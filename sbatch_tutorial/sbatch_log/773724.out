@@ -1,0 +1,2 @@
+Creating tensor
+tensor([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.], device='cuda:0')
