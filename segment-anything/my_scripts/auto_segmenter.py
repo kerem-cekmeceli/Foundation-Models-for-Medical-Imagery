@@ -27,10 +27,18 @@ def show_anns(anns):
     
 
 # Load example image    
-os.chdir(os.path.join(os.getcwd(), 'segment-anything/my_scripts'))
+# os.chdir(os.path.join(os.getcwd(), 'segment-anything/my_scripts'))
                       
-image = cv2.imread('../notebooks/images/dog.jpg')
-image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+# image = cv2.imread('../notebooks/images/dog.jpg')
+# image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+image = cv2.imread('/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp2/images/test/0050.png')
+plt.figure(figsize=(20,20))
+plt.imshow(image)
+plt.axis('off')
+plt.savefig('oup_masked/orig.png',
+            bbox_inches='tight')
+
 
 # Load the SAM checkpoint
 sam_checkpoint = "../sam_checkpoints/sam_vit_h_4b8939.pth"

@@ -44,7 +44,7 @@ torch.cuda.manual_seed(2023)
 np.random.seed(2023)
 
 SAM_MODEL_TYPE = "vit_b"
-MedSAM_CKPT_PATH = "work_dir/MedSAM/medsam_vit_b.pth"
+MedSAM_CKPT_PATH = "./medsam_checkpoints/medsam_vit_b.pth"
 MEDSAM_IMG_INPUT_SIZE = 1024
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 

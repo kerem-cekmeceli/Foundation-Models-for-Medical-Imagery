@@ -58,13 +58,15 @@ backbone_archs = {
 backbone_arch = backbone_archs[BACKBONE_SIZE]
 backbone_name = f"dinov2_{backbone_arch}"
 
-os.chdir(os.path.join(os.getcwd(), 'dinov2'))
+# os.chdir(os.path.join(os.getcwd(), 'dinov2'))
 
 local_backbone_cp = True
 
 if not local_backbone_cp:
     backbone_model = torch.hub.load(repo_or_dir="facebookresearch/dinov2", model=backbone_name)
 else:
+    import os
+    print(os.getcwd())
     backbone_model = torch.hub.load('./', backbone_name, source='local', pretrained=False)
 
     # Define the path to your local .pth checkpoint file
@@ -142,9 +144,14 @@ def load_image_from_url(url: str) -> Image:
         return Image.open(f).convert("RGB")
 
 
-EXAMPLE_IMAGE_URL = "https://dl.fbaipublicfiles.com/dinov2/images/example.jpg"
+# EXAMPLE_IMAGE_URL = "https://dl.fbaipublicfiles.com/dinov2/images/example.jpg"
 
-image = load_image_from_url(EXAMPLE_IMAGE_URL)
+# image = load_image_from_url(EXAMPLE_IMAGE_URL)
+    
+import cv2
+image = cv2.imread('/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp2/images/test/0050.png')
+
+
 
 plt.figure(figsize=(20,20))
 plt.imshow(image)
@@ -170,8 +177,13 @@ def render_segmentation(segmentation_logits, dataset):
     # segmentation_values = colormap_array[segmentation_logits]
     return Image.fromarray(segmentation_values)
 
-
-array = np.array(image)[:, :, ::-1] # BGR
+array = np.array(image)
+# print(f"shape : {array.shape}")
+if len(np.array(image).shape)>2:
+    array = array[:, :, ::-1] # BGR
+else:
+    array = array[..., np.newaxis]
+    
 segmentation_logits = inference_segmentor(model, array)[0]
 # segmented_image = render_segmentation(segmentation_logits, HEAD_DATASET)
 
@@ -179,7 +191,6 @@ segmentation_logits = inference_segmentor(model, array)[0]
 show_result_pyplot(model=model, img=array, 
                 #    palette=DATASET_COLORMAPS[HEAD_DATASET], 
                    result=[segmentation_logits], 
-                   show=False, 
                    out_file=f'./oup_imgs/seg_out_{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.png',
                    block=False)
 
@@ -231,4 +242,4 @@ segmentation_logits = inference_segmentor(model, array)[0]
 # Save the res of m2f seg head with dino plugged into a ViT adapter
 show_result_pyplot(model=model, img=array, result=[segmentation_logits], 
                    out_file=f'./oup_imgs/seg_out_{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.png',
-                   show=False, block=False)
+                   block=False)
