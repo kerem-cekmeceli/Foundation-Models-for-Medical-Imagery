@@ -381,8 +381,9 @@ def plot_batch_im(input, fld_pth, file_suffix='', show=False, save=True,
     # Define a static variable
     if not hasattr(plot_batch_im, "static_variable"):
         plot_batch_im.cnt = 1        
-        
+    
     # Plot subplots (square)
+    plt.figure()
     M = math.ceil(math.sqrt(input.shape[0]))
     for i in range(0, input.shape[0]):
         plt.subplot(M, M, i+1)
