@@ -16,6 +16,7 @@ import cv2
 from matplotlib import pyplot as plt
 
 from mmseg.models import build_backbone
+from datetime import datetime
 
 from pathlib import Path
 import mmcv
@@ -365,6 +366,46 @@ def get_pca_res(patch_tks, bg_thres=0.6, rescale_fac=None):
             res[key] = rescale_pca(key)  
     
     return res
+
+def time_str():
+    # Get the current date and time
+    current_datetime = datetime.now()
+    # Format the date and time as a string
+    formatted_time_str = current_datetime.strftime('%Y_%m_%d_%H_%M_%S')
+    return formatted_time_str
+
+def plot_batch_im(input, fld_pth, file_suffix='', show=False, save=True, 
+                  title_prefix=None, suptitle=None):
+    assert show or save is not None, "Should either save, show or do both"
+    
+    # Define a static variable
+    if not hasattr(plot_batch_im, "static_variable"):
+        plot_batch_im.cnt = 1        
+        
+    # Plot subplots (square)
+    M = math.ceil(math.sqrt(input.shape[0]))
+    for i in range(0, input.shape[0]):
+        plt.subplot(M, M, i+1)
+        if title_prefix is not None:
+            plt.title(title_prefix+f"{i}")
+        plt.imshow(input[i])
+        plt.axis('off')
+    if suptitle is not None:    
+        plt.suptitle(suptitle)
+    plt.tight_layout()
+    
+    if save:
+        pth = fld_pth + time_str() + file_suffix
+        if Path(pth).is_file():
+            pth += f'_{plot_batch_im.cnt}'
+            plot_batch_im.cnt += 1
+        else:
+            plot_batch_im.cnt = 1
+            
+        plt.savefig(pth)
+    if show:
+        plt.show()
+    
 
 
 # Extras

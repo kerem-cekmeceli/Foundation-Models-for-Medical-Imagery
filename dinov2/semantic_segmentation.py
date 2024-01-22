@@ -24,14 +24,16 @@ import urllib
 from mmcv.runner import load_checkpoint
 import cv2
 
+
 import urllib
 from PIL import Image
 from torchvision import transforms
 
-from prep_model import CenterPadding, create_segmenter, get_bb_name, get_dino_backbone,\
-    load_config_from_url, get_seg_had_config, get_seg_model, load_pil_img_rgb, prep_img_tensor, \
-        conv_to_numpy_img, pca_patches, get_pca_patches_plotable, get_pca_res
+from prep_model import get_bb_name, get_dino_backbone,\
+        get_seg_had_config, get_seg_model, prep_img_tensor, \
+        conv_to_numpy_img, get_pca_res, plot_batch_im
 
+save_plots=False
 
 # Load the pre-trained backbone
 BACKBONE_SIZE = "small" # in ("small", "base", "large" or "giant")
@@ -65,21 +67,13 @@ pca_res = get_pca_res(patch_tks, rescale_fac=backbone_model.patch_size)
 
 # Concat the PCA result next to the original image
 orig_w_pca_res = np.concatenate([imgs_transformed, pca_res['pca_fg']], axis=-2) # Width axis
-    
-    
-# Plot the img after transformations along with the PCA results
-M = math.ceil(math.sqrt(orig_w_pca_res.shape[0]))
-for i in range(0, orig_w_pca_res.shape[0]):
-    plt.subplot(M, M, i+1)
-    plt.imshow(orig_w_pca_res[i])
-    plt.axis('off')
-plt.tight_layout()
-plt.show()
 
+# Plot the PCA results
+pth = './oup_imgs/PCAs/'
+plot_batch_im(orig_w_pca_res, pth, show=True, save=save_plots)
 
 
 # Get the patch tokens and self attentions from the last layer
-# img_tensor = prep_img_tensor('./oup_imgs/orig_dino.png', pad_patch_sz=backbone_model.patch_size)
 with torch.no_grad():
     patch_tk, attn = backbone_model.get_last_layer_w_attn_scores(img_tensors, reshape=True)
 
@@ -89,20 +83,10 @@ attn = (attn - attn.min(dim=-3, keepdim=True)[0]) / (attn.max(dim=-3, keepdim=Tr
 # Convert to numpy array
 attn = attn.detach().cpu().numpy()
 
-
-def plot_attn_heads(attn):
-    # Plot the self attention for the CLS token
-    M = math.ceil(math.sqrt(attn.shape[0]))
-    for i in range(0, attn.shape[0]):
-        plt.subplot(M, M, i+1)
-        plt.title(f"Head{i}")
-        plt.imshow(attn[i])
-        plt.axis('off')
-    plt.suptitle("Self-attention for the CLS token query")
-    plt.tight_layout()
-    plt.show()
-
-plot_attn_heads(attn[0])
+# Create the self attention plots    
+fld_pth = './oup_imgs/self_attentions/'
+suptitle = "Self-attention for the CLS token query"
+plot_batch_im(attn[0], fld_pth, title_prefix='Head', suptitle=suptitle, show=True, save=save_plots)
 
 
 # Load the pre-trained segmentation head Linear Boosted (+ms)
