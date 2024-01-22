@@ -52,6 +52,7 @@ class Block(nn.Module):
         drop: float = 0.0,
         attn_drop: float = 0.0,
         init_values=None,
+        save_attn_scores: bool = False,
         drop_path: float = 0.0,
         act_layer: Callable[..., nn.Module] = nn.GELU,
         norm_layer: Callable[..., nn.Module] = nn.LayerNorm,
@@ -68,6 +69,7 @@ class Block(nn.Module):
             proj_bias=proj_bias,
             attn_drop=attn_drop,
             proj_drop=drop,
+            save_attn_scores=save_attn_scores,
         )
         self.ls1 = LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
         self.drop_path1 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()

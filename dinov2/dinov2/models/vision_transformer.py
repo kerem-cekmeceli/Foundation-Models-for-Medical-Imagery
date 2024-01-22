@@ -57,6 +57,7 @@ class DinoVisionTransformer(nn.Module):
         drop_path_rate=0.0,
         drop_path_uniform=False,
         init_values=None,  # for layerscale: None or 0 => no layerscale
+        # save_attn_scores=False,
         embed_layer=PatchEmbed,
         act_layer=nn.GELU,
         block_fn=Block,
@@ -104,6 +105,7 @@ class DinoVisionTransformer(nn.Module):
         self.interpolate_offset = interpolate_offset
 
         self.patch_embed = embed_layer(img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+        # assumed num_patches (nb patches used for pos encodings, actual nb patch can be diiferent for each inference img)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
@@ -112,6 +114,10 @@ class DinoVisionTransformer(nn.Module):
         self.register_tokens = (
             nn.Parameter(torch.zeros(1, num_register_tokens, embed_dim)) if num_register_tokens else None
         )
+        
+        # sv_scores = [False] * (depth)
+        # if save_attn_scores is True:
+        #     sv_scores[depth-1] = True          
 
         if drop_path_uniform is True:
             dpr = [drop_path_rate] * depth
@@ -147,6 +153,7 @@ class DinoVisionTransformer(nn.Module):
                 act_layer=act_layer,
                 ffn_layer=ffn_layer,
                 init_values=init_values,
+                save_attn_scores=False#  sv_scores[i],
             )
             for i in range(depth)
         ]
@@ -177,23 +184,25 @@ class DinoVisionTransformer(nn.Module):
         named_apply(init_weights_vit_timm, self)
 
     def interpolate_pos_encoding(self, x, w, h):
+        # Input x also contains pos encodings
+        # w, h is the actual size of the img
         previous_dtype = x.dtype
-        npatch = x.shape[1] - 1
-        N = self.pos_embed.shape[1] - 1
+        npatch = x.shape[1] - 1  # x.shape = [B, npatch+pos_enc, D], npatch: actual nb of patch tokens for the input img
+        N = self.pos_embed.shape[1] - 1  # assumed number of patches 
         if npatch == N and w == h:
             return self.pos_embed
-        pos_embed = self.pos_embed.float()
+        pos_embed = self.pos_embed.float()  # [B, N, D]
         class_pos_embed = pos_embed[:, 0]
         patch_pos_embed = pos_embed[:, 1:]
         dim = x.shape[-1]
-        w0 = w // self.patch_size
-        h0 = h // self.patch_size
+        w0 = w // self.patch_size  # actual nb patches on w axis
+        h0 = h // self.patch_size  # actual nb patches on h axis
         # we add a small number to avoid floating point error in the interpolation
         # see discussion at https://github.com/facebookresearch/dino/issues/8
         w0, h0 = w0 + self.interpolate_offset, h0 + self.interpolate_offset
 
         sqrt_N = math.sqrt(N)
-        sx, sy = float(w0) / sqrt_N, float(h0) / sqrt_N
+        sx, sy = float(w0) / sqrt_N, float(h0) / sqrt_N  # ratios on axis for 2D interpolation to be applied to patch pos embs
         patch_pos_embed = nn.functional.interpolate(
             patch_pos_embed.reshape(1, int(sqrt_N), int(sqrt_N), dim).permute(0, 3, 1, 2),
             scale_factor=(sx, sy),
@@ -204,15 +213,15 @@ class DinoVisionTransformer(nn.Module):
         assert int(w0) == patch_pos_embed.shape[-2]
         assert int(h0) == patch_pos_embed.shape[-1]
         patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-        return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1).to(previous_dtype)
+        return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1).to(previous_dtype) # [B, npatch+1, D]
 
     def prepare_tokens_with_masks(self, x, masks=None):
         B, nc, w, h = x.shape
-        x = self.patch_embed(x)
+        x = self.patch_embed(x)  # 2D image to patch embedding: (B,C,H,W) -> (B,N,D)
         if masks is not None:
             x = torch.where(masks.unsqueeze(-1), self.mask_token.to(x.dtype).unsqueeze(0), x)
 
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)  # this way it's adapptable to batch size
         x = x + self.interpolate_pos_encoding(x, w, h)
 
         if self.register_tokens is not None:
@@ -251,7 +260,7 @@ class DinoVisionTransformer(nn.Module):
         if isinstance(x, list):
             return self.forward_features_list(x, masks)
 
-        x = self.prepare_tokens_with_masks(x, masks)
+        x = self.prepare_tokens_with_masks(x, masks)  # 2D image to patch embedding: (B,C,H,W) -> (B,N,D)
 
         for blk in self.blocks:
             x = blk(x)
@@ -265,6 +274,13 @@ class DinoVisionTransformer(nn.Module):
             "masks": masks,
         }
 
+    def forward(self, *args, is_training=False, **kwargs):
+        ret = self.forward_features(*args, **kwargs)
+        if is_training:
+            return ret
+        else:
+            return self.head(ret["x_norm_clstoken"])
+        
     def _get_intermediate_layers_not_chunked(self, x, n=1):
         x = self.prepare_tokens_with_masks(x)
         # If n is an int, take the n last blocks. If it's a list, take them
@@ -291,38 +307,87 @@ class DinoVisionTransformer(nn.Module):
         assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
         return output
 
+    
     def get_intermediate_layers(
         self,
         x: torch.Tensor,
-        n: Union[int, Sequence] = 1,  # Layers or n last layers to take
+        n: Union[int, Sequence] = 1,  
         reshape: bool = False,
         return_class_token: bool = False,
         norm=True,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]:
+        """_summary_
+
+        Args:
+            x (torch.Tensor): [B, nc(r, G, B), h, w]
+            n (Union[int, Sequence], optional): Layers or n last layers to take. Defaults to 1.
+            reshape (bool, optional): If True reshapes the output patches respecting the W, H order in Defaults to True.
+            return_class_token (bool, optional): also returns the cls token among the pathch tokens. Defaults to False.
+            norm (bool, optional): Applies normalization to the ooutputs before returning. Defaults to True.
+
+        Returns:
+            Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]: 
+        """
         if self.chunked_blocks:
             outputs = self._get_intermediate_layers_chunked(x, n)
         else:
             outputs = self._get_intermediate_layers_not_chunked(x, n)
+        # outputs is a list of length n
         if norm:
             outputs = [self.norm(out) for out in outputs]
-        class_tokens = [out[:, 0] for out in outputs]
-        outputs = [out[:, 1 + self.num_register_tokens:] for out in outputs]
+        class_tokens = [out[:, 0] for out in outputs]  # list of cls_token outputs (of length n)
+        outputs = [out[:, 1 + self.num_register_tokens:] for out in outputs]  # Discard register tokens
+        # Each oup is of shape: [B, N, embed_dim] --reshape--> [B, embed_dim, h_patches, w_patches]
         if reshape:
-            B, _, w, h = x.shape
+            B, _, h, w = x.shape 
             outputs = [
-                out.reshape(B, w // self.patch_size, h // self.patch_size, -1).permute(0, 3, 1, 2).contiguous()
+                out.reshape(B, h // self.patch_size, w // self.patch_size, -1).permute(0, 3, 1, 2).contiguous()
                 for out in outputs
             ]
         if return_class_token:
             return tuple(zip(outputs, class_tokens))
         return tuple(outputs)
-
-    def forward(self, *args, is_training=False, **kwargs):
-        ret = self.forward_features(*args, **kwargs)
-        if is_training:
-            return ret
+    
+    def _get_last_attn_chunked(self):
+        return None #@TODO
+    
+    def _get_last_attn_not_chunked(self):
+        return self.blocks[-1].attn.attn_scores
+        
+    
+    def get_last_layer_w_attn_scores(
+        self,
+        x: torch.Tensor,
+        reshape: bool = False,
+        return_class_token: bool = False,
+        norm=True,
+    ):
+        if self.chunked_blocks:
+            self.blocks[-1][-1].attn.save_attn_scores=True
+            self.blocks[-1][-1].attn.attn_scores=None
         else:
-            return self.head(ret["x_norm_clstoken"])
+            self.blocks[-1].attn.save_attn_scores=True
+            self.blocks[-1].attn.attn_scores=None
+            
+        oup_tuple = self.get_intermediate_layers(x, n=1, reshape=reshape, 
+                                                 return_class_token=return_class_token, norm=norm)
+        
+        if self.chunked_blocks:
+            last_attn = self._get_last_attn_chunked()
+            self.blocks[-1][-1].attn.save_attn_scores=False
+            self.blocks[-1][-1].attn.attn_scores=None
+        else:
+            last_attn = self._get_last_attn_not_chunked()
+            self.blocks[-1].attn.save_attn_scores=True
+            self.blocks[-1].attn.attn_scores=None
+        
+        last_attn = last_attn[..., 0, self.num_register_tokens + 1:]  # self attn for CLS token query
+        
+        if reshape:
+            B, _, w, h = x.shape
+            last_attn = last_attn.reshape(B, self.num_heads, w//self.patch_size, h//self.patch_size)
+            
+        return oup_tuple, last_attn
 
 
 def init_weights_vit_timm(module: nn.Module, name: str = ""):
