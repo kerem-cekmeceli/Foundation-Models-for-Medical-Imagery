@@ -1,57 +1,59 @@
-import math
-import itertools
-from functools import partial
+
+import sys
+import pathlib
+ 
+dino_main_pth = pathlib.Path(__file__).parent.parent
+orig_dino_pth = dino_main_pth / 'OrigDino'
+sys.path.insert(1, dino_main_pth.as_posix())
+sys.path.insert(2, orig_dino_pth.as_posix())
 
 import torch
-import torch.nn.functional as F
 from mmseg.apis import init_segmentor, inference_segmentor, show_result_pyplot
-from mmseg.apis.inference import LoadImage
-from mmcv.parallel import collate, scatter
-from mmseg.datasets.pipelines import Compose
-
-import dinov2.eval.segmentation.models
-
-import os
-from matplotlib import pyplot as plt
-
-from mmseg.models import build_backbone
-
-from pathlib import Path
-import mmcv
-import numpy as np
-
-import urllib
 from mmcv.runner import load_checkpoint
 import cv2
-
-
-import urllib
-from PIL import Image
-from torchvision import transforms
+import numpy as np
+from matplotlib import pyplot as plt
 
 from prep_model import get_bb_name, get_dino_backbone,\
-        get_seg_had_config, get_seg_model, prep_img_tensor, \
+        get_seg_head_config, get_seg_model, prep_img_tensor, \
         conv_to_numpy_img, get_pca_res, plot_batch_im
+from OrigDino.dinov2.eval.segmentation import models
+
+# import os
+# import math
+# import itertools
+# import urllib
+# from functools import partial
+# from pathlib import Path
+# from PIL import Image
+# from torchvision import transforms      
+# import torch.nn.functional as F
+# import mmcv
+# from mmseg.models import build_backbone
+# from mmseg.apis.inference import LoadImage
+# from mmcv.parallel import collate, scatter
+# from mmseg.datasets.pipelines import Compose
 
 save_plots=True
 
-do_pca = False
-do_self_attn = False
-do_seg_ms = True
+do_pca = True
+do_self_attn = True
+do_seg_ms = False
 do_seg_m2f = False
 
 # Load the pre-trained backbone
 BACKBONE_SIZE = "small" # in ("small", "base", "large" or "giant")
-bb_checkpoint_path = './checkpoints_backbone/dinov2_vits14_pretrain.pth'
+bb_checkpoint_path = dino_main_pth/'Checkpoints'/'Orig'/'backbone'/'dinov2_vits14_pretrain.pth'
 
 backbone_name = get_bb_name(BACKBONE_SIZE)
-backbone_model = get_dino_backbone(backbone_name, backbone_cp=bb_checkpoint_path)
+backbone_model = get_dino_backbone(backbone_name, backbone_cp=str(bb_checkpoint_path))
 
 # Open images from the file list
 # '/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp2/images/test/0050.png'
 # pth = './oup_imgs/Dogs/'
-pth = '/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp2/images/test/'
-filelist = [pth+f'00{i}.png' for i in range(48, 52)]
+# pth = '/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp2/images/test/'
+pth = dino_main_pth.parent / 'DataSample/images/test'
+filelist = [(pth/f'00{i}.png').as_posix() for i in [28, 48, 68, 88]]#range(48, 52)]
 
 resized_shape = [518, 518]  # 37x37 patches for patch sz of 14  
 img_tensors = prep_img_tensor(filelist, resized_shape=resized_shape, 
@@ -76,8 +78,8 @@ if do_pca:
     orig_w_pca_res = np.concatenate([imgs_transformed, pca_res['pca_fg']], axis=-2) # Width axis
 
     # Plot the PCA results
-    pth = './oup_imgs/PCAs/'
-    plot_batch_im(orig_w_pca_res, pth, show=True, save=save_plots)
+    pth = dino_main_pth / 'oup_imgs/PCAs'
+    plot_batch_im(orig_w_pca_res, pth.as_posix(), show=True, save=save_plots)
 
 
 if do_self_attn:
@@ -92,9 +94,9 @@ if do_self_attn:
     attn = attn.detach().cpu().numpy()
 
     # Create the self attention plots    
-    fld_pth = './oup_imgs/self_attentions/'
+    fld_pth = dino_main_pth / 'oup_imgs/self_attentions'
     suptitle = "Self-attention for the CLS token query"
-    plot_batch_im(attn[0], fld_pth, title_prefix='Head', suptitle=suptitle, show=True, save=save_plots)
+    plot_batch_im(attn[0], fld_pth.as_posix(), title_prefix='Head', suptitle=suptitle, show=True, save=save_plots)
 
 
 if do_seg_ms:
@@ -103,8 +105,10 @@ if do_seg_ms:
     HEAD_DATASET = "voc2012" # in ("ade20k", "voc2012")
     HEAD_TYPE = "ms" # in ("ms, "linear")
 
-    cfg = get_seg_had_config(backbone_name, HEAD_DATASET, HEAD_TYPE, head_sclae_cnt=HEAD_SCALE_COUNT, cfg_fld_path='./configs')
-    model = get_seg_model(backbone_model, cfg, cp_fld_path='./checkpoints_segHead', eval=True) 
+    cfg = get_seg_head_config(backbone_name, HEAD_DATASET, HEAD_TYPE, head_sclae_cnt=HEAD_SCALE_COUNT, 
+                              cfg_fld_path=(dino_main_pth/'ConfigsSegmentation/Orig').as_posix())
+    model = get_seg_model(backbone_model, cfg, eval=True,
+                          cp_fld_path=(dino_main_pth/'Checkpoints/Orig/seg_head').as_posix())
 
 
     # Semantic segmentation with Boosted Linear head (+ms)
@@ -118,14 +122,14 @@ if do_seg_ms:
     show_result_pyplot(model=model, img=img_file, 
                     #    palette=DATASET_COLORMAPS[HEAD_DATASET], 
                     result=[segmentation_logits], 
-                    out_file=f'./oup_imgs/seg_out_{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.png',
+                    out_file=(dino_main_pth/f'oup_imgs/seg_out_{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.png').as_posix(),
                     block=False)
     plt.close()
 
 
 if do_seg_m2f:
     # Pre-trained backbone with ViT adapter + mask2former seg head
-    import dinov2.eval.segmentation_m2f.models.segmentors
+    from OrigDino.dinov2.eval.segmentation_m2f.models import segmentors
 
     img_file = filelist[0]
     # img_file = cv2.resize(cv2.imread(img_file), resized_shape)
@@ -135,7 +139,8 @@ if do_seg_m2f:
     HEAD_TYPE = "m2f" 
 
     backbone_name = get_bb_name(BACKBONE_SIZE)
-    cfg = get_seg_had_config(backbone_name, HEAD_DATASET, HEAD_TYPE, head_sclae_cnt=3, cfg_fld_path=None)
+    cfg = get_seg_head_config(backbone_name, HEAD_DATASET, HEAD_TYPE, head_sclae_cnt=3, 
+                              cfg_fld_path=None)
 
     DINOV2_BASE_URL = "https://dl.fbaipublicfiles.com/dinov2"
 
@@ -148,9 +153,9 @@ if do_seg_m2f:
         CHECKPOINT_URL = f"{DINOV2_BASE_URL}/{backbone_name}/{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.pth"    
         load_checkpoint(model, CHECKPOINT_URL, map_location="cpu")
     else:
-        cp = f'./checkpoints_seg_model_mask2former/{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.pth'
+        cp = dino_main_pth/'Checkpoints/Orig/seg_model_m2f'/f'{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.pth'
         model = init_segmentor(cfg, checkpoint=None)
-        checkpoint = load_checkpoint(model, cp, map_location="cpu")
+        checkpoint = load_checkpoint(model, cp.as_posix(), map_location="cpu")
         model.CLASSES = checkpoint['meta']['CLASSES']
         model.PALETTE = checkpoint['meta']['PALETTE']
         
@@ -165,6 +170,6 @@ if do_seg_m2f:
 
     # Save the res of m2f seg head with dino plugged into a ViT adapter
     show_result_pyplot(model=model, img=img_file, result=[segmentation_logits], 
-                    out_file=f'./oup_imgs/seg_out_{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.png',
+                    out_file=(dino_main_pth/f'oup_imgs/seg_out_{backbone_name}_{HEAD_DATASET}_{HEAD_TYPE}.png').as_posix(),
                     block=False)
     plt.close()

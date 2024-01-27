@@ -1,3 +1,11 @@
+# import os
+# import sys
+# par_dir = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
+# REPO_PATH = par_dir
+# sys.path.insert(1, REPO_PATH)
+# print(REPO_PATH)
+
+
 import math
 import itertools
 from functools import partial
@@ -9,7 +17,7 @@ from mmseg.apis.inference import LoadImage
 from mmcv.parallel import collate, scatter
 from mmseg.datasets.pipelines import Compose
 
-import dinov2.eval.segmentation.models
+from OrigDino.dinov2.eval.segmentation import models
 
 import os
 import cv2
@@ -22,8 +30,8 @@ from pathlib import Path
 import mmcv
 import numpy as np
 
-from dinov2.hub.backbones import dinov2_vits14
-from dinov2.models.vision_transformer import vit_small
+from OrigDino.dinov2.hub.backbones import dinov2_vits14
+from OrigDino.dinov2.models.vision_transformer import vit_small
 
 import urllib
 from mmcv.runner import load_checkpoint
@@ -32,15 +40,15 @@ from PIL import Image
 from torchvision import transforms
 
 import numpy as np
-import dinov2.eval.segmentation.utils.colormaps as colormaps
+from OrigDino.dinov2.eval.segmentation.utils import colormaps as colormaps
 
 import numpy as np
-import dinov2.eval.segmentation.utils.colormaps as colormaps
 
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import minmax_scale
 
 
+# Same exists in dinov2/hub/utils
 class CenterPadding(torch.nn.Module):
     def __init__(self, multiple):
         super().__init__()
@@ -95,7 +103,9 @@ def get_bb_name(backbone_sz, ret_arch=False):
         return backbone_name
 
 def get_dino_backbone(backbone_name, backbone_cp=None, eval=True):
-    
+    if isinstance(backbone_cp, Path):
+        backbone_cp = str(backbone_cp)
+        
     # Local checkpoint
     if backbone_cp is not None:
         print(f"Attempting to load the local checkpoint from {backbone_cp}")
@@ -133,7 +143,7 @@ def load_config_from_url(url: str) -> str:
         return f.read().decode()
     
 DINOV2_BASE_URL = "https://dl.fbaipublicfiles.com/dinov2"
-def get_seg_had_config(backbone_name, head_dataset, head_type, head_sclae_cnt=3, cfg_fld_path=None):
+def get_seg_head_config(backbone_name, head_dataset, head_type, head_sclae_cnt=3, cfg_fld_path=None):
     # Get the conf file for the segmentation head
     if cfg_fld_path is None:
         head_config_url = f"{DINOV2_BASE_URL}/{backbone_name}/{backbone_name}_{head_dataset}_{head_type}_config.py"
@@ -209,7 +219,7 @@ def prep_img_tensor(imgs, pad_patch_sz=None, resized_shape=None, norm=True, devi
         if isinstance(img, (str, Path)):
             img = Image.open(img)
             
-        img = img.convert("RGB")  # RGBA -> RGB
+        img = img.convert("RGB")  # RGBA -> RGB  (if single ch -> replicates the same vals for rgb)
         img_tens = trf_indv(img)  # 
         if resized_shape is None:
             if i==0:
@@ -396,7 +406,7 @@ def plot_batch_im(input, fld_pth, file_suffix='', show=False, save=True,
     plt.tight_layout()
     
     if save:
-        pth = fld_pth + time_str() + file_suffix
+        pth = fld_pth + '/' + time_str() + file_suffix
         if Path(pth).is_file():
             pth += f'_{plot_batch_im.cnt}'
             plot_batch_im.cnt += 1
