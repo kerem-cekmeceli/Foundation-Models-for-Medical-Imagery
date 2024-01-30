@@ -151,7 +151,7 @@ mIoU = mIoULoss(n_classes=num_classses)
 if cluster_paths:
         models_pth = Path(f'scratch_net/biwidl210/kcekmeceli/DataFoundationModels/trained_models/conv_head/{time_str()}.pth') 
 else:   
-        models_pth = data_root_pth.parent / f'trained_models/conv_head/{time_str()}.pth'
+        models_pth = dino_main_pth / f'Checkpoints/MedDino/conv_head/{time_str()}.pth'
 (train_loss, val_loss) = train(model=model, train_loader=train_dataloader, 
                                val_loader=val_dataloader, loss_fn=mIoU, 
                                optimizer=optm, scheduler=scheduler,
