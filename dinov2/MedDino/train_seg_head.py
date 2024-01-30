@@ -45,7 +45,7 @@ from torchinfo import summary
 # from mmcv.parallel import collate, scatter
 # from mmseg.datasets.pipelines import Compose
 
-cluster_paths = False
+cluster_paths = True
 
 
 # Load the pre-trained backbone
