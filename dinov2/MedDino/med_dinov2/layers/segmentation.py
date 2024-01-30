@@ -4,16 +4,32 @@ from abc import ABC, abstractmethod
 from mmseg.ops import resize
 
 
+
 class SegHeadBase(nn.Module, ABC):
     def __init__(self, embedding_sz, num_classses, 
-                 input_transform='resize_concat',
-                 in_index=None) -> None:
+                 n_concat,
+                 interp_fact,
+                 input_transform,
+                 in_index,
+                 resize_factors,
+                 align_corners) -> None:
         super().__init__()
         
-        self.embedding_sz = embedding_sz
-        self.num_classes = num_classses
+        self.embedding_sz=embedding_sz
+        self.num_classes=num_classses
+        self.interp_fact=interp_fact
+        
+        if input_transform == 'resize_concat':
+            self.n_concat=n_concat
+        else:
+            self.n_concat=1
+        
+        self.input_dim=embedding_sz*self.n_concat
+        
         self.input_transform = input_transform
         self.in_index=in_index
+        self.resize_factors=resize_factors
+        self.align_corners=align_corners
     
     @abstractmethod
     def compute_logits(self, x):
@@ -69,33 +85,59 @@ class SegHeadBase(nn.Module, ABC):
         
     
     def forward(self, inputs):
+        # Concat list of inputs 
         x = self._transform_inputs(inputs)
-        logits = self.compute_logits(x)
-        return logits
+        
+        # segmentation method (assigns logits to each patch)
+        logits = self.compute_logits(x)  # [B, N_class, H0, W0]
+        
+        if self.interp_fact is None:
+            return logits
+        else:
+            # Interpolate to get pixel logits frmo patch logits
+            pix_logits = resize(input=logits,
+                                scale_factor=self.interp_fact,
+                                mode='bilinear',
+                                align_corners=self.align_corners)
+            # [B, N_class, H, W]
+            
+            return pix_logits
     
 class ConvHead(SegHeadBase):
     
-    def __init__(self, embedding_sz, num_classses, 
+    def __init__(self, 
+                 embedding_sz, 
+                 num_classses, 
+                 n_concat,
+                 interp_fact,
                  input_transform='resize_concat',
                  in_index=None,
+                 resize_factors=None,
+                 align_corners=False,
                  batch_norm=True, dropout_rat=0.) -> None:
-        super().__init__(embedding_sz, num_classses, 
-                         input_transform, in_index)
+        super().__init__(embedding_sz=embedding_sz, 
+                         num_classses=num_classses, 
+                         n_concat=n_concat,
+                         input_transform=input_transform, 
+                         in_index=in_index,
+                         resize_factors=resize_factors,
+                         align_corners=align_corners,
+                         interp_fact=interp_fact,)
         
         if batch_norm:
-            self.batch_norm = nn.SyncBatchNorm(embedding_sz)
+            self.batch_norm = nn.SyncBatchNorm(self.input_dim)  #@TODO change not sure
         
         if dropout_rat>0:
             self.dropout = nn.Dropout2d(dropout_rat)  # Randomly zero out entire channels
         else:
             self.dropout = None
         
-        self.conv_seg = nn.Conv2d(embedding_sz, num_classses, kernel_size=1)
+        self.conv_seg = nn.Conv2d(self.input_dim, num_classses, kernel_size=1)
         
         
     def compute_logits(self, x):
         # Batch norm
-        x = self.bn(x)
+        x = self.batch_norm(x)
         
         # Dropout
         if self.dropout is not None:

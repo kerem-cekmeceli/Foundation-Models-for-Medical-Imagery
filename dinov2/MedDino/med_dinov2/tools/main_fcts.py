@@ -13,6 +13,7 @@ import torch.nn.functional as F
 # from model import Segmentor
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 
 def train_all_batches(model, train_loader, loss_fn, optimizer, device):
@@ -24,14 +25,20 @@ def train_all_batches(model, train_loader, loss_fn, optimizer, device):
         raise Exception('No data')
     
     for x_batch, y_batch in batches:
+        # Put the data on the selected device
         x_batch = x_batch.to(device=device)
         y_batch = y_batch.to(device=device)
         
+        # Forward pass
         y_pred = model(x_batch)
         loss = loss_fn(y_pred, y_batch)
         running_loss += loss.item()
+        
+        # backward pass
         optimizer.zero_grad()
         loss.backward()
+        
+        # Update weights
         optimizer.step()
         
     return running_loss / len(batches)
@@ -45,9 +52,11 @@ def validate_all_batches(model, val_loader, loss_fn, device):
         raise Exception('No data')
     
     for x_batch, y_batch in batches:
+        # Put the data on the selected device
         x_batch = x_batch.to(device=device)
         y_batch = y_batch.to(device=device)
         
+        # Forward pass
         y_pred = model(x_batch)
         loss = loss_fn(y_pred, y_batch)
         running_loss += loss.item()
@@ -57,8 +66,16 @@ def validate_all_batches(model, val_loader, loss_fn, device):
 # @TODO add metrics: dict:{metric_name:callable}
 
 def train(model, train_loader, loss_fn, optimizer, n_epochs, device,
-          scheduler=None, val_loader=None, print_epoch_info=True):
+          scheduler=None, val_loader=None, print_epoch_info=True,
+          save_best_val_path=None):
+    model.to(device)
     epochs = tqdm(range(n_epochs), desc='Epochs')
+    
+    if save_best_val_path is not None:
+        if isinstance(save_best_val_path, Path):
+            save_best_val_path = str(save_best_val_path)
+        assert isinstance(save_best_val_path, str)
+        best_validation_loss = float('inf')  # Initialize with positive infinity
     
     train_loss = []
     if val_loader is not None:
@@ -68,26 +85,39 @@ def train(model, train_loader, loss_fn, optimizer, n_epochs, device,
         # Train
         train_loss_e = train_all_batches(model, train_loader, loss_fn, optimizer, device)
         train_loss.append(train_loss_e)
-        epoch_str = f'Epoch:{epoch+1}/{n_epochs}, lr={optimizer.param_groups[0]["lr"]}\
-                        , train_loss={train_loss_e}'
-        
-        # Update LR
-        if scheduler is not None:
-            scheduler.step()
+        epoch_str = f'Epoch:{epoch+1}/{n_epochs}, lr={round(optimizer.param_groups[0]["lr"], 6)}, train_loss={round(train_loss_e, 6)}'
         
         # Validate    
         if val_loader is not None:
             val_loss_e = validate_all_batches(model, val_loader, loss_fn, device)
             val_loss.append(val_loss_e)
-            epoch_str += f', val_loss={val_loss_e}'
+            epoch_str += f', val_loss={round(val_loss_e, 6)}'
+            
+            if save_best_val_path is not None:
+                if val_loss_e < best_validation_loss:
+                    best_validation_loss = val_loss_e
+
+                    # Save the model
+                    torch.save(model.state_dict(), save_best_val_path)
+            
+        # Update LR
+        if scheduler is not None:
+            scheduler.step()
             
         if print_epoch_info:
             tqdm.write(epoch_str)
             
     if val_loader is not None:   
-        return tuple(train_loss, val_loss)
+        return (train_loss, val_loss)
     else:
-        return tuple(train_loss)
+        return (train_loss)
+    
+def test(model, val_loader, loss_fn, device):
+    test_loss = validate_all_batches(model, val_loader, loss_fn, device)
+    print(f'Test loss={test_loss}')
+    
+    
+
     
 
 ###########################################################################

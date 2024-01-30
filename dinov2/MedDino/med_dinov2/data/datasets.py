@@ -19,6 +19,9 @@ from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 from PIL import Image
 from pathlib import Path
+from mmseg.datasets.pipelines import Compose
+import mmcv
+from MedDino.med_dinov2.data.transforms import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -55,11 +58,37 @@ def get_file_list(fld_pth, start_idx=0, num_img=None, extension=None,
     imgs_sel = files[start_idx:start_idx+num_img]
     return imgs_sel 
 
+def put_in_res_dict(img, mask=None):
+    # if pil img : Convert PIL img (RGB) --> ndarray (BGR)
+    get_nd_arr = lambda img: np.array(img).copy() if isinstance(img, Image.Image) else img
+    # if ndarray convert RGB to BGR
+    rgb_2_bgr = lambda img: img[..., ::-1].copy() if isinstance(img, np.ndarray) else img
+    
+    img = rgb_2_bgr(get_nd_arr(img))
+    result = dict(img=mmcv.imread(img, flag='color', channel_order='bgr'),
+                  seg_fields=[])
+
+    if mask is not None:
+        mask = get_nd_arr(mask)
+        key = 'gt_seg_map'
+        result[key]=mmcv.imread(mask, flag='grayscale')
+        result['seg_fields'].append(key)
+            
+    return result
+
+def rm_from_res_dict(results):
+    img = results['img']
+    
+    if 'gt_seg_map' in results.keys():
+        mask = results['gt_seg_map']
+        return [img, mask]
+    return [img]
+
 
 class SegmentationDataset(Dataset):
     def __init__(self, img_dir, mask_dir, num_classes, 
                  file_extension=None, mask_suffix='',
-                 img_transform=None, mask_transform=None, images=None,
+                 augmentations=None, images=None,
                  dtype=torch.float32,
                  *args, **kwargs):
         super(Dataset).__init__(*args, **kwargs)
@@ -76,14 +105,29 @@ class SegmentationDataset(Dataset):
         self.mask_suffix = mask_suffix
         self.dtype = dtype
         
-        if img_transform is None:
-            img_transform = F.pil_to_tensor 
+        # Put the must have transforms
+        transforms = []
+        transforms.append(lambda data : put_in_res_dict(data[0], data[1]))
+        
+        # Put the optional augmentations
+        if augmentations is not None:
+            transforms.extend(augmentations)
+        
+        # Put the rest of the mandatory transforms
+        # conv the img keys to torch.Tensor with [HWC] -> [CHW]  |  mmseg/datasets/pipelines/transforms  
+        transforms.append(dict(type='ImageToTensor', keys=['img', 'gt_seg_map']))
+        
+        # Remove the dict and keep the tensor
+        transforms.append(rm_from_res_dict)
+        
+        # Compose the transforms
+        self.transforms = Compose(transforms)
             
-        if mask_transform is None:
-            mask_transform = lambda mask : torch.as_tensor(np.array(mask), dtype=torch.int64)
+        # if mask_transform is None:
+        #     mask_transform = lambda mask : torch.as_tensor(np.array(mask), dtype=torch.int64)
             
-        self.img_transform = img_transform
-        self.mask_transform = mask_transform
+        # self.img_transform = augmentations
+        # self.mask_transform = mask_transform
         
         # Only include images for which a mask is found
         if images is None:
@@ -103,9 +147,10 @@ class SegmentationDataset(Dataset):
         
         image = Image.open(img_path).convert("RGB") # H, W, C
         mask = Image.open(mask_path)  # Read are the img indices (single channel)
-
-        image = self.img_transform(image).to(self.dtype) # C, H, W
-        mask = self.mask_transform(mask).to(torch.int64).reshape(image.shape[1:]) # H, W
+        
+        [image, mask] = self.transforms([image, mask])
+        image = image.to(self.dtype) # C, H, W
+        mask = mask.squeeze(0)  #.to(torch.int64) #.reshape(image.shape[1:]) # H, W
                     
         # Create a tensor to hold the binary masks (GT probas of each class)  [num_cls, H, W]
         bin_mask = torch.zeros(self.num_classes, mask.shape[0], mask.shape[1], dtype=self.dtype)

@@ -1,4 +1,3 @@
-
 import sys
 import pathlib
  
@@ -34,11 +33,11 @@ from OrigDino.dinov2.eval.segmentation import models
 # from mmcv.parallel import collate, scatter
 # from mmseg.datasets.pipelines import Compose
 
-save_plots=True
+save_plots=False
 
-do_pca = True
-do_self_attn = True
-do_seg_ms = False
+do_pca = False
+do_self_attn = False
+do_seg_ms = True
 do_seg_m2f = False
 
 # Load the pre-trained backbone
@@ -112,7 +111,9 @@ if do_seg_ms:
 
 
     # Semantic segmentation with Boosted Linear head (+ms)
-    img_file = filelist[0]
+    # img_file = filelist[0]
+    img_file = str(dino_main_pth.parent / 'DataSample/images/test/0128.png')
+
     img_file = cv2.resize(cv2.imread(img_file), resized_shape)
     segmentation_logits = inference_segmentor(model, img_file)[0]
     # segmented_image = render_segmentation(segmentation_logits, HEAD_DATASET)

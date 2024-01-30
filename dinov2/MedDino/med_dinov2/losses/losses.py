@@ -1,5 +1,5 @@
 import torch.nn as nn
-from torchvision.transforms import functional as F
+from torch.nn import functional as F
 
 class mIoULoss(nn.Module):
     def __init__(self, n_classes):
@@ -13,7 +13,7 @@ class mIoULoss(nn.Module):
         N = inputs.size()[0]
 
         # predicted probabilities for each pixel along channel
-        inputs = F.softmax(inputs,dim=1)
+        inputs = F.softmax(inputs, dim=1) # [B, n_class, h0, w0]
         
         # Numerator Product
         inter = inputs * target_oneHot
