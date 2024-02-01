@@ -1,9 +1,12 @@
+from typing import Optional
+from torch import Tensor
 import torch.nn as nn
 from torch.nn import functional as F
 
-class mIoULoss(nn.Module):
+
+class mIoU(nn.Module):
     def __init__(self, n_classes):
-        super(mIoULoss, self).__init__()
+        super(mIoU, self).__init__()
         self.classes = n_classes
 
     def forward(self, inputs, target_oneHot):
@@ -28,4 +31,11 @@ class mIoULoss(nn.Module):
         loss = inter/union  # N x C
 
         ## Return average loss over classes and batch
-        return -loss.mean()  # minus since loss is  to be minimized nont maximized
+        return loss.mean()  # minus since loss is  to be minimized nont maximized
+    
+
+    
+# @TODO CrossEntropyLoss (Dino)
+# @TODO Dice score implement  !! medical  (BG supression)
+# @TODO keep miou as a metric for natural img comparison
+# @TODO eval on 3d not per slice

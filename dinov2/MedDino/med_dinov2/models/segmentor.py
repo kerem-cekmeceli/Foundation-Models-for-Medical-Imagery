@@ -5,6 +5,7 @@ from OrigDino.dinov2.hub.utils import CenterPadding
 class Segmentor(nn.Module):
     def __init__(self, backbone, decode_head, train_backbone=False, 
                  *args, **kwargs) -> None:
+
         super().__init__(*args, **kwargs)
         
         self._train_backbone = train_backbone
@@ -51,5 +52,7 @@ class Segmentor(nn.Module):
         feats = self.forward_backbone(x)
         out = self.decode_head(feats)
         return out
+    
+
     
     

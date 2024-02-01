@@ -122,12 +122,6 @@ class SegmentationDataset(Dataset):
         
         # Compose the transforms
         self.transforms = Compose(transforms)
-            
-        # if mask_transform is None:
-        #     mask_transform = lambda mask : torch.as_tensor(np.array(mask), dtype=torch.int64)
-            
-        # self.img_transform = augmentations
-        # self.mask_transform = mask_transform
         
         # Only include images for which a mask is found
         if images is None:

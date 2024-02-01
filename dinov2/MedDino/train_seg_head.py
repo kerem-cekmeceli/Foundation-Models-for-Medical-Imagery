@@ -8,15 +8,12 @@ sys.path.insert(1, dino_main_pth.as_posix())
 sys.path.insert(2, orig_dino_pth.as_posix())
 
 import torch
-from mmseg.apis import init_segmentor, inference_segmentor, show_result_pyplot
-from mmcv.runner import load_checkpoint
+
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-from prep_model import get_bb_name, get_dino_backbone,\
-        get_seg_head_config, get_seg_model, prep_img_tensor, \
-        conv_to_numpy_img, get_pca_res, plot_batch_im, time_str
+from prep_model import get_bb_name, get_dino_backbone, time_str
 from OrigDino.dinov2.eval.segmentation import models
 
 from MedDino.med_dinov2.models.segmentor import Segmentor
@@ -24,29 +21,17 @@ from MedDino.med_dinov2.layers.segmentation import ConvHead
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.losses.losses import mIoULoss
+from MedDino.med_dinov2.losses.metrics import mIoU
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
-from mmseg.datasets.pipelines import Compose
 from torchinfo import summary
+from torch.nn import CrossEntropyLoss
+import wandb
+from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
-# import os
-# import math
-# import itertools
-# import urllib
-# from functools import partial
-# from pathlib import Path
-# from PIL import Image
-# from torchvision import transforms      
-# import torch.nn.functional as F
-# import mmcv
-# from mmseg.models import build_backbone
-# from mmseg.apis.inference import LoadImage
-# from mmcv.parallel import collate, scatter
-# from mmseg.datasets.pipelines import Compose
 
-cluster_paths = True
-
+cluster_paths = False
+save_checkpoints = True
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -61,19 +46,20 @@ summary(backbone)
 num_classses = 15
 n_concat = 4
 device = 'cuda:0'
-conv_head = ConvHead(embedding_sz=backbone.embed_dim, 
+dec_head = ConvHead(embedding_sz=backbone.embed_dim, 
                      num_classses=num_classses,
                      n_concat=n_concat,
                      interp_fact=backbone.patch_size)
-conv_head.to(device)
+dec_head.to(device)
 
 print("Convolutional decode head")
-summary(conv_head)
+summary(dec_head)
 
 # Initialize the segmentor
+train_backbone=False
 model = Segmentor(backbone=backbone,
-                  decode_head=conv_head,
-                  train_backbone=False)
+                  decode_head=dec_head,
+                  train_backbone=train_backbone)
 model.to(device)
 
 # Print model info
@@ -100,9 +86,9 @@ augmentations.append(dict(type='CentralPad',
 
 # Get the data loader
 if cluster_paths:
-        data_root_pth = Path('/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp1') 
+    data_root_pth = Path('/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp1') 
 else:            
-        data_root_pth = dino_main_pth.parent.parent / 'DataFoundationModels/HPC1'
+    data_root_pth = dino_main_pth.parent.parent / 'DataFoundationModels/HPC1'
 
 train_dataset = SegmentationDataset(img_dir=data_root_pth/'images/train-filtered',
                                     mask_dir=data_root_pth/'labels/train-filtered',
@@ -111,15 +97,15 @@ train_dataset = SegmentationDataset(img_dir=data_root_pth/'images/train-filtered
                                     mask_suffix='_labelTrainIds',
                                     augmentations=augmentations,
                                     )
-val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val-filtered',
-                                  mask_dir=data_root_pth/'labels/val-filtered',
+val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
+                                  mask_dir=data_root_pth/'labels/val',
                                   num_classes=num_classses,
                                   file_extension='.png',
                                   mask_suffix='_labelTrainIds',
                                   augmentations=augmentations,
                                   )
-test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test-filtered',
-                                   mask_dir=data_root_pth/'labels/test-filtered',
+test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
+                                   mask_dir=data_root_pth/'labels/test',
                                    num_classes=num_classses,
                                    file_extension='.png',
                                    mask_suffix='_labelTrainIds',
@@ -134,33 +120,79 @@ test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_sz,
                               shuffle=False, pin_memory=True)
 
 # Optimizer
+optm_cfg = dict(lr = 0.001,
+                wd = 0.0001,
+                betas = (0.9, 0.999))
 optm = torch.optim.AdamW(model.parameters(), 
-                         lr=0.001, weight_decay=0.0001, betas=(0.9, 0.999))
+                         lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-total_epochs = 2
-warmup_iters = 0#total_epochs//10
-scheduler1 = LinearLR(optm, start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)
-scheduler2 = PolynomialLR(optm, power=1.0)
+nb_epochs = 2
+warmup_iters =1
+lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
+              polynomial_lr = dict(power=1.0))
+scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
+scheduler2 = PolynomialLR(optm, **lr_cfg['polynomial_lr'])
 scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[warmup_iters])
+#@TODO: check tuning strategies for LR
 
 # Loss function
-mIoU = mIoULoss(n_classes=num_classses)
+loss = CrossEntropyLoss()
 
+# Metrics
+metrics=dict(mIoU=mIoU(n_classes=num_classses),)
+
+# Init the logger (wandb)
+wnadb_config = dict(backbone_name=backbone_name,
+                    backbone_last_n_concat=n_concat,
+                    decode_head=dec_head.__class__.__name__,
+                    train_backbone=train_backbone,
+                    dataset=str(data_root_pth),
+                    num_classes=num_classses,
+                    augmentations=augmentations,
+                    nb_epochs=nb_epochs,
+                    lr_cfg=lr_cfg)
+
+
+wandb_log_path = dino_main_pth / 'Logs'
+wandb_log_path.mkdir(parents=True, exist_ok=True)
+wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not train_backbone else '_with_train'
+logger = wandb.init(project='FoundationModels_MedDino',
+                    group=wandb_group_name,
+                    config=wnadb_config,
+                    dir=wandb_log_path,
+                    name=time_str(),)
+
+# Init checkpointer
+models_pth = dino_main_pth / f'Checkpoints/MedDino/conv_head'
+cp = Checkpointer(save_pth=models_pth, monitor='val_loss',
+                  minimize=True, n_best=2, 
+                  name_prefix=time_str())
+
+if not save_checkpoints:
+    cp = None
+    
 # Training loop
-if cluster_paths:
-        models_pth = Path(f'scratch_net/biwidl210/kcekmeceli/DataFoundationModels/trained_models/conv_head/{time_str()}.pth') 
-else:   
-        models_pth = dino_main_pth / f'Checkpoints/MedDino/conv_head/{time_str()}.pth'
-(train_loss, val_loss) = train(model=model, train_loader=train_dataloader, 
-                               val_loader=val_dataloader, loss_fn=mIoU, 
-                               optimizer=optm, scheduler=scheduler,
-                               n_epochs=total_epochs, device=device,
-                               save_best_val_path=models_pth)
+train(model=model, train_loader=train_dataloader, 
+      val_loader=val_dataloader, loss_fn=loss, 
+      optimizer=optm, scheduler=scheduler,
+      n_epochs=nb_epochs, device=device, logger=logger,
+      checkpointer=cp, metrics=metrics)
 
 # Prints the test set mIoU loss
-test(model=model, val_loader=val_dataloader, loss_fn=mIoU, device=device)
+#@TODO return hard decision predicted seg classes per pix
+test(model=model, test_loader=test_dataloader, loss_fn=loss, 
+     device=device, logger=logger, metrics=metrics)
 
+#@TODO plot gt and prediction side by side
 
+#@TODO Weights and biases log
+# log input pred gt randomly every n iter (dice scores per class)
+
+#@TODO add types and comments
+#@TODO write readme.md
+#@TODO maybe torchlighning Friday
+
+#finish logging
+wandb.finish()
 print('***END***')
-

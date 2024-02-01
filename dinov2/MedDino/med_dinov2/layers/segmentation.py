@@ -125,7 +125,7 @@ class ConvHead(SegHeadBase):
                          interp_fact=interp_fact,)
         
         if batch_norm:
-            self.batch_norm = nn.SyncBatchNorm(self.input_dim)  #@TODO change not sure
+            self.batch_norm = nn.SyncBatchNorm(self.input_dim)  
         
         if dropout_rat>0:
             self.dropout = nn.Dropout2d(dropout_rat)  # Randomly zero out entire channels

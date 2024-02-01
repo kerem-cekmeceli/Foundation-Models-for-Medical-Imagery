@@ -1,5 +1,6 @@
 from PIL import Image
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from torchvision.transforms import functional as F
@@ -14,25 +15,38 @@ import torch.nn.functional as F
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 from pathlib import Path
+import wandb
+from typing import Callable, Optional, Union, Dict
+from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
-
-def train_all_batches(model, train_loader, loss_fn, optimizer, device):
+def train_all_batches(model : nn.Module, 
+                      train_loader : DataLoader, 
+                      loss_fn : Callable, 
+                      optimizer : torch.optim.Optimizer, 
+                      device : Union[str, torch.device], 
+                      metrics : Optional[Dict[str, Callable]] = None) -> dict:
     model.train()
     batches = tqdm(train_loader, desc='Train Batches', leave=False)
-    running_loss = 0
+    tot_batches = len(batches)
     
-    if len(batches)<=0:
+    if tot_batches<=0:
         raise Exception('No data')
     
-    for x_batch, y_batch in batches:
+    metrics = {} if metrics is None else metrics
+    
+    # Init the epoch log dict (to be averaged over all the batches)
+    log_epoch = dict(loss=0.)
+    for metric_n in metrics.keys():
+        log_epoch[metric_n] = 0.
+    
+    for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
-        x_batch = x_batch.to(device=device)
+        x_batch = x_batch.to(device=device) #@TODO model.device
         y_batch = y_batch.to(device=device)
         
         # Forward pass
         y_pred = model(x_batch)
         loss = loss_fn(y_pred, y_batch)
-        running_loss += loss.item()
         
         # backward pass
         optimizer.zero_grad()
@@ -41,15 +55,40 @@ def train_all_batches(model, train_loader, loss_fn, optimizer, device):
         # Update weights
         optimizer.step()
         
-    return running_loss / len(batches)
+        # Save the values
+        log_epoch['loss']+=loss.item()
         
-def validate_all_batches(model, val_loader, loss_fn, device):
+        # Compute the metrics
+        for metric_n, metric in metrics.items():
+            metric_val = metric(y_pred, y_batch).item()
+            log_epoch[metric_n] += metric_val
+    
+    # Average out the epoch logs 
+    for key in log_epoch.keys():
+        log_epoch[key] /= tot_batches  
+               
+    return log_epoch
+        
+def validate_all_batches(model: nn.Module, 
+                         val_loader: DataLoader, 
+                         loss_fn: Callable, 
+                         device: Union[str, torch.device], 
+                         metrics: Optional[Dict[str, Callable]]=None) -> dict:
     model.eval()
     batches = tqdm(val_loader, desc='Eval Batches', leave=False)
-    running_loss = 0
+    tot_batches = len(batches)
+    
+    if tot_batches<=0:
+        raise Exception('No data')
+    
+    metrics = {} if metrics is None else metrics
     
     if len(batches)<=0:
         raise Exception('No data')
+    
+    log_epoch = dict(val_loss=0.)
+    for metric_n in metrics.keys():
+        log_epoch['val_'+metric_n] = 0.
     
     for x_batch, y_batch in batches:
         # Put the data on the selected device
@@ -59,63 +98,89 @@ def validate_all_batches(model, val_loader, loss_fn, device):
         # Forward pass
         y_pred = model(x_batch)
         loss = loss_fn(y_pred, y_batch)
-        running_loss += loss.item()
         
-    return running_loss / len(batches)
+        # Save the values        
+        log_epoch['val_loss']+=loss.item()
+        
+        # Compute the metrics
+        for metric_n, metric in metrics.items():
+            metric_val = metric(y_pred, y_batch).item()
+            log_epoch['val_'+metric_n] += metric_val
+     
+    # Average out the epoch logs 
+    for key in log_epoch.keys():
+        log_epoch[key] /= tot_batches      
+        
+    return log_epoch
 
-# @TODO add metrics: dict:{metric_name:callable}
 
-def train(model, train_loader, loss_fn, optimizer, n_epochs, device,
-          scheduler=None, val_loader=None, print_epoch_info=True,
-          save_best_val_path=None):
+def train(model: nn.Module, 
+          train_loader: DataLoader, 
+          loss_fn: Callable, 
+          optimizer: torch.optim.Optimizer,
+          n_epochs: int, 
+          device: Union[str, torch.device], 
+          logger: wandb.wandb_sdk.wandb_run.Run,
+          scheduler: Optional[torch.optim.lr_scheduler.SequentialLR]=None, 
+          val_loader: Optional[DataLoader]=None, 
+          print_epoch_info: bool=True,
+          checkpointer: Optional[Checkpointer]=None, 
+          metrics: Optional[Dict[str, Callable]]=None) -> None:
+    
     model.to(device)
     epochs = tqdm(range(n_epochs), desc='Epochs')
     
-    if save_best_val_path is not None:
-        if isinstance(save_best_val_path, Path):
-            save_best_val_path = str(save_best_val_path)
-        assert isinstance(save_best_val_path, str)
-        best_validation_loss = float('inf')  # Initialize with positive infinity
-    
-    train_loss = []
-    if val_loader is not None:
-        val_loss = []
+    if metrics is not None:
+        assert isinstance(metrics, dict)
     
     for epoch in epochs:
+        # Init the epoch log dict
+        log_epoch = dict(epoch=epoch, lr=optimizer.param_groups[0]["lr"])
+                
         # Train
-        train_loss_e = train_all_batches(model, train_loader, loss_fn, optimizer, device)
-        train_loss.append(train_loss_e)
-        epoch_str = f'Epoch:{epoch+1}/{n_epochs}, lr={round(optimizer.param_groups[0]["lr"], 6)}, train_loss={round(train_loss_e, 6)}'
+        log_train = train_all_batches(model, train_loader, loss_fn, optimizer, device, metrics)
+        log_epoch = log_epoch | log_train
         
         # Validate    
         if val_loader is not None:
-            val_loss_e = validate_all_batches(model, val_loader, loss_fn, device)
-            val_loss.append(val_loss_e)
-            epoch_str += f', val_loss={round(val_loss_e, 6)}'
-            
-            if save_best_val_path is not None:
-                if val_loss_e < best_validation_loss:
-                    best_validation_loss = val_loss_e
-
-                    # Save the model
-                    torch.save(model.state_dict(), save_best_val_path)
+            log_val = validate_all_batches(model, val_loader, loss_fn, device, metrics)
+            log_epoch = log_epoch | log_val
             
         # Update LR
         if scheduler is not None:
             scheduler.step()
-            
+        
+        # Print epoch info
         if print_epoch_info:
+            epoch_str = ''
+            for key, val in log_epoch.items():
+                if epoch_str != '':
+                    epoch_str += ', '
+                epoch_str += f'{key} = {round(val, 5)}'
             tqdm.write(epoch_str)
             
-    if val_loader is not None:   
-        return (train_loss, val_loss)
-    else:
-        return (train_loss)
+        # Checkpointer
+        if checkpointer is not None:
+            assert checkpointer.monitor in log_epoch.keys(), 'Monitored qty is missing'
+            checkpointer.update(model=model, metric=log_epoch[checkpointer.monitor], epoch=epoch)
+            
+        # Log the epoch
+        logger.log(log_epoch)
+        
+    # Save the best models:
+    if checkpointer is not None:
+        checkpointer.save()
+            
     
-def test(model, val_loader, loss_fn, device):
-    test_loss = validate_all_batches(model, val_loader, loss_fn, device)
-    print(f'Test loss={test_loss}')
-    
+def test(model: nn.Module,
+         test_loader: DataLoader, 
+         loss_fn: Callable, 
+         device: Union[str, torch.device], 
+         logger: wandb.wandb_sdk.wandb_run.Run,
+         metrics: Optional[Dict[str, Callable]]=None, 
+         ):
+    log_test = validate_all_batches(model, test_loader, loss_fn, device, metrics)
+    logger.summary = logger.summary | log_test
     
 
     

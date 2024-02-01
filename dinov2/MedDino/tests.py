@@ -106,11 +106,109 @@ transforms.append(rm_from_res_dict)
 
 transforms = Compose(transforms)
 
-out = transforms(im)
+# out = transforms(im)
 
-im_t = out[0]
+# im_t = out[0]
 
-plt.figure()
-plt.imshow(im_t.detach().cpu().numpy().transpose([1, 2, 0])[..., ::-1])
-plt.show()
+# plt.figure()
+# plt.imshow(im_t.detach().cpu().numpy().transpose([1, 2, 0])[..., ::-1])
+# plt.show()
+# print()
+
+
+###################]
+
+# import h5py
+
+
+# data_root_pth = dino_main_pth.parent.parent / 'DataFoundationModels/HCP1_hdf5'
+
+# dat_rsz = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
+# dat_ori = 'data_T1_original_depth_256_from_20_to_25.hdf5'
+
+
+# with h5py.File(str(data_root_pth/dat_ori), 'r') as data:
+#     print()
+#     print()
+    
+    
+from queue import PriorityQueue
+
+q = PriorityQueue(maxsize=3, )
+
+q.put((4, 'Read'))
+q.put((2, 'Play'))
+q.put((5, 'Write'))
+q.put((1, 'Code'))
+q.put((3, 'Study'))
+
+while not q.empty():
+    next_item = q.get()
+    print(next_item)
+
+
 print()
+####################################
+
+
+# def train_all_batches(model : nn.Module, 
+#                       train_loader : Dataset, 
+#                       loss_fn : Callable, 
+#                       optimizer : torch.optim.Optimizer, 
+#                       device : Union[str, torch.device], 
+#                       logger : wandb.wandb_sdk.wandb_run.Run, 
+#                       epoch : int, 
+#                       log_batch : bool = False,
+#                       metrics : Optional[Dict[str, Callable]] = None) -> dict:
+#     model.train()
+#     batches = tqdm(train_loader, desc='Train Batches', leave=False)
+#     running_loss = 0
+    
+#     tot_batches = len(batches)
+#     if tot_batches<=0:
+#         raise Exception('No data')
+    
+#     metrics = {} if metrics is None else metrics
+    
+#     # Init the epoch log dict (to be averaged over all the batches)
+#     log_epoch = dict(epoch=epoch, loss=0.)
+#     for metric_n in metrics.keys():
+#         log_epoch[metric_n] = 0.
+    
+#     for i_batch, (x_batch, y_batch) in enumerate(batches):
+#         # Put the data on the selected device
+#         x_batch = x_batch.to(device=device) #@TODO model.device
+#         y_batch = y_batch.to(device=device)
+        
+#         # Forward pass
+#         y_pred = model(x_batch)
+#         loss = loss_fn(y_pred, y_batch)
+        
+#         # backward pass
+#         optimizer.zero_grad()
+#         loss.backward()
+        
+#         # Update weights
+#         optimizer.step()
+        
+#         ## Log the values
+#         if log_batch:
+#             log_batch = dict(batch_idx=i_batch, epoch=epoch, loss=loss.item)
+#         log_epoch['loss']+=loss.item
+        
+#         # Compute the metrics
+#         for metric_n, metric in metrics.items():
+#             metric_val = metric(y_pred, y_batch).item
+#             if log_batch:
+#                 log_batch[metric_n] = metric_val
+#             log_epoch[metric_n] += metric_val
+        
+#         if log_batch:    
+#             # Log the batch
+#             logger.log(log_batch)
+    
+#     # Average out the epoch logs 
+#     for key in log_epoch.keys():
+#         log_epoch[key] /= tot_batches  
+               
+#     return log_epoch
