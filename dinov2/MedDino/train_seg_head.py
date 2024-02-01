@@ -67,7 +67,7 @@ print("Segmentor model")
 summary(model)
 
 # Define data augmentations
-img_scale_fac = 1
+img_scale_fac = 3
 augmentations = []
 augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
 augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
@@ -127,8 +127,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 2
-warmup_iters =1
+nb_epochs = 100
+warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
