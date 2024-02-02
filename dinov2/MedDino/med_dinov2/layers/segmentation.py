@@ -103,7 +103,7 @@ class SegHeadBase(nn.Module, ABC):
             
             return pix_logits
     
-class ConvHead(SegHeadBase):
+class ConvHeadLinear(SegHeadBase):
     
     def __init__(self, 
                  embedding_sz, 

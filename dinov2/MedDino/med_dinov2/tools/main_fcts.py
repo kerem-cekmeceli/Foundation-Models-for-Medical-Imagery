@@ -161,8 +161,7 @@ def train(model: nn.Module,
             
         # Checkpointer
         if checkpointer is not None:
-            assert checkpointer.monitor in log_epoch.keys(), 'Monitored qty is missing'
-            checkpointer.update(model=model, metric=log_epoch[checkpointer.monitor], epoch=epoch)
+            checkpointer.update(model=model, metrics=log_epoch, epoch=epoch)
             
         # Log the epoch
         logger.log(log_epoch)
@@ -170,6 +169,60 @@ def train(model: nn.Module,
     # Save the best models:
     if checkpointer is not None:
         checkpointer.save()
+        
+        
+        
+def test_all_batches(model: nn.Module, 
+                     val_loader: DataLoader, 
+                     loss_fn: Callable, 
+                     device: Union[str, torch.device], 
+                     metrics: Optional[Dict[str, Callable]]=None, 
+                     soft: bool=False) -> dict:
+    model.eval()
+    batches = tqdm(val_loader, desc='Test Batches', leave=False)
+    tot_batches = len(batches)
+    
+    if tot_batches<=0:
+        raise Exception('No data')
+    
+    metrics = {} if metrics is None else metrics
+    
+    if len(batches)<=0:
+        raise Exception('No data')
+    
+    log_epoch = dict(test_loss=0.)
+    for metric_n in metrics.keys():
+        log_epoch['test_'+metric_n] = 0.
+    
+    for x_batch, y_batch in batches:
+        # Put the data on the selected device
+        x_batch = x_batch.to(device=device)
+        y_batch = y_batch.to(device=device)
+        
+        # Forward pass
+        y_pred = model(x_batch)
+        
+        # Hard decision
+        if not soft:
+            n_classes = y_pred.shape[1]
+            dtype = y_pred.dtype
+            y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(dtype)
+        
+        loss = loss_fn(y_pred, y_batch)
+        
+        # Save the values        
+        log_epoch['test_loss']+=loss.item()
+        
+        # Compute the metrics
+        for metric_n, metric in metrics.items():
+            metric_val = metric(y_pred, y_batch).item()
+            log_epoch['test_'+metric_n] += metric_val
+     
+    # Average out the epoch logs 
+    for key in log_epoch.keys():
+        log_epoch[key] /= tot_batches      
+        
+    return log_epoch
             
     
 def test(model: nn.Module,
@@ -178,9 +231,14 @@ def test(model: nn.Module,
          device: Union[str, torch.device], 
          logger: wandb.wandb_sdk.wandb_run.Run,
          metrics: Optional[Dict[str, Callable]]=None, 
-         ):
-    log_test = validate_all_batches(model, test_loader, loss_fn, device, metrics)
+         soft:bool = False):
+    log_test = test_all_batches(model, test_loader, loss_fn, device, metrics, soft)
     logger.summary = logger.summary | log_test
+    
+    test_str = ''
+    for key, val in log_test.items():
+        test_str += f'{key}={round(val, 5)}, '
+    print(test_str)
     
 
     

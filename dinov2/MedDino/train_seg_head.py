@@ -17,11 +17,11 @@ from prep_model import get_bb_name, get_dino_backbone, time_str
 from OrigDino.dinov2.eval.segmentation import models
 
 from MedDino.med_dinov2.models.segmentor import Segmentor
-from MedDino.med_dinov2.layers.segmentation import ConvHead
+from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.losses.metrics import mIoU
+from MedDino.med_dinov2.metrics.metrics import mIoU, DiceScore
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary
@@ -32,6 +32,7 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
 cluster_paths = True
 save_checkpoints = True
+log_the_run = True
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -45,8 +46,11 @@ summary(backbone)
 # Initialize the segmentation decode head
 num_classses = 15
 n_concat = 4
-device = 'cuda:0'
-dec_head = ConvHead(embedding_sz=backbone.embed_dim, 
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print('Using device:', device)
+
+dec_head = ConvHeadLinear(embedding_sz=backbone.embed_dim, 
                      num_classses=num_classses,
                      n_concat=n_concat,
                      interp_fact=backbone.patch_size)
@@ -67,7 +71,7 @@ print("Segmentor model")
 summary(model)
 
 # Define data augmentations
-img_scale_fac = 3
+img_scale_fac = 1#3
 augmentations = []
 augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
 augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
@@ -127,8 +131,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 100
-warmup_iters = 20
+nb_epochs = 3#100
+warmup_iters = 1#20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
@@ -140,7 +144,10 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 loss = CrossEntropyLoss()
 
 # Metrics
-metrics=dict(mIoU=mIoU(n_classes=num_classses),)
+metrics=dict(mIoU=mIoU(n_classes=num_classses),
+             dice=DiceScore(bg_channel=0, soft=True, 
+                            reduction='mean', k=1, epsilon=1e-6,
+                            fg_only=True))
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,
@@ -157,36 +164,40 @@ wnadb_config = dict(backbone_name=backbone_name,
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
 wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not train_backbone else '_with_train'
+log_mode = 'online' if log_the_run else 'disabled'
 logger = wandb.init(project='FoundationModels_MedDino',
                     group=wandb_group_name,
                     config=wnadb_config,
                     dir=wandb_log_path,
-                    name=time_str(),)
+                    name=time_str(),
+                    mode=log_mode)
 
 # Init checkpointer
+n_best = 2
 models_pth = dino_main_pth / f'Checkpoints/MedDino/conv_head'
-cp = Checkpointer(save_pth=models_pth, monitor='val_loss',
-                  minimize=True, n_best=2, 
+cp = Checkpointer(save_pth=models_pth, 
+                  monitor=['val_loss', 'val_dice', 'val_mIoU'],
+                  minimize=[True, False, False], 
+                  n_best=n_best, 
                   name_prefix=time_str())
 
 if not save_checkpoints:
     cp = None
     
 # Training loop
-train(model=model, train_loader=train_dataloader, 
-      val_loader=val_dataloader, loss_fn=loss, 
-      optimizer=optm, scheduler=scheduler,
-      n_epochs=nb_epochs, device=device, logger=logger,
-      checkpointer=cp, metrics=metrics)
+# train(model=model, train_loader=train_dataloader, 
+#       val_loader=val_dataloader, loss_fn=loss, 
+#       optimizer=optm, scheduler=scheduler,
+#       n_epochs=nb_epochs, device=device, logger=logger,
+#       checkpointer=cp, metrics=metrics)
 
 # Prints the test set mIoU loss
 #@TODO return hard decision predicted seg classes per pix
 test(model=model, test_loader=test_dataloader, loss_fn=loss, 
-     device=device, logger=logger, metrics=metrics)
+     device=device, logger=logger, metrics=metrics, soft=False)
 
 #@TODO plot gt and prediction side by side
 
-#@TODO Weights and biases log
 # log input pred gt randomly every n iter (dice scores per class)
 
 #@TODO add types and comments

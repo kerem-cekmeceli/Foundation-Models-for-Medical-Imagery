@@ -134,20 +134,105 @@ transforms = Compose(transforms)
     
 from queue import PriorityQueue
 
-q = PriorityQueue(maxsize=3, )
+# q = PriorityQueue()
 
-q.put((4, 'Read'))
-q.put((2, 'Play'))
-q.put((5, 'Write'))
-q.put((1, 'Code'))
-q.put((3, 'Study'))
+# # def put_in(val, dat):
+# #     if q.full():
+# #         if val <= q[]
 
-while not q.empty():
-    next_item = q.get()
-    print(next_item)
+# q.put((4, 'Read'))
+# q.put((2, 'Play'))
+# q.put((5, 'Write'))
+# q.put((1, 'Code'))
+# q.put((3, 'Study'))
+
+
+
+
+from copy import deepcopy
+
+class PriorityQueueFixedSz:
+    def __init__(self, sz, keep_min=True):
+        self.sz = sz
+        self.minimize = keep_min
+        self.pq = PriorityQueue(maxsize=sz)
+        
+    def update(self, score, data):            
+        queue_score = -score if self.minimize else score
+        new_el = (queue_score, data)
+        
+        if self.pq.full():
+            old_worst = self.pq.get()
+            if old_worst[0]<=new_el[0]:
+                self.pq.put(new_el)
+            else:
+                self.pq.put(old_worst)
+        else:
+            self.pq.put((queue_score, data))
+
+
+    def get_elems(self):
+        els = []
+        while not self.pq.empty():
+            (queue_score, data) = self.pq.get()
+            score = -queue_score if self.minimize else queue_score
+            els.append((score, data))
+        els.reverse()  # Best first
+        return els
+
+
+# Example usage
+pq3 = PriorityQueueFixedSz(sz=3, keep_min=True)
+
+# Feed data and scores
+pq3.update(10, "Ten")
+pq3.update(5, "Five")
+pq3.update(8, "Eight")
+pq3.update(3, "Three")
+pq3.update(7, "Seven")
+pq3.update(9, "Nine")
+pq3.update(7, "Seven2")
+pq3.update(4, "Four")
+pq3.update(1, "One")
 
 
 print()
+
+# import heapq
+
+# class ThreeSmallestScores:
+#     def __init__(self):
+#         self.smallest_scores = []
+#         self.minimize = True
+
+#     def update(self, score, data):
+#         if self.minimize:
+#             score = -score
+#         # Update the list with the 3 smallest scores and their associated data
+#         heapq.heappush(self.smallest_scores, (score, data))
+#         if len(self.smallest_scores) > 3:
+#             heapq.heappop(self.smallest_scores)
+
+#     def get_three_smallest(self):
+#         return sorted(self.smallest_scores)
+
+# # Example usage
+# three_smallest_handler = PriorityQueueFixedSz()
+
+# # Feed data and scores
+# three_smallest_handler.update(10, "Data1")
+# three_smallest_handler.update(5, "Data2")
+# three_smallest_handler.update(8, "Data3")
+# three_smallest_handler.update(3, "Data4")
+# three_smallest_handler.update(7, "Data5")
+
+# Get the 3 smallest scores and their associated data
+result = pq3.get_three_smallest()
+print(result)
+
+
+print()
+
 ####################################
 
 
