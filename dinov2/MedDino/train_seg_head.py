@@ -30,7 +30,7 @@ import wandb
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
 
-cluster_paths = False
+cluster_paths = True
 save_checkpoints = True
 log_the_run = True
 
