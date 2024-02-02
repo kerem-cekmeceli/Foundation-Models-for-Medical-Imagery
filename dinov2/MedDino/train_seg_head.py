@@ -30,7 +30,7 @@ import wandb
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = True
 log_the_run = True
 
@@ -71,7 +71,7 @@ print("Segmentor model")
 summary(model)
 
 # Define data augmentations
-img_scale_fac = 1#3
+img_scale_fac = 1
 augmentations = []
 augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
 augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
@@ -131,8 +131,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 3#100
-warmup_iters = 1#20
+nb_epochs = 3
+warmup_iters = 1
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
@@ -164,7 +164,7 @@ wnadb_config = dict(backbone_name=backbone_name,
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
 wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not train_backbone else '_with_train'
-log_mode = 'online' if log_the_run else 'disabled'
+log_mode = 'offline' if log_the_run else 'disabled'
 logger = wandb.init(project='FoundationModels_MedDino',
                     group=wandb_group_name,
                     config=wnadb_config,
