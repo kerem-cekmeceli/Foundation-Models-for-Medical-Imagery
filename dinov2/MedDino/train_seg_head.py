@@ -175,6 +175,7 @@ logger = wandb.init(project='FoundationModels_MedDino',
 # Init checkpointer
 n_best = 2
 models_pth = dino_main_pth / f'Checkpoints/MedDino/conv_head'
+models_pth.mkdir(parents=True, exist_ok=True)
 cp = Checkpointer(save_pth=models_pth, 
                   monitor=['val_loss', 'val_dice', 'val_mIoU'],
                   minimize=[True, False, False], 
