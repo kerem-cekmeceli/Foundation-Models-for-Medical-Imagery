@@ -71,7 +71,7 @@ print("Segmentor model")
 summary(model)
 
 # Define data augmentations
-img_scale_fac = 1
+img_scale_fac = 3
 augmentations = []
 augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
 augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
@@ -131,8 +131,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 3
-warmup_iters = 1
+nb_epochs = 150
+warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
@@ -164,7 +164,7 @@ wnadb_config = dict(backbone_name=backbone_name,
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
 wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not train_backbone else '_with_train'
-log_mode = 'offline' if log_the_run else 'disabled'
+log_mode = 'online' if log_the_run else 'disabled'
 logger = wandb.init(project='FoundationModels_MedDino',
                     group=wandb_group_name,
                     config=wnadb_config,
@@ -186,21 +186,18 @@ if not save_checkpoints:
     cp = None
     
 # Training loop
-# train(model=model, train_loader=train_dataloader, 
-#       val_loader=val_dataloader, loss_fn=loss, 
-#       optimizer=optm, scheduler=scheduler,
-#       n_epochs=nb_epochs, device=device, logger=logger,
-#       checkpointer=cp, metrics=metrics)
+train(model=model, train_loader=train_dataloader, 
+      val_loader=val_dataloader, loss_fn=loss, 
+      optimizer=optm, scheduler=scheduler,
+      n_epochs=nb_epochs, device=device, logger=logger,
+      checkpointer=cp, metrics=metrics)
 
-# Prints the test set mIoU loss
-#@TODO return hard decision predicted seg classes per pix
+# Test hard decision predicted seg classes per pix
 test(model=model, test_loader=test_dataloader, loss_fn=loss, 
      device=device, logger=logger, metrics=metrics, soft=False)
 
 #@TODO plot gt and prediction side by side
-
-# log input pred gt randomly every n iter (dice scores per class)
-
+#@TODO log input pred gt randomly every n iter (dice scores per class)
 #@TODO add types and comments
 #@TODO write readme.md
 #@TODO maybe torchlighning Friday
