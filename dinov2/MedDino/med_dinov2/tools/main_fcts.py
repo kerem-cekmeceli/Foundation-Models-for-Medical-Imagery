@@ -233,10 +233,10 @@ def test(model: nn.Module,
          metrics: Optional[Dict[str, Callable]]=None, 
          soft:bool = False):
     log_test = test_all_batches(model, test_loader, loss_fn, device, metrics, soft)
-    logger.summary = logger.summary | log_test
     
     test_str = ''
     for key, val in log_test.items():
+        logger.summary[key] = val
         test_str += f'{key}={round(val, 5)}, '
     print(test_str)
     
