@@ -18,8 +18,9 @@ from pathlib import Path
 import wandb
 from typing import Callable, Optional, Union, Dict
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
+from MedDino.med_dinov2.tools.plot import show_result
 
-def train_all_batches(model : nn.Module, 
+def train_batches(model : nn.Module, 
                       train_loader : DataLoader, 
                       loss_fn : Callable, 
                       optimizer : torch.optim.Optimizer, 
@@ -69,7 +70,7 @@ def train_all_batches(model : nn.Module,
                
     return log_epoch
         
-def validate_all_batches(model: nn.Module, 
+def validate_batches(model: nn.Module, 
                          val_loader: DataLoader, 
                          loss_fn: Callable, 
                          device: Union[str, torch.device], 
@@ -90,10 +91,10 @@ def validate_all_batches(model: nn.Module,
     for metric_n in metrics.keys():
         log_epoch['val_'+metric_n] = 0.
     
-    for x_batch, y_batch in batches:
+    for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
-        x_batch = x_batch.to(device=device)
-        y_batch = y_batch.to(device=device)
+        x_batch = x_batch.to(device=device)  # [N, C, H, W]
+        y_batch = y_batch.to(device=device)  # [N, num_cls, H, W]
         
         # Forward pass
         y_pred = model(x_batch)
@@ -138,12 +139,12 @@ def train(model: nn.Module,
         log_epoch = dict(epoch=epoch, lr=optimizer.param_groups[0]["lr"])
                 
         # Train
-        log_train = train_all_batches(model, train_loader, loss_fn, optimizer, device, metrics)
+        log_train = train_batches(model, train_loader, loss_fn, optimizer, device, metrics)
         log_epoch = log_epoch | log_train
         
         # Validate    
         if val_loader is not None:
-            log_val = validate_all_batches(model, val_loader, loss_fn, device, metrics)
+            log_val = validate_batches(model, val_loader, loss_fn, device, metrics)
             log_epoch = log_epoch | log_val
             
         # Update LR
@@ -172,7 +173,7 @@ def train(model: nn.Module,
         
         
         
-def test_all_batches(model: nn.Module, 
+def test_batches(model: nn.Module, 
                      val_loader: DataLoader, 
                      loss_fn: Callable, 
                      device: Union[str, torch.device], 
@@ -194,7 +195,7 @@ def test_all_batches(model: nn.Module,
     for metric_n in metrics.keys():
         log_epoch['test_'+metric_n] = 0.
     
-    for x_batch, y_batch in batches:
+    for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
         x_batch = x_batch.to(device=device)
         y_batch = y_batch.to(device=device)
@@ -217,6 +218,16 @@ def test_all_batches(model: nn.Module,
         for metric_n, metric in metrics.items():
             metric_val = metric(y_pred, y_batch).item()
             log_epoch['test_'+metric_n] += metric_val
+            
+        if i_batch<32: # First 2 patients
+            idx = -1  # last minimbatch elements
+            log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
+                                  masks={
+                                      'predictions': {'mask_data': y_pred[idx].detach().cpu().argmax(dim=0).numpy(),
+                                                      },
+                                      'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
+                                      })
+            wandb.log({'test_seg': log_img})
      
     # Average out the epoch logs 
     for key in log_epoch.keys():
@@ -232,7 +243,7 @@ def test(model: nn.Module,
          logger: wandb.wandb_sdk.wandb_run.Run,
          metrics: Optional[Dict[str, Callable]]=None, 
          soft:bool = False):
-    log_test = test_all_batches(model, test_loader, loss_fn, device, metrics, soft)
+    log_test = test_batches(model, test_loader, loss_fn, device, metrics, soft)
     
     test_str = ''
     for key, val in log_test.items():

@@ -1280,7 +1280,9 @@ class Resize2(object):
                  keep_ratio: bool = False,
                  clip_object_border: bool = True,
                  backend: str = 'cv2',
-                 interpolation='bilinear') -> None:
+                 interpolation='bilinear',
+                 only_img:bool = False) -> None:
+        self.only_img = only_img
         assert scale is not None or scale_factor is not None, (
             '`scale` and'
             '`scale_factor` can not both be `None`')
@@ -1399,9 +1401,10 @@ class Resize2(object):
             results['scale'] = _scale_size(img_shape[::-1],
                                            self.scale_factor)  # type: ignore
         self._resize_img(results)
-        self._resize_bboxes(results)
-        self._resize_seg(results)
-        self._resize_keypoints(results)
+        if not self.only_img:
+            self._resize_bboxes(results)
+            self._resize_seg(results)
+            self._resize_keypoints(results)
         return results
 
 

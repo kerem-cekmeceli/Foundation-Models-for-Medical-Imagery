@@ -134,7 +134,7 @@ optm = torch.optim.AdamW(model.parameters(),
 nb_epochs = 150
 warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
-              polynomial_lr = dict(power=1.0))
+              polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
 scheduler2 = PolynomialLR(optm, **lr_cfg['polynomial_lr'])
 scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[warmup_iters])
@@ -201,6 +201,9 @@ test(model=model, test_loader=test_dataloader, loss_fn=loss,
 #@TODO add types and comments
 #@TODO write readme.md
 #@TODO maybe torchlighning Friday
+
+#@TODO validate and test at the original resolution, also for training ???
+    # x --> scale up resize --> model --> scale down resize  --> accuracy 
 
 #finish logging
 wandb.finish()
