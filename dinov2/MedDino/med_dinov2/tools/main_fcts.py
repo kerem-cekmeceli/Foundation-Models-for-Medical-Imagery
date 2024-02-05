@@ -200,6 +200,8 @@ def test_batches(model: nn.Module,
         x_batch = x_batch.to(device=device)
         y_batch = y_batch.to(device=device)
         
+        # check if you have nans x batch or y batch
+        
         # Forward pass
         y_pred = model(x_batch)
         

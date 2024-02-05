@@ -97,6 +97,9 @@ transforms.append(put_in_res_dict)
 #                         scale_factor=3., #HW
 #                         keep_ratio=True))
 
+transforms.append(dict(type='CentralCrop',  
+                              size_divisor=14))
+
 # mmseg/datasets/pipelines/transforms  
 # conv the img keys to torch.Tensor with [HWC] -> [CHW]
 transforms.append(dict(type='ImageToTensor', keys=['img']))
@@ -106,14 +109,15 @@ transforms.append(rm_from_res_dict)
 
 transforms = Compose(transforms)
 
-# out = transforms(im)
+out = transforms(im)
 
-# im_t = out[0]
+im_t = out[0]
 
-# plt.figure()
-# plt.imshow(im_t.detach().cpu().numpy().transpose([1, 2, 0])[..., ::-1])
-# plt.show()
-# print()
+
+plt.figure()
+plt.imshow(im_t.detach().cpu().numpy().transpose([1, 2, 0])[..., ::-1])
+plt.show()
+print()
 
 
 ###################]
@@ -132,71 +136,71 @@ transforms = Compose(transforms)
 #     print()
     
     
-from queue import PriorityQueue
+# from queue import PriorityQueue
 
-# q = PriorityQueue()
+# # q = PriorityQueue()
 
-# # def put_in(val, dat):
-# #     if q.full():
-# #         if val <= q[]
+# # # def put_in(val, dat):
+# # #     if q.full():
+# # #         if val <= q[]
 
-# q.put((4, 'Read'))
-# q.put((2, 'Play'))
-# q.put((5, 'Write'))
-# q.put((1, 'Code'))
-# q.put((3, 'Study'))
-
-
+# # q.put((4, 'Read'))
+# # q.put((2, 'Play'))
+# # q.put((5, 'Write'))
+# # q.put((1, 'Code'))
+# # q.put((3, 'Study'))
 
 
-from copy import deepcopy
 
-class PriorityQueueFixedSz:
-    def __init__(self, sz, keep_min=True):
-        self.sz = sz
-        self.minimize = keep_min
-        self.pq = PriorityQueue(maxsize=sz)
+
+# from copy import deepcopy
+
+# class PriorityQueueFixedSz:
+#     def __init__(self, sz, keep_min=True):
+#         self.sz = sz
+#         self.minimize = keep_min
+#         self.pq = PriorityQueue(maxsize=sz)
         
-    def update(self, score, data):            
-        queue_score = -score if self.minimize else score
-        new_el = (queue_score, data)
+#     def update(self, score, data):            
+#         queue_score = -score if self.minimize else score
+#         new_el = (queue_score, data)
         
-        if self.pq.full():
-            old_worst = self.pq.get()
-            if old_worst[0]<=new_el[0]:
-                self.pq.put(new_el)
-            else:
-                self.pq.put(old_worst)
-        else:
-            self.pq.put((queue_score, data))
+#         if self.pq.full():
+#             old_worst = self.pq.get()
+#             if old_worst[0]<=new_el[0]:
+#                 self.pq.put(new_el)
+#             else:
+#                 self.pq.put(old_worst)
+#         else:
+#             self.pq.put((queue_score, data))
 
 
-    def get_elems(self):
-        els = []
-        while not self.pq.empty():
-            (queue_score, data) = self.pq.get()
-            score = -queue_score if self.minimize else queue_score
-            els.append((score, data))
-        els.reverse()  # Best first
-        return els
+#     def get_elems(self):
+#         els = []
+#         while not self.pq.empty():
+#             (queue_score, data) = self.pq.get()
+#             score = -queue_score if self.minimize else queue_score
+#             els.append((score, data))
+#         els.reverse()  # Best first
+#         return els
 
 
-# Example usage
-pq3 = PriorityQueueFixedSz(sz=3, keep_min=True)
+# # Example usage
+# pq3 = PriorityQueueFixedSz(sz=3, keep_min=True)
 
-# Feed data and scores
-pq3.update(10, "Ten")
-pq3.update(5, "Five")
-pq3.update(8, "Eight")
-pq3.update(3, "Three")
-pq3.update(7, "Seven")
-pq3.update(9, "Nine")
-pq3.update(7, "Seven2")
-pq3.update(4, "Four")
-pq3.update(1, "One")
+# # Feed data and scores
+# pq3.update(10, "Ten")
+# pq3.update(5, "Five")
+# pq3.update(8, "Eight")
+# pq3.update(3, "Three")
+# pq3.update(7, "Seven")
+# pq3.update(9, "Nine")
+# pq3.update(7, "Seven2")
+# pq3.update(4, "Four")
+# pq3.update(1, "One")
 
 
-print()
+# print()
 
 # import heapq
 
@@ -227,11 +231,11 @@ print()
 # three_smallest_handler.update(7, "Data5")
 
 # Get the 3 smallest scores and their associated data
-result = pq3.get_three_smallest()
-print(result)
+# result = pq3.get_three_smallest()
+# print(result)
 
 
-print()
+# print()
 
 ####################################
 

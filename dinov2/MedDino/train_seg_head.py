@@ -30,9 +30,9 @@ import wandb
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -71,22 +71,29 @@ print("Segmentor model")
 summary(model)
 
 # Define data augmentations
-img_scale_fac = 3
+img_scale_fac = 1  # Try without first
+central_crop = True
 augmentations = []
 augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
 augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
 augmentations.append(dict(type='PhotoMetricDistortion'))
-augmentations.append(dict(type='Resize2',
-                          scale_factor=float(img_scale_fac), #HW
-                          keep_ratio=True))
+
+if img_scale_fac > 1:
+    augmentations.append(dict(type='Resize2',
+                            scale_factor=float(img_scale_fac), #HW
+                            keep_ratio=True))
 
 augmentations.append(dict(type='Normalize', 
                           mean=[123.675, 116.28, 103.53],  #RGB
                           std=[58.395, 57.12, 57.375],  #RGB
                           to_rgb=True))
-augmentations.append(dict(type='CentralPad',
-                          size_divisor=backbone.patch_size,
-                          pad_val=0, seg_pad_val=0))
+if central_crop:
+    augmentations.append(dict(type='CentralCrop',  
+                              size_divisor=backbone.patch_size))
+else:
+    augmentations.append(dict(type='CentralPad',  
+                            size_divisor=backbone.patch_size,
+                            pad_val=0, seg_pad_val=0))
 
 # Get the data loader
 if cluster_paths:
@@ -131,8 +138,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 150
-warmup_iters = 20
+nb_epochs = 5
+warmup_iters = 2
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
@@ -144,10 +151,19 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 loss = CrossEntropyLoss()
 
 # Metrics
-metrics=dict(mIoU=mIoU(n_classes=num_classses),
-             dice=DiceScore(bg_channel=0, soft=True, 
-                            reduction='mean', k=1, epsilon=1e-6,
-                            fg_only=True))
+bg_channel = 0
+metrics=dict(mIoU=mIoU(n_class=num_classses, 
+                       prob_inputs=False, # Decoder does not return probas explicitly
+                       soft=True,
+                       bg_ch_to_rm=bg_channel,  # bg channel to be removed 
+                       reduction='mean'), # average over batches and classes
+             dice=DiceScore(n_class=num_classses, 
+                            prob_inputs=False,  # Decoder does not return probas explicitly
+                            soft=True,
+                            bg_ch_to_rm=bg_channel,
+                            reduction='mean',
+                            k=1, 
+                            epsilon=1e-6,))
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,
@@ -202,8 +218,13 @@ test(model=model, test_loader=test_dataloader, loss_fn=loss,
 #@TODO write readme.md
 #@TODO maybe torchlighning Friday
 
-#@TODO validate and test at the original resolution, also for training ???
-    # x --> scale up resize --> model --> scale down resize  --> accuracy 
+#@TODO ASK
+# validate and test at the original resolution, also for training ???
+# x --> scale up resize --> model --> scale down resize  --> accuracy 
+# Which decoder architecture 
+# which segmentations to log (test, how frequent, val ?)
+
+
 
 #finish logging
 wandb.finish()

@@ -1220,6 +1220,83 @@ class CentralPad(object):
                     f'pad_val={self.pad_val})'
         return repr_str
     
+@PIPELINES.register_module()
+class CentralCrop(object):
+    """Pad the image & mask.
+
+    There are two padding modes: (1) pad to a fixed size and (2) pad to the
+    minimum size that is divisible by some number.
+    Added keys are "pad_shape", "pad_fixed_size", "pad_size_divisor",
+
+    Args:
+        size (tuple, optional): Fixed padding size.
+        size_divisor (int, optional): The divisor of padded size.
+        pad_val (float, optional): Padding value. Default: 0.
+        seg_pad_val (float, optional): Padding value of segmentation map.
+            Default: 255.
+    """
+
+    def __init__(self,
+                 size=None,
+                 size_divisor=None,):
+        self.size = size
+        self.size_divisor = size_divisor
+                
+        # only one of size and size_divisor should be valid
+        assert size is not None or size_divisor is not None
+        assert size is None or size_divisor is None
+        
+    def _get_central_crops(self, orig_sz):
+        # Orig_sz [HWC]
+        if self.size is not None:
+            crop_w_tot = max(orig_sz[1] - self.size[1], 0)
+            crop_h_tot = max(orig_sz[0] - self.size[0], 0)
+            
+        else:
+            assert self.size_divisor > 0
+            crop_w_tot = orig_sz[1] - math.floor(orig_sz[1] / self.size_divisor)*self.size_divisor
+            crop_h_tot = orig_sz[0] - math.floor(orig_sz[0] / self.size_divisor)*self.size_divisor
+            
+        # crops on left and right
+        crop_l = crop_w_tot // 2
+        crop_r = crop_w_tot - crop_l
+        
+        # Pads on top and bottom
+        crop_t = crop_h_tot // 2
+        crop_b = crop_h_tot - crop_t
+        
+        crops = (crop_l, crop_t, crop_r, crop_b)
+        return crops
+
+    def _crop(self, res):
+        (crop_l, crop_t, crop_r, crop_b) = self._get_central_crops(res.shape)
+        croped = res[crop_t:-crop_b, crop_l:-crop_r, ...]
+        return croped
+            
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Updated result dict.
+        """
+        
+        results['img'] = self._crop(results['img'])
+        results['croped_shape'] = results['img'].shape
+        results['crop_size_divisor'] = self.size_divisor
+        
+        for key in results.get('seg_fields', []):
+            results[key] = self._crop(results[key])
+        
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(size={self.size}, size_divisor={self.size_divisor})'
+        return repr_str
+    
 
 from mmcv.image.geometric import _scale_size
 
