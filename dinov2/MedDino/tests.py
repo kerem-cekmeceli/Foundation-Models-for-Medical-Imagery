@@ -41,6 +41,23 @@ from mmseg.apis.inference import LoadImage
 # from mmseg.datasets.pipelines import Compose
 
 
+seg_log_per_batch = 3
+batch_sz = 21
+
+sp = seg_log_per_batch+1
+log_idxs = torch.arange(batch_sz//sp, 
+                        batch_sz//sp*sp, 
+                        batch_sz//sp)
+
+print(log_idxs)
+
+log_idxs = log_idxs + (batch_sz%sp)//2
+
+print(log_idxs)
+
+print()
+
+
 pth = dino_main_pth / 'oup_imgs/orig.png'
 im = Image.open(pth).convert('RGB') # RGB
 # im = cv2.imread(str(pth)) # BGR

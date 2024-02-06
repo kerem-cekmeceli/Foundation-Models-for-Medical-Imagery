@@ -19,6 +19,7 @@ import wandb
 from typing import Callable, Optional, Union, Dict
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from MedDino.med_dinov2.tools.plot import show_result
+import math
 
 def train_batches(model : nn.Module, 
                       train_loader : DataLoader, 
@@ -71,10 +72,12 @@ def train_batches(model : nn.Module,
     return log_epoch
         
 def validate_batches(model: nn.Module, 
-                         val_loader: DataLoader, 
-                         loss_fn: Callable, 
-                         device: Union[str, torch.device], 
-                         metrics: Optional[Dict[str, Callable]]=None) -> dict:
+                     val_loader: DataLoader, 
+                     loss_fn: Callable, 
+                     device: Union[str, torch.device], 
+                     metrics: Optional[Dict[str, Callable]]=None,
+                     first_n_batch_to_seg_log=0,
+                     seg_log_per_batch=3) -> dict:
     model.eval()
     batches = tqdm(val_loader, desc='Eval Batches', leave=False)
     tot_batches = len(batches)
@@ -90,6 +93,24 @@ def validate_batches(model: nn.Module,
     log_epoch = dict(val_loss=0.)
     for metric_n in metrics.keys():
         log_epoch['val_'+metric_n] = 0.
+        
+    # Seg result logging preps
+    if first_n_batch_to_seg_log>0:
+        # get the batch indexes to log
+        batch_sz = val_loader.batch_size
+        sp = seg_log_per_batch+1
+        # maximal separation from each other and from edges (from edges is prioritized)
+        log_idxs = torch.arange(batch_sz//sp, 
+                                batch_sz//sp*sp, 
+                                batch_sz//sp)
+        log_idxs = log_idxs + (batch_sz%sp)//2
+        log_idxs = log_idxs.cpu().numpy().tolist()
+        
+        column_names = ['Batch Idx'] + [f'sample {i}/{batch_sz-1}' for i in range(seg_log_per_batch)]
+        # Create the wandb table to log the selected seg results
+        log_table = wandb.Table(columns=column_names)  
+    else:
+        log_table = None
     
     for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
@@ -100,6 +121,19 @@ def validate_batches(model: nn.Module,
         y_pred = model(x_batch)
         loss = loss_fn(y_pred, y_batch)
         
+        # Log the segmentation result
+        if i_batch < first_n_batch_to_seg_log:
+            log_row = [i_batch]
+            for idx in log_idxs:
+                log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
+                                  masks={
+                                      'predictions': {'mask_data': y_pred[idx].detach().cpu().argmax(dim=0).numpy(),
+                                                      },
+                                      'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
+                                      })
+                log_row.append(log_img)
+            log_table.add_data(*log_row)
+            
         # Save the values        
         log_epoch['val_loss']+=loss.item()
         
@@ -107,11 +141,15 @@ def validate_batches(model: nn.Module,
         for metric_n, metric in metrics.items():
             metric_val = metric(y_pred, y_batch).item()
             log_epoch['val_'+metric_n] += metric_val
-     
+    
     # Average out the epoch logs 
     for key in log_epoch.keys():
-        log_epoch[key] /= tot_batches      
+        log_epoch[key] /= tot_batches   
         
+    # Log the table
+    if log_table is not None:
+        log_epoch['val_seg_table'] = log_table
+       
     return log_epoch
 
 
@@ -126,7 +164,10 @@ def train(model: nn.Module,
           val_loader: Optional[DataLoader]=None, 
           print_epoch_info: bool=True,
           checkpointer: Optional[Checkpointer]=None, 
-          metrics: Optional[Dict[str, Callable]]=None) -> None:
+          metrics: Optional[Dict[str, Callable]]=None,
+          seg_val_intv=20,
+          first_n_batch_to_seg_log=16,
+          seg_log_per_batch=3) -> None:
     
     model.to(device)
     epochs = tqdm(range(n_epochs), desc='Epochs')
@@ -144,7 +185,9 @@ def train(model: nn.Module,
         
         # Validate    
         if val_loader is not None:
-            log_val = validate_batches(model, val_loader, loss_fn, device, metrics)
+            batch_th = first_n_batch_to_seg_log if (epoch+1)%seg_val_intv==0 else 0
+            log_val = validate_batches(model, val_loader, loss_fn, device, metrics,
+                                       batch_th, seg_log_per_batch)
             log_epoch = log_epoch | log_val
             
         # Update LR
@@ -155,9 +198,10 @@ def train(model: nn.Module,
         if print_epoch_info:
             epoch_str = ''
             for key, val in log_epoch.items():
-                if epoch_str != '':
-                    epoch_str += ', '
-                epoch_str += f'{key} = {round(val, 5)}'
+                if key != 'val_seg_table':
+                    if epoch_str != '':
+                        epoch_str += ', '
+                    epoch_str += f'{key} = {round(val, 5)}'
             tqdm.write(epoch_str)
             
         # Checkpointer
@@ -165,7 +209,7 @@ def train(model: nn.Module,
             checkpointer.update(model=model, metrics=log_epoch, epoch=epoch)
             
         # Log the epoch
-        logger.log(log_epoch)
+        logger.log(log_epoch, step=epoch)
         
     # Save the best models:
     if checkpointer is not None:
@@ -178,7 +222,9 @@ def test_batches(model: nn.Module,
                      loss_fn: Callable, 
                      device: Union[str, torch.device], 
                      metrics: Optional[Dict[str, Callable]]=None, 
-                     soft: bool=False) -> dict:
+                     soft: bool=False,
+                     first_n_batch_to_seg_log=16,
+                     seg_log_per_batch=3) -> dict:
     model.eval()
     batches = tqdm(val_loader, desc='Test Batches', leave=False)
     tot_batches = len(batches)
@@ -191,9 +237,27 @@ def test_batches(model: nn.Module,
     if len(batches)<=0:
         raise Exception('No data')
     
-    log_epoch = dict(test_loss=0.)
+    log_test = dict(test_loss=0.)
     for metric_n in metrics.keys():
-        log_epoch['test_'+metric_n] = 0.
+        log_test['test_'+metric_n] = 0.
+    
+    # Seg result logging preps
+    if first_n_batch_to_seg_log>0:
+        # get the batch indexes to log
+        batch_sz = val_loader.batch_size
+        sp = seg_log_per_batch+1
+        # maximal separation from each other and from edges (from edges is prioritized)
+        log_idxs = torch.arange(batch_sz//sp, 
+                                batch_sz//sp*sp, 
+                                batch_sz//sp)
+        log_idxs = log_idxs + (batch_sz%sp)//2
+        log_idxs = log_idxs.cpu().numpy().tolist()
+        
+        column_names = ['Batch Idx'] + [f'sample {i}/{batch_sz-1}' for i in range(seg_log_per_batch)]
+        # Create the wandb table to log the selected seg results
+        log_table = wandb.Table(columns=column_names)  
+    else:
+        log_table = None
     
     for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
@@ -214,28 +278,32 @@ def test_batches(model: nn.Module,
         loss = loss_fn(y_pred, y_batch)
         
         # Save the values        
-        log_epoch['test_loss']+=loss.item()
+        log_test['test_loss']+=loss.item()
         
         # Compute the metrics
         for metric_n, metric in metrics.items():
             metric_val = metric(y_pred, y_batch).item()
-            log_epoch['test_'+metric_n] += metric_val
+            log_test['test_'+metric_n] += metric_val
             
-        if i_batch<32: # First 2 patients
-            idx = -1  # last minimbatch elements
-            log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
+        # Log the segmentation result
+        if i_batch < first_n_batch_to_seg_log:
+            log_row = [i_batch]
+            for idx in log_idxs:
+                log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
                                   masks={
                                       'predictions': {'mask_data': y_pred[idx].detach().cpu().argmax(dim=0).numpy(),
                                                       },
                                       'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
                                       })
-            wandb.log({'test_seg': log_img})
+                log_row.append(log_img)
+            log_table.add_data(*log_row)
      
     # Average out the epoch logs 
-    for key in log_epoch.keys():
-        log_epoch[key] /= tot_batches      
+    for key in log_test.keys():
+        if not key.startswith('val_seg_batch'):
+            log_test[key] /= tot_batches      
         
-    return log_epoch
+    return log_test
             
     
 def test(model: nn.Module,
@@ -249,8 +317,9 @@ def test(model: nn.Module,
     
     test_str = ''
     for key, val in log_test.items():
-        logger.summary[key] = val
-        test_str += f'{key}={round(val, 5)}, '
+        if not key.startswith('val_seg_batch'):
+            logger.summary[key] = val
+            test_str += f'{key}={round(val, 5)}, '
     print(test_str)
     
 

@@ -8,6 +8,7 @@ sys.path.insert(1, dino_main_pth.as_posix())
 sys.path.insert(2, orig_dino_pth.as_posix())
 
 import torch
+import math
 
 import cv2
 import numpy as np
@@ -30,9 +31,9 @@ import wandb
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 
 
-cluster_paths = False
+cluster_paths = True
 save_checkpoints = False
-log_the_run = False
+log_the_run = True
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -188,6 +189,14 @@ logger = wandb.init(project='FoundationModels_MedDino',
                     name=time_str(),
                     mode=log_mode)
 
+seg_res_log_itv = 1  # Log seg reult every xxx epochs
+seg_res_nb_patient = 1
+seg_log_per_batch = 3
+
+SLICE_PER_PATIENT = 256
+first_n_batch_to_seg_log = math.ceil(SLICE_PER_PATIENT/batch_sz*seg_res_nb_patient)
+
+
 # Init checkpointer
 n_best = 2
 models_pth = dino_main_pth / f'Checkpoints/MedDino/conv_head'
@@ -206,11 +215,14 @@ train(model=model, train_loader=train_dataloader,
       val_loader=val_dataloader, loss_fn=loss, 
       optimizer=optm, scheduler=scheduler,
       n_epochs=nb_epochs, device=device, logger=logger,
-      checkpointer=cp, metrics=metrics)
+      checkpointer=cp, metrics=metrics,
+      seg_val_intv=seg_res_log_itv,
+      first_n_batch_to_seg_log=first_n_batch_to_seg_log,
+      seg_log_per_batch=3)
 
-# Test hard decision predicted seg classes per pix
-test(model=model, test_loader=test_dataloader, loss_fn=loss, 
-     device=device, logger=logger, metrics=metrics, soft=False)
+# # Test hard decision predicted seg classes per pix
+# test(model=model, test_loader=test_dataloader, loss_fn=loss, 
+#      device=device, logger=logger, metrics=metrics, soft=False)
 
 #@TODO plot gt and prediction side by side
 #@TODO log input pred gt randomly every n iter (dice scores per class)
