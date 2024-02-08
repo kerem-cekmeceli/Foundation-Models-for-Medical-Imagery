@@ -29,10 +29,11 @@ from torchinfo import summary
 from torch.nn import CrossEntropyLoss
 import wandb
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
+from mmseg.models.decode_heads import *
 
 
 cluster_paths = True
-save_checkpoints = False
+save_checkpoints = True
 log_the_run = True
 
 # Load the pre-trained backbone
@@ -53,18 +54,35 @@ print('Using device:', device)
 
 dec_head = ConvHeadLinear(embedding_sz=backbone.embed_dim, 
                      num_classses=num_classses,
-                     n_concat=n_concat,
-                     interp_fact=backbone.patch_size)
+                     n_concat=n_concat,)
+
+# dec_head = FCNHead(num_convs=2,
+#                    kernel_size=3,
+#                    concat_input=True,
+#                    dilation=1,
+#                    in_channels=[backbone.embed_dim]*n_concat,  # input channels
+#                    channels=backbone.embed_dim,  # Conv channels
+#                    num_classes=num_classses,  # output channels
+#                    dropout_ratio=0.1,
+#                    conv_cfg=dict(type='Conv2d'), # None = conv2d
+#                    norm_cfg=dict(type='BN'),
+#                    act_cfg=dict(type='ReLU'),
+#                    in_index=[i for i in range(n_concat)],
+#                    input_transform='resize_concat',
+#                    init_cfg=dict(
+#                        type='Normal', std=0.01, override=dict(name='conv_seg')))
 dec_head.to(device)
 
 print("Convolutional decode head")
 summary(dec_head)
 
+
 # Initialize the segmentor
 train_backbone=False
 model = Segmentor(backbone=backbone,
                   decode_head=dec_head,
-                  train_backbone=train_backbone)
+                  train_backbone=train_backbone,
+                  reshape_dec_oup=True)
 model.to(device)
 
 # Print model info
@@ -139,8 +157,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 5
-warmup_iters = 2
+nb_epochs = 40
+warmup_iters = 10
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
@@ -189,7 +207,7 @@ logger = wandb.init(project='FoundationModels_MedDino',
                     name=time_str(),
                     mode=log_mode)
 
-seg_res_log_itv = 1  # Log seg reult every xxx epochs
+seg_res_log_itv = nb_epochs//4  # Log seg reult every xxx epochs
 seg_res_nb_patient = 1
 seg_log_per_batch = 3
 
@@ -218,13 +236,14 @@ train(model=model, train_loader=train_dataloader,
       checkpointer=cp, metrics=metrics,
       seg_val_intv=seg_res_log_itv,
       first_n_batch_to_seg_log=first_n_batch_to_seg_log,
-      seg_log_per_batch=3)
+      seg_log_per_batch=seg_log_per_batch)
 
-# # Test hard decision predicted seg classes per pix
-# test(model=model, test_loader=test_dataloader, loss_fn=loss, 
-#      device=device, logger=logger, metrics=metrics, soft=False)
+# Test hard decision predicted seg classes per pix
+test(model=model, test_loader=test_dataloader, loss_fn=loss, 
+     device=device, logger=logger, metrics=metrics, soft=False,
+     first_n_batch_to_seg_log=first_n_batch_to_seg_log, 
+     seg_log_per_batch=seg_log_per_batch)
 
-#@TODO plot gt and prediction side by side
 #@TODO log input pred gt randomly every n iter (dice scores per class)
 #@TODO add types and comments
 #@TODO write readme.md

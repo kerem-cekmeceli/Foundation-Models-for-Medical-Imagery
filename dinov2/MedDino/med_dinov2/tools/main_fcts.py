@@ -105,12 +105,6 @@ def validate_batches(model: nn.Module,
                                 batch_sz//sp)
         log_idxs = log_idxs + (batch_sz%sp)//2
         log_idxs = log_idxs.cpu().numpy().tolist()
-        
-        column_names = ['Batch Idx'] + [f'sample {i}/{batch_sz-1}' for i in range(seg_log_per_batch)]
-        # Create the wandb table to log the selected seg results
-        log_table = wandb.Table(columns=column_names)  
-    else:
-        log_table = None
     
     for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
@@ -121,34 +115,46 @@ def validate_batches(model: nn.Module,
         y_pred = model(x_batch)
         loss = loss_fn(y_pred, y_batch)
         
-        # Log the segmentation result
-        if i_batch < first_n_batch_to_seg_log:
-            log_row = [i_batch]
-            for idx in log_idxs:
-                log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
-                                  masks={
-                                      'predictions': {'mask_data': y_pred[idx].detach().cpu().argmax(dim=0).numpy(),
-                                                      },
-                                      'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
-                                      })
-                log_row.append(log_img)
-            log_table.add_data(*log_row)
-            
-        # Save the values        
+        # save the values        
         log_epoch['val_loss']+=loss.item()
         
         # Compute the metrics
         for metric_n, metric in metrics.items():
             metric_val = metric(y_pred, y_batch).item()
             log_epoch['val_'+metric_n] += metric_val
+            
+        # save the segmentation result
+        if i_batch < first_n_batch_to_seg_log:
+            imgs = []
+            masks_pred = []
+            masks_gt = []
+            caption = f'Eval batch: {i_batch+1}/{tot_batches}, samples: '
+            for idx in log_idxs:
+                # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
+                imgs.append(x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1])  
+                masks_pred.append(y_pred[idx].detach().cpu().argmax(dim=0).numpy())
+                masks_gt.append(y_batch[idx].detach().cpu().argmax(dim=0).numpy())
+                caption += f'{idx+1}/{batch_sz}, '
+                
+            # Concat the seg results for the samples from the same batch
+            imgs = np.concatenate(imgs, axis=1)
+            masks_pred = np.concatenate(masks_pred, axis=1)
+            masks_gt = np.concatenate(masks_gt, axis=1)
+                
+            log_img = wandb.Image(data_or_path=imgs,
+                                  masks={
+                                      'predictions': {'mask_data': masks_pred,
+                                                      },
+                                      'ground_truth': {'mask_data': masks_gt} 
+                                      },
+                                  caption=caption)
+            # Log the seg result        
+            log_epoch[f'val_seg_batch{i_batch+1}']=log_img
     
     # Average out the epoch logs 
     for key in log_epoch.keys():
-        log_epoch[key] /= tot_batches   
-        
-    # Log the table
-    if log_table is not None:
-        log_epoch['val_seg_table'] = log_table
+        if not key.startswith('val_seg_batch'):
+            log_epoch[key] /= tot_batches   
        
     return log_epoch
 
@@ -198,7 +204,7 @@ def train(model: nn.Module,
         if print_epoch_info:
             epoch_str = ''
             for key, val in log_epoch.items():
-                if key != 'val_seg_table':
+                if not key.startswith('val_seg_batch'):
                     if epoch_str != '':
                         epoch_str += ', '
                     epoch_str += f'{key} = {round(val, 5)}'
@@ -253,7 +259,8 @@ def test_batches(model: nn.Module,
         log_idxs = log_idxs + (batch_sz%sp)//2
         log_idxs = log_idxs.cpu().numpy().tolist()
         
-        column_names = ['Batch Idx'] + [f'sample {i}/{batch_sz-1}' for i in range(seg_log_per_batch)]
+        column_names = [f'sample {i+1}/{batch_sz}' for i in log_idxs]
+        column_names = column_names + ['test_loss'] + [f'test_{key}' for key in metrics.keys()]
         # Create the wandb table to log the selected seg results
         log_table = wandb.Table(columns=column_names)  
     else:
@@ -277,17 +284,9 @@ def test_batches(model: nn.Module,
         
         loss = loss_fn(y_pred, y_batch)
         
-        # Save the values        
-        log_test['test_loss']+=loss.item()
-        
-        # Compute the metrics
-        for metric_n, metric in metrics.items():
-            metric_val = metric(y_pred, y_batch).item()
-            log_test['test_'+metric_n] += metric_val
-            
         # Log the segmentation result
         if i_batch < first_n_batch_to_seg_log:
-            log_row = [i_batch]
+            log_row = []
             for idx in log_idxs:
                 log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
                                   masks={
@@ -296,13 +295,34 @@ def test_batches(model: nn.Module,
                                       'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
                                       })
                 log_row.append(log_img)
+        
+        # Save the values        
+        log_test['test_loss']+=loss.item()
+        
+        # Append the row for the table
+        if i_batch < first_n_batch_to_seg_log:
+            log_row.append(loss.item())
+        
+        # Compute the metrics
+        for metric_n, metric in metrics.items():
+            metric_val = metric(y_pred, y_batch).item()
+            log_test['test_'+metric_n] += metric_val
+            
+            # Append the row for the table
+            if i_batch < first_n_batch_to_seg_log:
+                log_row.append(metric_val)
+            
+        if i_batch < first_n_batch_to_seg_log:
             log_table.add_data(*log_row)
      
     # Average out the epoch logs 
     for key in log_test.keys():
-        if not key.startswith('val_seg_batch'):
-            log_test[key] /= tot_batches      
+        log_test[key] /= tot_batches      
         
+    # Log the table
+    if log_table is not None:
+        log_test['test_seg_table'] = log_table
+         
     return log_test
             
     
@@ -312,14 +332,20 @@ def test(model: nn.Module,
          device: Union[str, torch.device], 
          logger: wandb.wandb_sdk.wandb_run.Run,
          metrics: Optional[Dict[str, Callable]]=None, 
-         soft:bool = False):
-    log_test = test_batches(model, test_loader, loss_fn, device, metrics, soft)
+         soft:bool = False,
+         first_n_batch_to_seg_log=16,
+         seg_log_per_batch=3):
+    log_test = test_batches(model, test_loader, loss_fn, device, metrics, soft, 
+                            first_n_batch_to_seg_log, seg_log_per_batch)
     
     test_str = ''
     for key, val in log_test.items():
-        if not key.startswith('val_seg_batch'):
+        if not key.startswith('test_seg_table'):
             logger.summary[key] = val
             test_str += f'{key}={round(val, 5)}, '
+        else:
+            # Log the table
+            logger.log({key:val})
     print(test_str)
     
 

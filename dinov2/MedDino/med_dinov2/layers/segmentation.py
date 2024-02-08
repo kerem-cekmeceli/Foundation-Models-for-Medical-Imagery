@@ -4,11 +4,9 @@ from abc import ABC, abstractmethod
 from mmseg.ops import resize
 
 
-
 class SegHeadBase(nn.Module, ABC):
     def __init__(self, embedding_sz, num_classses, 
                  n_concat,
-                 interp_fact,
                  input_transform,
                  in_index,
                  resize_factors,
@@ -17,7 +15,6 @@ class SegHeadBase(nn.Module, ABC):
         
         self.embedding_sz=embedding_sz
         self.num_classes=num_classses
-        self.interp_fact=interp_fact
         
         if input_transform == 'resize_concat':
             self.n_concat=n_concat
@@ -91,17 +88,8 @@ class SegHeadBase(nn.Module, ABC):
         # segmentation method (assigns logits to each patch)
         logits = self.compute_logits(x)  # [B, N_class, H0, W0]
         
-        if self.interp_fact is None:
-            return logits
-        else:
-            # Interpolate to get pixel logits frmo patch logits
-            pix_logits = resize(input=logits,
-                                scale_factor=self.interp_fact,
-                                mode='bilinear',
-                                align_corners=self.align_corners)
-            # [B, N_class, H, W]
-            
-            return pix_logits
+        return logits
+        
     
 class ConvHeadLinear(SegHeadBase):
     
@@ -109,7 +97,6 @@ class ConvHeadLinear(SegHeadBase):
                  embedding_sz, 
                  num_classses, 
                  n_concat,
-                 interp_fact,
                  input_transform='resize_concat',
                  in_index=None,
                  resize_factors=None,
@@ -122,7 +109,7 @@ class ConvHeadLinear(SegHeadBase):
                          in_index=in_index,
                          resize_factors=resize_factors,
                          align_corners=align_corners,
-                         interp_fact=interp_fact,)
+                         )
         
         if batch_norm:
             self.batch_norm = nn.SyncBatchNorm(self.input_dim)  
