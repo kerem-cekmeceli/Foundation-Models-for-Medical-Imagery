@@ -52,25 +52,26 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-# dec_head = ConvHeadLinear(embedding_sz=backbone.embed_dim, 
-#                      num_classses=num_classses,
-#                      n_concat=n_concat,)
+dec_head = ConvHeadLinear(in_channels=[backbone.embed_dim]*n_concat, 
+                          num_classses=num_classses,
+                          out_upsample_fac=backbone.patch_size,
+                          bilinear=False)
 
-dec_head = FCNHead(num_convs=3,
-                   kernel_size=3,
-                   concat_input=True,
-                   dilation=1,
-                   in_channels=[backbone.embed_dim]*n_concat,  # input channels
-                   channels=backbone.embed_dim,  # Conv channels
-                   num_classes=num_classses,  # output channels
-                   dropout_ratio=0.1,
-                   conv_cfg=dict(type='Conv2d'), # None = conv2d
-                   norm_cfg=dict(type='BN'),
-                   act_cfg=dict(type='ReLU'),
-                   in_index=[i for i in range(n_concat)],
-                   input_transform='resize_concat',
-                   init_cfg=dict(
-                       type='Normal', std=0.01, override=dict(name='conv_seg')))
+# dec_head = FCNHead(num_convs=3,
+#                    kernel_size=3,
+#                    concat_input=True,
+#                    dilation=1,
+#                    in_channels=[backbone.embed_dim]*n_concat,  # input channels
+#                    channels=backbone.embed_dim,  # Conv channels
+#                    num_classes=num_classses,  # output channels
+#                    dropout_ratio=0.1,
+#                    conv_cfg=dict(type='Conv2d'), # None = conv2d
+#                    norm_cfg=dict(type='BN'),
+#                    act_cfg=dict(type='ReLU'),
+#                    in_index=[i for i in range(n_concat)],
+#                    input_transform='resize_concat',
+#                    init_cfg=dict(
+#                        type='Normal', std=0.01, override=dict(name='conv_seg')))
 dec_head.to(device)
 
 print("Convolutional decode head")
@@ -82,7 +83,7 @@ train_backbone=False
 model = Segmentor(backbone=backbone,
                   decode_head=dec_head,
                   train_backbone=train_backbone,
-                  reshape_dec_oup=True)
+                  reshape_dec_oup=False)
 model.to(device)
 
 # Print model info
@@ -157,8 +158,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 60
-warmup_iters = 15
+nb_epochs = 60#5
+warmup_iters = 15#2
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
