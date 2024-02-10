@@ -70,7 +70,8 @@ def train_batches(model : nn.Module,
         log_epoch[key] /= tot_batches  
                
     return log_epoch
-        
+
+@torch.no_grad()        
 def validate_batches(model: nn.Module, 
                      val_loader: DataLoader, 
                      loss_fn: Callable, 
@@ -106,55 +107,56 @@ def validate_batches(model: nn.Module,
         log_idxs = log_idxs + (batch_sz%sp)//2
         log_idxs = log_idxs.cpu().numpy().tolist()
     
-    for i_batch, (x_batch, y_batch) in enumerate(batches):
-        # Put the data on the selected device
-        x_batch = x_batch.to(device=device)  # [N, C, H, W]
-        y_batch = y_batch.to(device=device)  # [N, num_cls, H, W]
-        
-        # Forward pass
-        y_pred = model(x_batch)
-        loss = loss_fn(y_pred, y_batch)
-        
-        # save the values        
-        log_epoch['val_loss']+=loss.item()
-        
-        # Compute the metrics
-        for metric_n, metric in metrics.items():
-            metric_val = metric(y_pred, y_batch).item()
-            log_epoch['val_'+metric_n] += metric_val
+    with torch.no_grad():
+        for i_batch, (x_batch, y_batch) in enumerate(batches):
+            # Put the data on the selected device
+            x_batch = x_batch.to(device=device)  # [N, C, H, W]
+            y_batch = y_batch.to(device=device)  # [N, num_cls, H, W]
             
-        # save the segmentation result
-        if i_batch < first_n_batch_to_seg_log:
-            imgs = []
-            masks_pred = []
-            masks_gt = []
-            caption = f'Eval batch: {i_batch+1}/{tot_batches}, samples: '
-            for idx in log_idxs:
-                # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
-                imgs.append(x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1])  
-                masks_pred.append(y_pred[idx].detach().cpu().argmax(dim=0).numpy())
-                masks_gt.append(y_batch[idx].detach().cpu().argmax(dim=0).numpy())
-                caption += f'{idx+1}/{batch_sz}, '
+            # Forward pass
+            y_pred = model(x_batch)
+            loss = loss_fn(y_pred, y_batch)
+            
+            # save the values        
+            log_epoch['val_loss']+=loss.item()
+            
+            # Compute the metrics
+            for metric_n, metric in metrics.items():
+                metric_val = metric(y_pred, y_batch).item()
+                log_epoch['val_'+metric_n] += metric_val
                 
-            # Concat the seg results for the samples from the same batch
-            imgs = np.concatenate(imgs, axis=1)
-            masks_pred = np.concatenate(masks_pred, axis=1)
-            masks_gt = np.concatenate(masks_gt, axis=1)
-                
-            log_img = wandb.Image(data_or_path=imgs,
-                                  masks={
-                                      'predictions': {'mask_data': masks_pred,
-                                                      },
-                                      'ground_truth': {'mask_data': masks_gt} 
-                                      },
-                                  caption=caption)
-            # Log the seg result        
-            log_epoch[f'val_seg_batch{i_batch+1}']=log_img
-    
-    # Average out the epoch logs 
-    for key in log_epoch.keys():
-        if not key.startswith('val_seg_batch'):
-            log_epoch[key] /= tot_batches   
+            # save the segmentation result
+            if i_batch < first_n_batch_to_seg_log:
+                imgs = []
+                masks_pred = []
+                masks_gt = []
+                caption = f'Eval batch: {i_batch+1}/{tot_batches}, samples: '
+                for idx in log_idxs:
+                    # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
+                    imgs.append(x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1])  
+                    masks_pred.append(y_pred[idx].detach().cpu().argmax(dim=0).numpy())
+                    masks_gt.append(y_batch[idx].detach().cpu().argmax(dim=0).numpy())
+                    caption += f'{idx+1}/{batch_sz}, '
+                    
+                # Concat the seg results for the samples from the same batch
+                imgs = np.concatenate(imgs, axis=1)
+                masks_pred = np.concatenate(masks_pred, axis=1)
+                masks_gt = np.concatenate(masks_gt, axis=1)
+                    
+                log_img = wandb.Image(data_or_path=imgs,
+                                    masks={
+                                        'predictions': {'mask_data': masks_pred,
+                                                        },
+                                        'ground_truth': {'mask_data': masks_gt} 
+                                        },
+                                    caption=caption)
+                # Log the seg result        
+                log_epoch[f'val_seg_batch{i_batch+1}']=log_img
+        
+        # Average out the epoch logs 
+        for key in log_epoch.keys():
+            if not key.startswith('val_seg_batch'):
+                log_epoch[key] /= tot_batches   
        
     return log_epoch
 
@@ -222,7 +224,7 @@ def train(model: nn.Module,
         checkpointer.save()
         
         
-        
+@torch.no_grad()           
 def test_batches(model: nn.Module, 
                      val_loader: DataLoader, 
                      loss_fn: Callable, 
@@ -266,62 +268,63 @@ def test_batches(model: nn.Module,
     else:
         log_table = None
     
-    for i_batch, (x_batch, y_batch) in enumerate(batches):
-        # Put the data on the selected device
-        x_batch = x_batch.to(device=device)
-        y_batch = y_batch.to(device=device)
-        
-        # check if you have nans x batch or y batch
-        
-        # Forward pass
-        y_pred = model(x_batch)
-        
-        # Hard decision
-        if not soft:
-            n_classes = y_pred.shape[1]
-            dtype = y_pred.dtype
-            y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(dtype)
-        
-        loss = loss_fn(y_pred, y_batch)
-        
-        # Log the segmentation result
-        if i_batch < first_n_batch_to_seg_log:
-            log_row = []
-            for idx in log_idxs:
-                log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
-                                  masks={
-                                      'predictions': {'mask_data': y_pred[idx].detach().cpu().argmax(dim=0).numpy(),
-                                                      },
-                                      'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
-                                      })
-                log_row.append(log_img)
-        
-        # Save the values        
-        log_test['test_loss']+=loss.item()
-        
-        # Append the row for the table
-        if i_batch < first_n_batch_to_seg_log:
-            log_row.append(loss.item())
-        
-        # Compute the metrics
-        for metric_n, metric in metrics.items():
-            metric_val = metric(y_pred, y_batch).item()
-            log_test['test_'+metric_n] += metric_val
+    with torch.no_grad():
+        for i_batch, (x_batch, y_batch) in enumerate(batches):
+            # Put the data on the selected device
+            x_batch = x_batch.to(device=device)
+            y_batch = y_batch.to(device=device)
+            
+            # check if you have nans x batch or y batch
+            
+            # Forward pass
+            y_pred = model(x_batch)
+            
+            # Hard decision
+            if not soft:
+                n_classes = y_pred.shape[1]
+                dtype = y_pred.dtype
+                y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(dtype)
+            
+            loss = loss_fn(y_pred, y_batch)
+            
+            # Log the segmentation result
+            if i_batch < first_n_batch_to_seg_log:
+                log_row = []
+                for idx in log_idxs:
+                    log_img = wandb.Image(data_or_path=x_batch[idx].detach().cpu().permute([1, 2, 0]).numpy()[..., ::-1],
+                                    masks={
+                                        'predictions': {'mask_data': y_pred[idx].detach().cpu().argmax(dim=0).numpy(),
+                                                        },
+                                        'ground_truth': {'mask_data': y_batch[idx].detach().cpu().argmax(dim=0).numpy()} 
+                                        })
+                    log_row.append(log_img)
+            
+            # Save the values        
+            log_test['test_loss']+=loss.item()
             
             # Append the row for the table
             if i_batch < first_n_batch_to_seg_log:
-                log_row.append(metric_val)
+                log_row.append(loss.item())
             
-        if i_batch < first_n_batch_to_seg_log:
-            log_table.add_data(*log_row)
-     
-    # Average out the epoch logs 
-    for key in log_test.keys():
-        log_test[key] /= tot_batches      
+            # Compute the metrics
+            for metric_n, metric in metrics.items():
+                metric_val = metric(y_pred, y_batch).item()
+                log_test['test_'+metric_n] += metric_val
+                
+                # Append the row for the table
+                if i_batch < first_n_batch_to_seg_log:
+                    log_row.append(metric_val)
+                
+            if i_batch < first_n_batch_to_seg_log:
+                log_table.add_data(*log_row)
         
-    # Log the table
-    if log_table is not None:
-        log_test['test_seg_table'] = log_table
+        # Average out the epoch logs 
+        for key in log_test.keys():
+            log_test[key] /= tot_batches      
+            
+        # Log the table
+        if log_table is not None:
+            log_test['test_seg_table'] = log_table
          
     return log_test
             

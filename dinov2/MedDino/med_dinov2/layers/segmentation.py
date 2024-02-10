@@ -401,9 +401,7 @@ class Up(nn.Module):
             # self.up_res_con = nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact)
         
     def forward(self, x):
-        x = self.up(x)
-        x = self.conv_xn(x)
-        return x
+        return self.conv_xn(self.up(x))
     
     
 class ConvUNet(DecBase):
