@@ -80,18 +80,37 @@ class Checkpointer():
     def update(self, 
                model:nn.Module,
                metrics:dict,
-               epoch:int):
+               epoch:int,
+               opt:torch.optim.Optimizer=None,
+               scheduler:torch.optim.lr_scheduler.LRScheduler=None):
         
         for m in self.monitor:
             assert m in metrics.keys(), \
                 "monitored quantity: {m} is not found in the given metrics dict" 
-            self.best[m].update(score=metrics[m], data=(epoch, model.state_dict()))
+            data = [epoch, model.state_dict()]
+            
+            if opt is not None:
+                data.append(opt.state_dict())
+                
+            if scheduler is not None:
+                data.append(scheduler.state_dict())
+            
+            self.best[m].update(score=metrics[m], data=data)
                    
     def save(self):
         for m in self.monitor:
             bests_m = self.best[m].get_elems()
-            for i, (score, (epoch, state_dict)) in enumerate(bests_m):
+            for i, (score, data) in enumerate(bests_m):
+                epoch = data[0]
+                state_dict = data[1]
                 f_name = self.name_prefix + f'_{m}_top{i+1}_epoch{epoch}.pth'
                 print(f'{m} top{i+1}: {round(score, 4)}, saved as: {f_name}, to {self.save_pth}')
-                torch.save(state_dict, self.save_pth+'/'+f_name)
+                
+                save_dict = dict(epoch = epoch,
+                                 model_state_dict = state_dict)
+                if len(data)>2:
+                    save_dict['opt_state_dict'] = data[2]
+                if len(data)>3:
+                    save_dict['scheduler_state_dict'] = data[3]
+                torch.save(save_dict, self.save_pth+'/'+f_name)
         

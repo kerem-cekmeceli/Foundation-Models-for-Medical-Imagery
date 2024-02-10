@@ -212,7 +212,7 @@ def train(model: nn.Module,
             
         # Checkpointer
         if checkpointer is not None:
-            checkpointer.update(model=model, metrics=log_epoch, epoch=epoch)
+            checkpointer.update(model=model, metrics=log_epoch, epoch=epoch, opt=optimizer, scheduler=scheduler)
             
         # Log the epoch
         logger.log(log_epoch, step=epoch)

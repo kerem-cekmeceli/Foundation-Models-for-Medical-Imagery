@@ -8,7 +8,7 @@ from mmseg.ops import resize
 
 class Segmentor(nn.Module):
     def __init__(self, backbone, decode_head, train_backbone=False, 
-                 reshape_dec_oup=False, align_corners=False, interp_mode='bilinear', \
+                 reshape_dec_oup=False, align_corners=False, \
                  *args, **kwargs) -> None:
 
         super().__init__(*args, **kwargs)
@@ -19,7 +19,6 @@ class Segmentor(nn.Module):
         # params for the reshaping of the dec out
         self.reshape_dec_oup = reshape_dec_oup
         self.align_corners = align_corners
-        self.interp_mode = interp_mode
         
         self.decode_head = decode_head
         if isinstance(decode_head, BaseDecodeHead):
@@ -59,12 +58,13 @@ class Segmentor(nn.Module):
             with torch.no_grad():
                 return self.backbone.get_intermediate_layers(x, n=self.n_concat_bb, reshape=True)
             
-    def reshape_dec_out(self, model_out):        
+    def reshape_dec_out(self, model_out, reshaped_size): 
+        up = reshaped_size[0] > model_out.shape[-2] and reshaped_size[1] > model_out.shape[-1]
         # Interpolate to get pixel logits frmo patch logits
         pix_logits = resize(input=model_out,
-                            scale_factor=self.backbone.patch_size,
-                            mode=self.interp_mode,
-                            align_corners=self.align_corners)
+                            size=reshaped_size,
+                            mode="bilinear" if up >= 1 else "area",
+                            align_corners=self.align_corners if up >= 1 else None)
         # [B, N_class, H, W]
         return pix_logits
     
@@ -73,7 +73,7 @@ class Segmentor(nn.Module):
         out = self.decode_head(feats)
         
         if self.reshape_dec_oup:
-            out = self.reshape_dec_out(out)
+            out = self.reshape_dec_out(out, x.shape[-2:])
             
         assert x.shape[-2:] == out.shape[-2:], \
             f'input and output image shapes do not match, {x.shape[:-2]} =! {out.shape[:-2]}'

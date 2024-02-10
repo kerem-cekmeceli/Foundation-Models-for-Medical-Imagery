@@ -3,6 +3,7 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 from mmseg.ops import resize
 from typing import Sequence, Union, Optional
+from torch import functional as F
 
 
 class DecBase(nn.Module, ABC):
@@ -71,6 +72,7 @@ class DecBase(nn.Module, ABC):
                 self.up = nn.Upsample(scale_factor=out_upsample_fac, mode='bilinear', align_corners=False)
             else:
                 self.up = nn.ConvTranspose2d(num_classses , num_classses, kernel_size=out_upsample_fac, stride=out_upsample_fac)
+        self.out_upsample_fac = out_upsample_fac
         
     def _init_inputs(self, in_channels, in_index, input_transform, in_resize_factors):
         """Check and initialize input transforms.
@@ -232,30 +234,266 @@ class ConvHeadLinear(DecBase):
         
         return x
     
+class DoubleConv(nn.Module):
+    """(convolution => [BN] => ReLU) * 2"""
+
+    def __init__(self, in_channels, out_channels, mid_channels=None):
+        super().__init__()
+        if not mid_channels:
+            mid_channels = out_channels
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(mid_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, x):
+        return self.double_conv(x)
+
+class ConvBlk(nn.Module):
+    def __init__(self, 
+                 in_channel:int,
+                 out_channel:int,
+                 kernel_size:int,
+                 padding:Union[str, int]=0,
+                 batch_norm:bool=True,
+                 non_linearity:Union[str, nn.Module]='ReLU',
+                 **kwargs) -> None:
+        super().__init__()
+        
+        assert in_channel>1 and out_channel>1
+        
+        self.conv = nn.Conv2d(in_channel, out_channel, kernel_size, padding=padding, **kwargs)
+        
+        self.do_batch_norm = batch_norm
+        if batch_norm:
+            self.batch_norm = nn.BatchNorm2d(out_channel)
+        
+        if isinstance(non_linearity, str):
+            if non_linearity == 'ReLU':
+                self.nonlin = nn.ReLU()
+            elif non_linearity == 'Tanh':
+                self.nonlin = nn.Tanh()
+            elif non_linearity == 'GELU':
+                self.nonlin = nn.GELU()
+            elif non_linearity == 'Sigmoid':
+                self.nonlin = nn.Sigmoid()
+            else:
+                raise Exception( f'Text non-linearity {non_linearity} is not supported')
+        else:
+            self.nonlin = non_linearity
+            
+    def forward(self, x):
+        x = self.conv(x)
+        
+        if self.do_batch_norm:
+            x = self.batch_norm(x)
+            
+        x = self.nonlin(x)
+        return x
+      
+
+class NConv(nn.Module):
+    def __init__(self, 
+                 in_channels:int,
+                 out_channels:int,
+                 kernel_sz:Union[int, Sequence[int]],
+                 mid_channels:Optional[int]=None,
+                 nb_convs:int=2,
+                 batch_norm:Union[bool, Sequence[bool]]=True,
+                 non_linearity:Union[str, nn.Module]='ReLU',
+                 padding:Union[str, int, Sequence[str], Sequence[int]]='same') -> None:
+        super().__init__()
+        assert nb_convs>1
+        self.nb_convs = nb_convs
+        
+        kernel_sz = self.get_attr_list(kernel_sz)
+        self.kernel_sz = kernel_sz
+        batch_norm = self.get_attr_list(batch_norm)
+        self.batch_norm = batch_norm
+        non_linearity = self.get_attr_list(non_linearity)
+        self.non_linearity = non_linearity
+        padding = self.get_attr_list('same')
+        self.padding = padding
+        
+        if not mid_channels:
+            mid_channels = out_channels
+            
+        
+        conv_blk_list = [ConvBlk(in_channel=in_channels,
+                                 out_channel=mid_channels,
+                                 kernel_size=kernel_sz[0],
+                                 padding=padding[0])]
+        if nb_convs>2:
+            for i in range(1, nb_convs-1):
+                conv_blk_list.append(ConvBlk(in_channel=mid_channels,
+                                             out_channel=mid_channels,
+                                             kernel_size=kernel_sz[i],
+                                             batch_norm=batch_norm[i],
+                                             non_linearity=non_linearity[i],
+                                             padding=padding[i]))
+                
+        conv_blk_list.append(ConvBlk(in_channel=mid_channels,
+                                    out_channel=out_channels,
+                                    kernel_size=kernel_sz[-1],
+                                    batch_norm=batch_norm[-1],
+                                    non_linearity=non_linearity[-1],
+                                    padding=padding[-1]))
+        
+        self.conv_blks = nn.ModuleList(conv_blk_list)
+        
+        
+    def get_attr_list(self, attr):
+        if isinstance(attr, list):
+            assert len(attr) == self.nb_convs
+        else:
+            attr = [attr]*self.nb_convs
+        return attr
+    
+    
+    def forward(self, x):
+        for blk in self.conv_blks:
+            x = blk(x)
+        return x
+        
+            
+class Up(nn.Module):
+    """Upscaling by f, channel depth reduction by f then n times conv"""
+
+    def __init__(self, 
+                 in_channels, 
+                 out_channels, 
+                 bilinear=False, 
+                 res_con=True,
+                 fact=2, 
+                 nb_convs=2,
+                 kernel_size=3,
+                 batch_norm=True,
+                 non_linearity='ReLU'):
+        super().__init__()
+        assert fact>1 and isinstance(fact, int)
+        assert nb_convs > 1
+        
+        self.fact=fact
+        
+        # If to use residual connections 
+        self.res_con=res_con
+
+        # if bilinear, use the normal convolutions to reduce the number of channels
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+        else:
+            self.up = nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact)
+            
+        self.conv_xn = NConv(in_channels = in_channels if bilinear else in_channels//fact,
+                                out_channels=out_channels,
+                                mid_channels=in_channels//fact,
+                                kernel_sz=kernel_size,
+                                nb_convs=nb_convs,
+                                batch_norm=batch_norm,
+                                non_linearity=non_linearity)
+        
+        if res_con:
+            pass #@TODO ASK
+            # self.up_res_con = nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact)
+        
+    def forward(self, x):
+        x = self.up(x)
+        x = self.conv_xn(x)
+        return x
+    
     
 class ConvUNet(DecBase):
     def __init__(self, 
                  in_channels: Union[int,Sequence[int]],
                  num_classses: int, 
-                 cls_in_channels: Optional[int]=None,
                  in_index: Optional[Union[int,Sequence[int]]]=None,
-                 input_transform: Optional[str]=None,
                  in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
                  align_corners: bool=False,
-                 dropout_rat:float=0.) -> None:
+                 dropout_rat_cls_seg:float=0.,
+                 nb_up_blocks:int=2,
+                 upsample_facs: Union[int, Sequence[int]]=2,
+                 bilinear:Union[bool, Sequence[bool]]=True,
+                 res_con:Union[bool, Sequence[bool]]=False,
+                 conv_per_up_blk=2,) -> None:
         
-        super().__init__(in_channels=in_channels, 
+        # Number of up layers in the UNet architecture
+        assert nb_up_blocks>0
+        self.nb_up_blocks = nb_up_blocks
+        
+        # Upsampling ratio of each Up layer
+        upsample_facs = self.get_attr_list(upsample_facs, cond=lambda a: a>0)
+        self.upsample_facs = upsample_facs
+        
+        # If to use bilinear interp or transposed conv for each Up layer
+        bilinear = self.get_attr_list(bilinear)
+        self.bilinear = bilinear
+        
+        # If residual connections are used for each Up layer
+        res_con = self.get_attr_list(res_con)
+        self.res_con = res_con
+        
+        # Number of convloutional blocks per each up layer
+        conv_per_up_blk = self.get_attr_list(conv_per_up_blk, cond=lambda a: a>0)
+        self.conv_per_up_blk = conv_per_up_blk
+        
+        
+        tot_upsample_fac = 1
+        modules = []
+        last_out_ch = sum(in_channels) if isinstance(in_channels, list) else in_channels
+        for i in range(nb_up_blocks):
+            f = upsample_facs[i]
+            tot_upsample_fac = tot_upsample_fac*f
+            modules.append(Up(in_channels=last_out_ch, 
+                              out_channels=last_out_ch//f, 
+                              bilinear=bilinear[i], 
+                              fact=f, ))
+            last_out_ch = last_out_ch // f
+        self.tot_upsample_fac = tot_upsample_fac
+        self.last_out_ch = last_out_ch 
+        assert self.last_out_ch >= num_classses, \
+            f"Too many ch size reduction, input to seg_cls: {self.last_out_ch}, but num class: {num_classses} "
+        
+        super().__init__(in_channels=in_channels,
+                         cls_in_channels=self.last_out_ch,
                          num_classses=num_classses, 
-                         cls_in_channels=cls_in_channels, 
-                         in_index=in_index, 
-                         input_transform=input_transform, 
-                         in_resize_factors=in_resize_factors, 
-                         align_corners=align_corners, 
-                         dropout_rat=dropout_rat)
+                         in_index=in_index,
+                         input_transform='resize_concat',
+                         in_resize_factors=in_resize_factors,
+                         align_corners=align_corners,
+                         dropout_rat=dropout_rat_cls_seg,
+                         out_upsample_fac=None,  # Not used
+                         bilinear=True)  # Not used
         
+        self.ups = nn.ModuleList(modules)
         
+    def get_attr_list(self, attr, cond=None):
+        if isinstance(attr, list):
+            assert len(attr) == self.nb_up_blocks
+        else:
+            attr = [attr]*self.nb_up_blocks
+            
+        if cond is not None:
+            for a in attr:
+                assert cond(a)
+        return attr
     
+    def compute_feats(self, x):
+        for i, up in enumerate(self.ups):
+            # if self.res_con[i]:
+            #     x_in = x.clone()
+                
+            x = up(x)
+            
+            # if self.res_con[i]:
+            #     x = torch.cat([x_in, x], dim=1)
+            
+        return x
+            
         
         
-        
+
 

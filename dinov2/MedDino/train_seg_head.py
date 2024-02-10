@@ -18,7 +18,7 @@ from prep_model import get_bb_name, get_dino_backbone, time_str
 from OrigDino.dinov2.eval.segmentation import models
 
 from MedDino.med_dinov2.models.segmentor import Segmentor
-from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear
+from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
@@ -52,10 +52,10 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-dec_head = ConvHeadLinear(in_channels=[backbone.embed_dim]*n_concat, 
-                          num_classses=num_classses,
-                          out_upsample_fac=backbone.patch_size,
-                          bilinear=False)
+# dec_head = ConvHeadLinear(in_channels=[backbone.embed_dim]*n_concat, 
+#                           num_classses=num_classses,
+#                           out_upsample_fac=backbone.patch_size,
+#                           bilinear=False)
 
 # dec_head = FCNHead(num_convs=3,
 #                    kernel_size=3,
@@ -72,6 +72,20 @@ dec_head = ConvHeadLinear(in_channels=[backbone.embed_dim]*n_concat,
 #                    input_transform='resize_concat',
 #                    init_cfg=dict(
 #                        type='Normal', std=0.01, override=dict(name='conv_seg')))
+
+
+dec_head = ConvUNet(in_channels=[backbone.embed_dim]*n_concat,
+                    num_classses=num_classses, 
+                    # in_index=None,
+                    # in_resize_factors=None,
+                    # align_corners=False,
+                    # dropout_rat_cls_seg=0.,
+                    nb_up_blocks=4,
+                    upsample_facs=2,
+                    bilinear=False,
+                    res_con=False,
+                    conv_per_up_blk=2,)
+
 dec_head.to(device)
 
 print("Convolutional decode head")
@@ -83,7 +97,7 @@ train_backbone=False
 model = Segmentor(backbone=backbone,
                   decode_head=dec_head,
                   train_backbone=train_backbone,
-                  reshape_dec_oup=False)
+                  reshape_dec_oup=True)
 model.to(device)
 
 # Print model info
@@ -158,8 +172,8 @@ optm = torch.optim.AdamW(model.parameters(),
                          lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
 
 # LR scheduler
-nb_epochs = 60#5
-warmup_iters = 15#2
+nb_epochs = 100
+warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
