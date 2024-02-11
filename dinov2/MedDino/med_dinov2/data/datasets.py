@@ -23,7 +23,7 @@ from mmseg.datasets.pipelines import Compose
 import mmcv
 from MedDino.med_dinov2.data.transforms import *
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def get_file_list(fld_pth, start_idx=0, num_img=None, extension=None, 
                   file_suffix=None, inc_exc=0):

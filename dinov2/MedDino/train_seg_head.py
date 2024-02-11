@@ -82,7 +82,7 @@ dec_head = ConvUNet(in_channels=[backbone.embed_dim]*n_concat,
                     # dropout_rat_cls_seg=0.,
                     nb_up_blocks=4,
                     upsample_facs=2,
-                    bilinear=True,
+                    bilinear=False,
                     conv_per_up_blk=2,
                     res_con=True,
                     res_con_interv=1)
@@ -167,16 +167,16 @@ test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_sz,
 
 # Optimizer
 optm_cfg = dict(lr = 0.001,
-                wd = 0.0001,
+                weight_decay = 0.0001,
                 betas = (0.9, 0.999))
 optm = torch.optim.AdamW(model.parameters(), 
-                         lr=optm_cfg['lr'], weight_decay=optm_cfg['wd'], betas=optm_cfg['betas'])
+                         **optm_cfg)
 
 # LR scheduler
-nb_epochs = 50#100
+nb_epochs = 100
 warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
-              polynomial_lr = dict(power=1.0, total_iters=nb_epochs*2-warmup_iters))
+              polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
 scheduler2 = PolynomialLR(optm, **lr_cfg['polynomial_lr'])
 scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[warmup_iters])
