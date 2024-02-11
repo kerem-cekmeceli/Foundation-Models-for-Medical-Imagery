@@ -302,6 +302,8 @@ class NConv(nn.Module):
                  out_channels:int,
                  kernel_sz:Union[int, Sequence[int]],
                  mid_channels:Optional[int]=None,
+                 res_con:bool=False, 
+                 res_con_interv:int=1,
                  nb_convs:int=2,
                  batch_norm:Union[bool, Sequence[bool]]=True,
                  non_linearity:Union[str, nn.Module]='ReLU',
@@ -309,6 +311,21 @@ class NConv(nn.Module):
         super().__init__()
         assert nb_convs>1
         self.nb_convs = nb_convs
+        
+        if not mid_channels:
+            mid_channels = out_channels
+        
+        if res_con:
+            assert nb_convs>=2, 'Need at least 2 convolutions for a resifual connection'
+            assert mid_channels == out_channels, \
+                f'mid channels and out_channels should be the same for residual connections, {mid_channels}!={out_channels}'
+                
+            assert res_con_interv > 0, f'res_con_interv must be >0 but got {res_con_interv}'
+            assert res_con_interv < nb_convs
+            self.res_con_interv = res_con_interv
+            
+        self.res_con=res_con
+        
         
         kernel_sz = self.get_attr_list(kernel_sz)
         self.kernel_sz = kernel_sz
@@ -319,9 +336,6 @@ class NConv(nn.Module):
         padding = self.get_attr_list('same')
         self.padding = padding
         
-        if not mid_channels:
-            mid_channels = out_channels
-            
         
         conv_blk_list = [ConvBlk(in_channel=in_channels,
                                  out_channel=mid_channels,
@@ -355,8 +369,14 @@ class NConv(nn.Module):
     
     
     def forward(self, x):
-        for blk in self.conv_blks:
+        for i, blk in enumerate(self.conv_blks):
             x = blk(x)
+            
+            if self.res_con:
+                if (i+1)%(self.res_con_interv+1)==1:
+                    x_residual = x
+                if (i+1)%(self.res_con_interv+1)==0:
+                    x = x + x_residual     
         return x
         
             
@@ -368,6 +388,7 @@ class Up(nn.Module):
                  out_channels, 
                  bilinear=False, 
                  res_con=True,
+                 res_con_interv=1,
                  fact=2, 
                  nb_convs=2,
                  kernel_size=3,
@@ -381,6 +402,8 @@ class Up(nn.Module):
         
         # If to use residual connections 
         self.res_con=res_con
+        if res_con:
+            self.res_con_interv = res_con_interv
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
@@ -394,11 +417,9 @@ class Up(nn.Module):
                                 kernel_sz=kernel_size,
                                 nb_convs=nb_convs,
                                 batch_norm=batch_norm,
-                                non_linearity=non_linearity)
-        
-        if res_con:
-            pass #@TODO ASK
-            # self.up_res_con = nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact)
+                                non_linearity=non_linearity,
+                                res_con=res_con,
+                                res_con_interv=res_con_interv)
         
     def forward(self, x):
         return self.conv_xn(self.up(x))
@@ -415,8 +436,9 @@ class ConvUNet(DecBase):
                  nb_up_blocks:int=2,
                  upsample_facs: Union[int, Sequence[int]]=2,
                  bilinear:Union[bool, Sequence[bool]]=True,
-                 res_con:Union[bool, Sequence[bool]]=False,
-                 conv_per_up_blk=2,) -> None:
+                 conv_per_up_blk:Union[int,Sequence[int]]=2,
+                 res_con:Union[bool,Sequence[bool]]=True,
+                 res_con_interv:Union[int,Sequence[int]]=1) -> None:
         
         # Number of up layers in the UNet architecture
         assert nb_up_blocks>0
@@ -430,14 +452,20 @@ class ConvUNet(DecBase):
         bilinear = self.get_attr_list(bilinear)
         self.bilinear = bilinear
         
-        # If residual connections are used for each Up layer
-        res_con = self.get_attr_list(res_con)
-        self.res_con = res_con
-        
         # Number of convloutional blocks per each up layer
         conv_per_up_blk = self.get_attr_list(conv_per_up_blk, cond=lambda a: a>0)
         self.conv_per_up_blk = conv_per_up_blk
         
+        # If to use residual connections for the conv layers of the Up blocks
+        res_con = self.get_attr_list(res_con)
+        self.res_con = res_con
+        
+        # interval between residual connections for the conv layers of the Up blocks (summation)
+        res_con_interv = self.get_attr_list(res_con_interv, cond=lambda a: a>0)
+        self.res_con_interv = res_con_interv
+        
+        # Set kernel size to 3
+        self.kernel_sz = 3
         
         tot_upsample_fac = 1
         modules = []
@@ -448,12 +476,28 @@ class ConvUNet(DecBase):
             modules.append(Up(in_channels=last_out_ch, 
                               out_channels=last_out_ch//f, 
                               bilinear=bilinear[i], 
-                              fact=f, ))
+                              fact=f, 
+                              kernel_size=self.kernel_sz,
+                              res_con=res_con[i],
+                              res_con_interv=res_con_interv[i]))
             last_out_ch = last_out_ch // f
+            
         self.tot_upsample_fac = tot_upsample_fac
         self.last_out_ch = last_out_ch 
         assert self.last_out_ch >= num_classses, \
             f"Too many ch size reduction, input to seg_cls: {self.last_out_ch}, but num class: {num_classses} "
+            
+            
+        # in_channels
+        # out_channels
+        # kernel_sz
+        # mid_channels
+        # res_con 
+        # res_con_interv
+        # nb_convs
+        # batch_norm
+        # non_linearity
+        # padding
         
         super().__init__(in_channels=in_channels,
                          cls_in_channels=self.last_out_ch,
@@ -481,14 +525,7 @@ class ConvUNet(DecBase):
     
     def compute_feats(self, x):
         for i, up in enumerate(self.ups):
-            # if self.res_con[i]:
-            #     x_in = x.clone()
-                
             x = up(x)
-            
-            # if self.res_con[i]:
-            #     x = torch.cat([x_in, x], dim=1)
-            
         return x
             
         

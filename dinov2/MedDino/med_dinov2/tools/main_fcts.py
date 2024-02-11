@@ -217,7 +217,7 @@ def train(model: nn.Module,
             checkpointer.update(model=model, metrics=log_epoch, epoch=epoch, opt=optimizer, scheduler=scheduler)
             
         # Log the epoch
-        logger.log(log_epoch, step=epoch)
+        logger.log(log_epoch)
         
     # Save the best models:
     if checkpointer is not None:

@@ -83,8 +83,9 @@ dec_head = ConvUNet(in_channels=[backbone.embed_dim]*n_concat,
                     nb_up_blocks=4,
                     upsample_facs=2,
                     bilinear=False,
-                    res_con=False,
-                    conv_per_up_blk=2,)
+                    conv_per_up_blk=2,
+                    res_con=True,
+                    res_con_interv=1)
 
 dec_head.to(device)
 
