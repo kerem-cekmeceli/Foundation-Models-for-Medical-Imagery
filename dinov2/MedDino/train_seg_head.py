@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -85,7 +85,7 @@ dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
                     nb_up_blocks=4,
                     upsample_facs=2,
                     bilinear=False,
-                    conv_per_up_blk=2,
+                    conv_per_up_blk=4,
                     res_con=True,
                     res_con_interv=1
                     )

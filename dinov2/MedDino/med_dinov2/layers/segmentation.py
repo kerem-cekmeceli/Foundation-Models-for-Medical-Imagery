@@ -477,6 +477,7 @@ class ConvUNet(DecBase):
                               out_channels=last_out_ch//f, 
                               bilinear=bilinear[i], 
                               fact=f, 
+                              nb_convs=conv_per_up_blk[i],
                               kernel_size=self.kernel_sz,
                               res_con=res_con[i],
                               res_con_interv=res_con_interv[i]))
