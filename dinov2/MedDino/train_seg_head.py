@@ -52,12 +52,13 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-# dec_head = ConvHeadLinear(in_channels=[backbone.embed_dim]*n_concat, 
-#                           num_classses=num_classses,
-#                           out_upsample_fac=backbone.patch_size,
-#                           bilinear=False)
+# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
+#                     num_classses=num_classses,
+#                     out_upsample_fac=backbone.patch_size,
+#                     bilinear=False)
+# dec_head = ConvHeadLinear(**dec_head_cfg)
 
-# dec_head = FCNHead(num_convs=3,
+# dec_head_cfg = dict(num_convs=3,
 #                    kernel_size=3,
 #                    concat_input=True,
 #                    dilation=1,
@@ -72,20 +73,23 @@ print('Using device:', device)
 #                    input_transform='resize_concat',
 #                    init_cfg=dict(
 #                        type='Normal', std=0.01, override=dict(name='conv_seg')))
+# dec_head = FCNHead(**dec_head_cfg)
 
 
-dec_head = ConvUNet(in_channels=[backbone.embed_dim]*n_concat,
-                    num_classses=num_classses, 
+dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
+                    num_classses=num_classses,
                     # in_index=None,
                     # in_resize_factors=None,
                     # align_corners=False,
-                    # dropout_rat_cls_seg=0.,
+                    dropout_rat_cls_seg=0.1,
                     nb_up_blocks=4,
                     upsample_facs=2,
                     bilinear=False,
                     conv_per_up_blk=2,
                     res_con=True,
-                    res_con_interv=1)
+                    res_con_interv=1
+                    )
+dec_head = ConvUNet(**dec_head_cfg)
 
 dec_head.to(device)
 
@@ -94,11 +98,11 @@ summary(dec_head)
 
 
 # Initialize the segmentor
-train_backbone=False
+segmentor_cfg = dict(train_backbone=False,
+                     reshape_dec_oup=True)
 model = Segmentor(backbone=backbone,
                   decode_head=dec_head,
-                  train_backbone=train_backbone,
-                  reshape_dec_oup=True)
+                  **segmentor_cfg)
 model.to(device)
 
 # Print model info
@@ -204,17 +208,20 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
 wnadb_config = dict(backbone_name=backbone_name,
                     backbone_last_n_concat=n_concat,
                     decode_head=dec_head.__class__.__name__,
-                    train_backbone=train_backbone,
+                    dec_head_cfg=dec_head_cfg,
+                    segmentor_cfg=segmentor_cfg,
                     dataset=str(data_root_pth),
+                    batch_sz=batch_sz,
                     num_classes=num_classses,
                     augmentations=augmentations,
                     nb_epochs=nb_epochs,
-                    lr_cfg=lr_cfg)
+                    lr_cfg=lr_cfg,
+                    optm_cfg=optm_cfg)
 
 
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
-wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not train_backbone else '_with_train'
+wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not segmentor_cfg['train_backbone'] else '_with_train'
 log_mode = 'online' if log_the_run else 'disabled'
 logger = wandb.init(project='FoundationModels_MedDino',
                     group=wandb_group_name,
