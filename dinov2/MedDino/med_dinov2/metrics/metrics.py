@@ -110,23 +110,30 @@ class SegScoreBase(nn.Module, ABC):
         # Calc score over 3D 
         else:
             assert self.vol_batch_sz is not None
+            batch_sz = inputs.size(0)
+            assert self.vol_batch_sz%batch_sz == 0, 'Batch size must be a multiple of samples/volume'
             
-            if depth_idx % self.vol_batch_sz == 0:
+            vol_minibatch_sz = self.vol_batch_sz / batch_sz
+            
+            if depth_idx % vol_minibatch_sz == 0:
                 # Reinit the slices for the next volume batch
-                self.slices_mask_pred = mask_pred.unsqueeze(dim=-3)
-                self.slices_mask_gt = mask_gt.unsqueeze(dim=-3)
-                return {}  # Return an empty dict 
+                self.slices_mask_pred = [mask_pred]
+                self.slices_mask_gt = [mask_gt]
                 
-            elif depth_idx % self.vol_batch_sz == self.vol_batch_sz-1:
-                # Compute the scores over the complete volume
-                scores = self._compute_score(self.slices_mask_pred, self.slices_mask_gt)
-                return self._put_in_res_dict(scores)
-            
             else:
                 # Concat on depth dimension
-                self.slices_mask_pred = torch.concat([self.slices_mask_pred, mask_pred.unsqueeze(dim=-3)], dim=-3)
-                self.slices_mask_gt = torch.concat([self.slices_mask_gt, mask_gt.unsqueeze(dim=-3)], dim=-3)
-                return {}  # Return an empty dict 
+                self.slices_mask_pred.append(mask_pred)
+                self.slices_mask_gt.append(mask_gt)
+                
+                if depth_idx % vol_minibatch_sz == (vol_minibatch_sz-1):
+                    # Compute the scores over the complete volume
+                    scores = self._compute_score(torch.stack(self.slices_mask_pred, dim=-3), \
+                                                 torch.stack(self.slices_mask_gt, dim=-3))
+                    self.slices_mask_pred.clear()
+                    self.slices_mask_gt.clear()
+                    return self._put_in_res_dict(scores)
+                
+            return {}  # Return an empty dict 
     
     def forward(self, inputs, target_oneHot):
         # Verify and prep inputs

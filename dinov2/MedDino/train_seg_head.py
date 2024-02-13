@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -52,11 +52,11 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
-#                     num_classses=num_classses,
-#                     out_upsample_fac=backbone.patch_size,
-#                     bilinear=True)
-# dec_head = ConvHeadLinear(**dec_head_cfg)
+dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
+                    num_classses=num_classses,
+                    out_upsample_fac=backbone.patch_size,
+                    bilinear=True)
+dec_head = ConvHeadLinear(**dec_head_cfg)
 
 # dec_head_cfg = dict(num_convs=3,
 #                    kernel_size=3,
@@ -76,20 +76,20 @@ print('Using device:', device)
 # dec_head = FCNHead(**dec_head_cfg)
 
 
-dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
-                    num_classses=num_classses,
-                    # in_index=None,
-                    # in_resize_factors=None,
-                    # align_corners=False,
-                    dropout_rat_cls_seg=0.1,
-                    nb_up_blocks=4,
-                    upsample_facs=2,
-                    bilinear=False,
-                    conv_per_up_blk=2,
-                    res_con=True,
-                    res_con_interv=1
-                    )
-dec_head = ConvUNet(**dec_head_cfg)
+# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
+#                     num_classses=num_classses,
+#                     # in_index=None,
+#                     # in_resize_factors=None,
+#                     # align_corners=False,
+#                     dropout_rat_cls_seg=0.1,
+#                     nb_up_blocks=4,
+#                     upsample_facs=2,
+#                     bilinear=False,
+#                     conv_per_up_blk=2,
+#                     res_con=True,
+#                     res_con_interv=1
+#                     )
+# dec_head = ConvUNet(**dec_head_cfg)
 
 dec_head.to(device)
 
@@ -212,7 +212,7 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                             epsilon=1e-6,
                             vol_batch_sz=SLICE_PER_PATIENT))
 
-val_metrics_over_vol = False  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
+val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,

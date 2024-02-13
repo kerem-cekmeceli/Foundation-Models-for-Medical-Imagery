@@ -163,7 +163,7 @@ def validate_batches(model: nn.Module,
                 if key == 'val_loss' or not metrics_over_vol:
                     log_epoch[key] /= tot_batches
                 else:
-                    log_epoch[key] /= (tot_batches / next(iter(metrics.items()))[1].vol_batch_sz)
+                    log_epoch[key] /= (tot_batches / (next(iter(metrics.items()))[1].vol_batch_sz / x_batch.size(0)))
        
     return log_epoch
 
@@ -182,7 +182,8 @@ def train(model: nn.Module,
           seg_val_intv=20,
           first_n_batch_to_seg_log=16,
           seg_log_per_batch=3,
-          val_metrics_over_vol=False) -> None:
+          val_metrics_over_vol=False,
+          print_per_class=False) -> None:
     
     epochs = tqdm(range(n_epochs), desc='Epochs')
     
@@ -213,9 +214,10 @@ def train(model: nn.Module,
             epoch_str = ''
             for key, val in log_epoch.items():
                 if not key.startswith('val_seg_batch'):
-                    if epoch_str != '':
-                        epoch_str += ', '
-                    epoch_str += f'{key} = {round(val, 5)}'
+                    if not 'class' in key or print_per_class:
+                        if epoch_str != '':
+                            epoch_str += ', '
+                        epoch_str += f'{key} = {round(val, 5)}'
             tqdm.write(epoch_str)
             
         # Checkpointer
@@ -331,7 +333,7 @@ def test_batches(model: nn.Module,
             if key == 'test_loss' or not metrics_over_vol:
                 log_test[key] /= tot_batches
             else:
-                log_test[key] /= (tot_batches / next(iter(metrics.items()))[1].vol_batch_sz)
+                log_test[key] /= (tot_batches / (next(iter(metrics.items()))[1].vol_batch_sz / x_batch.size(0)))
             
         # Log the table
         if log_table is not None:
