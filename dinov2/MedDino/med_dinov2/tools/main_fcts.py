@@ -20,12 +20,12 @@ from typing import Callable, Optional, Union, Dict
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from MedDino.med_dinov2.tools.plot import show_result
 import math
+from MedDino.med_dinov2.metrics.metrics import SegScoreBase
 
 def train_batches(model : nn.Module, 
                       train_loader : DataLoader, 
                       loss_fn : Callable, 
                       optimizer : torch.optim.Optimizer, 
-                      device : Union[str, torch.device], 
                       metrics : Optional[Dict[str, Callable]] = None) -> dict:
     model.train()
     batches = tqdm(train_loader, desc='Train Batches', leave=False)
@@ -38,13 +38,11 @@ def train_batches(model : nn.Module,
     
     # Init the epoch log dict (to be averaged over all the batches)
     log_epoch = dict(loss=0.)
-    for metric_n in metrics.keys():
-        log_epoch[metric_n] = 0.
     
     for i_batch, (x_batch, y_batch) in enumerate(batches):
         # Put the data on the selected device
-        x_batch = x_batch.to(device=device) #@TODO model.device
-        y_batch = y_batch.to(device=device)
+        x_batch = x_batch.to(device=next(model.parameters()).device)
+        y_batch = y_batch.to(device=next(model.parameters()).device)
         
         # Forward pass
         y_pred = model(x_batch)
@@ -62,8 +60,12 @@ def train_batches(model : nn.Module,
         
         # Compute the metrics
         for metric_n, metric in metrics.items():
-            metric_val = metric(y_pred, y_batch).item()
-            log_epoch[metric_n] += metric_val
+            metric_dict = metric.get_res_dict(y_pred, y_batch)
+            for k, v in metric_dict.items():
+                key_epoch = metric_n+k
+                if not key_epoch in log_epoch.keys():
+                    log_epoch[key_epoch] = 0.
+                log_epoch[key_epoch] += v.item()
     
     # Average out the epoch logs 
     for key in log_epoch.keys():
@@ -75,10 +77,10 @@ def train_batches(model : nn.Module,
 def validate_batches(model: nn.Module, 
                      val_loader: DataLoader, 
                      loss_fn: Callable, 
-                     device: Union[str, torch.device], 
-                     metrics: Optional[Dict[str, Callable]]=None,
+                     metrics: Optional[Dict[str, SegScoreBase]]=None,
                      first_n_batch_to_seg_log=0,
-                     seg_log_per_batch=3) -> dict:
+                     seg_log_per_batch=3,
+                     metrics_over_vol=False) -> dict:
     model.eval()
     batches = tqdm(val_loader, desc='Eval Batches', leave=False)
     tot_batches = len(batches)
@@ -92,8 +94,6 @@ def validate_batches(model: nn.Module,
         raise Exception('No data')
     
     log_epoch = dict(val_loss=0.)
-    for metric_n in metrics.keys():
-        log_epoch['val_'+metric_n] = 0.
         
     # Seg result logging preps
     if first_n_batch_to_seg_log>0:
@@ -110,8 +110,8 @@ def validate_batches(model: nn.Module,
     with torch.no_grad():
         for i_batch, (x_batch, y_batch) in enumerate(batches):
             # Put the data on the selected device
-            x_batch = x_batch.to(device=device)  # [N, C, H, W]
-            y_batch = y_batch.to(device=device)  # [N, num_cls, H, W]
+            x_batch = x_batch.to(device=next(model.parameters()).device)  # [N, C, H, W]
+            y_batch = y_batch.to(device=next(model.parameters()).device)  # [N, num_cls, H, W]
             
             # Forward pass
             y_pred = model(x_batch)
@@ -122,8 +122,12 @@ def validate_batches(model: nn.Module,
             
             # Compute the metrics
             for metric_n, metric in metrics.items():
-                metric_val = metric(y_pred, y_batch).item()
-                log_epoch['val_'+metric_n] += metric_val
+                metric_dict = metric.get_res_dict(y_pred, y_batch, depth_idx=i_batch if metrics_over_vol else None)  
+                for k, v in metric_dict.items():
+                    key_epoch = 'val_'+metric_n+k
+                    if not key_epoch in log_epoch.keys():
+                        log_epoch[key_epoch] = 0.
+                    log_epoch[key_epoch] += v.item()
                 
             # save the segmentation result
             if i_batch < first_n_batch_to_seg_log:
@@ -156,7 +160,10 @@ def validate_batches(model: nn.Module,
         # Average out the epoch logs 
         for key in log_epoch.keys():
             if not key.startswith('val_seg_batch'):
-                log_epoch[key] /= tot_batches   
+                if key == 'val_loss' or not metrics_over_vol:
+                    log_epoch[key] /= tot_batches
+                else:
+                    log_epoch[key] /= (tot_batches / next(iter(metrics.items()))[1].vol_batch_sz)
        
     return log_epoch
 
@@ -166,18 +173,17 @@ def train(model: nn.Module,
           loss_fn: Callable, 
           optimizer: torch.optim.Optimizer,
           n_epochs: int, 
-          device: Union[str, torch.device], 
           logger: wandb.wandb_sdk.wandb_run.Run,
           scheduler: Optional[torch.optim.lr_scheduler.SequentialLR]=None, 
           val_loader: Optional[DataLoader]=None, 
           print_epoch_info: bool=True,
           checkpointer: Optional[Checkpointer]=None, 
-          metrics: Optional[Dict[str, Callable]]=None,
+          metrics: Optional[Dict[str, SegScoreBase]]=None,
           seg_val_intv=20,
           first_n_batch_to_seg_log=16,
-          seg_log_per_batch=3) -> None:
+          seg_log_per_batch=3,
+          val_metrics_over_vol=False) -> None:
     
-    model.to(device)
     epochs = tqdm(range(n_epochs), desc='Epochs')
     
     if metrics is not None:
@@ -188,14 +194,14 @@ def train(model: nn.Module,
         log_epoch = dict(epoch=epoch, lr=optimizer.param_groups[0]["lr"])
                 
         # Train
-        log_train = train_batches(model, train_loader, loss_fn, optimizer, device, metrics)
+        log_train = train_batches(model, train_loader, loss_fn, optimizer, metrics)
         log_epoch = log_epoch | log_train
         
         # Validate    
         if val_loader is not None:
             batch_th = first_n_batch_to_seg_log if (epoch+1)%seg_val_intv==0 else 0
-            log_val = validate_batches(model, val_loader, loss_fn, device, metrics,
-                                       batch_th, seg_log_per_batch)
+            log_val = validate_batches(model, val_loader, loss_fn, metrics,
+                                       batch_th, seg_log_per_batch, val_metrics_over_vol)
             log_epoch = log_epoch | log_val
             
         # Update LR
@@ -226,13 +232,13 @@ def train(model: nn.Module,
         
 @torch.no_grad()           
 def test_batches(model: nn.Module, 
-                     val_loader: DataLoader, 
-                     loss_fn: Callable, 
-                     device: Union[str, torch.device], 
-                     metrics: Optional[Dict[str, Callable]]=None, 
-                     soft: bool=False,
-                     first_n_batch_to_seg_log=16,
-                     seg_log_per_batch=3) -> dict:
+                val_loader: DataLoader, 
+                loss_fn: Callable, 
+                metrics: Optional[Dict[str, SegScoreBase]]=None, 
+                soft: bool=False,
+                first_n_batch_to_seg_log=16,
+                seg_log_per_batch=3,
+                metrics_over_vol=False) -> dict:
     model.eval()
     batches = tqdm(val_loader, desc='Test Batches', leave=False)
     tot_batches = len(batches)
@@ -246,8 +252,6 @@ def test_batches(model: nn.Module,
         raise Exception('No data')
     
     log_test = dict(test_loss=0.)
-    for metric_n in metrics.keys():
-        log_test['test_'+metric_n] = 0.
     
     # Seg result logging preps
     if first_n_batch_to_seg_log>0:
@@ -271,8 +275,8 @@ def test_batches(model: nn.Module,
     with torch.no_grad():
         for i_batch, (x_batch, y_batch) in enumerate(batches):
             # Put the data on the selected device
-            x_batch = x_batch.to(device=device)
-            y_batch = y_batch.to(device=device)
+            x_batch = x_batch.to(device=next(model.parameters()).device)
+            y_batch = y_batch.to(device=next(model.parameters()).device)
             
             # check if you have nans x batch or y batch
             
@@ -308,19 +312,26 @@ def test_batches(model: nn.Module,
             
             # Compute the metrics
             for metric_n, metric in metrics.items():
-                metric_val = metric(y_pred, y_batch).item()
-                log_test['test_'+metric_n] += metric_val
+                metric_dict = metric.get_res_dict(y_pred, y_batch, depth_idx=i_batch if metrics_over_vol else None)
+                for k, v in metric_dict.items():
+                    key_test = 'test_'+metric_n+k
+                    if not key_test in log_test.keys():
+                        log_test[key_test] = 0.
+                    log_test[key_test] += v.item()
                 
                 # Append the row for the table
                 if i_batch < first_n_batch_to_seg_log:
-                    log_row.append(metric_val)
+                    log_row.append(metric_dict[''])
                 
             if i_batch < first_n_batch_to_seg_log:
                 log_table.add_data(*log_row)
         
         # Average out the epoch logs 
         for key in log_test.keys():
-            log_test[key] /= tot_batches      
+            if key == 'test_loss' or not metrics_over_vol:
+                log_test[key] /= tot_batches
+            else:
+                log_test[key] /= (tot_batches / next(iter(metrics.items()))[1].vol_batch_sz)
             
         # Log the table
         if log_table is not None:
@@ -332,14 +343,15 @@ def test_batches(model: nn.Module,
 def test(model: nn.Module,
          test_loader: DataLoader, 
          loss_fn: Callable, 
-         device: Union[str, torch.device], 
          logger: wandb.wandb_sdk.wandb_run.Run,
          metrics: Optional[Dict[str, Callable]]=None, 
          soft:bool = False,
          first_n_batch_to_seg_log=16,
-         seg_log_per_batch=3):
-    log_test = test_batches(model, test_loader, loss_fn, device, metrics, soft, 
-                            first_n_batch_to_seg_log, seg_log_per_batch)
+         seg_log_per_batch=3,
+         metrics_over_vol=False):
+    log_test = test_batches(model, test_loader, loss_fn, metrics, soft, 
+                            first_n_batch_to_seg_log, seg_log_per_batch,
+                            metrics_over_vol)
     
     test_str = ''
     for key, val in log_test.items():
@@ -396,22 +408,22 @@ def test(model: nn.Module,
 #     print(f'\nValidation set: Average loss: {running_loss/len(valid_loader):.4f}')
 
 
-def infer(image_path, model, device, img_transform):
-    # Load and transform the image
-    image = Image.open(image_path).convert("RGB")
-    transformed_image = img_transform(image).unsqueeze(0).to(device)  # Add batch dimension and move to device
+# def infer(image_path, model, device, img_transform):
+#     # Load and transform the image
+#     image = Image.open(image_path).convert("RGB")
+#     transformed_image = img_transform(image).unsqueeze(0).to(device)  # Add batch dimension and move to device
 
-    # Make sure the model is in evaluation mode
-    model.eval()
+#     # Make sure the model is in evaluation mode
+#     model.eval()
 
-    with torch.no_grad():
-        # Make prediction
-        output = model(transformed_image)
+#     with torch.no_grad():
+#         # Make prediction
+#         output = model(transformed_image)
 
-        # Get the predicted class for each pixel
-        _, predicted = torch.max(output, 1)
+#         # Get the predicted class for each pixel
+#         _, predicted = torch.max(output, 1)
     
-    # Move prediction to cpu and convert to numpy array
-    predicted = predicted.squeeze().cpu().numpy()
+#     # Move prediction to cpu and convert to numpy array
+#     predicted = predicted.squeeze().cpu().numpy()
 
-    return transformed_image.cpu().squeeze().permute(1, 2, 0).numpy(), predicted
+#     return transformed_image.cpu().squeeze().permute(1, 2, 0).numpy(), predicted

@@ -22,7 +22,7 @@ from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.metrics.metrics import mIoU, DiceScore
+from MedDino.med_dinov2.metrics.metrics import mIoU, DiceScore, DiceLoss
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary
@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -55,7 +55,7 @@ print('Using device:', device)
 # dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
 #                     num_classses=num_classses,
 #                     out_upsample_fac=backbone.patch_size,
-#                     bilinear=False)
+#                     bilinear=True)
 # dec_head = ConvHeadLinear(**dec_head_cfg)
 
 # dec_head_cfg = dict(num_convs=3,
@@ -81,11 +81,11 @@ dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
                     # in_index=None,
                     # in_resize_factors=None,
                     # align_corners=False,
-                    dropout_rat_cls_seg=0.1,
+                    dropout_rat_cls_seg=0.0,
                     nb_up_blocks=4,
                     upsample_facs=2,
                     bilinear=False,
-                    conv_per_up_blk=4,
+                    conv_per_up_blk=2,
                     res_con=True,
                     res_con_interv=1
                     )
@@ -187,22 +187,32 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 #@TODO: check tuning strategies for LR
 
 # Loss function
-loss = CrossEntropyLoss()
+# loss = CrossEntropyLoss()
+
+loss = DiceLoss(n_class=num_classses, 
+                prob_inputs=False, 
+                bg_ch_to_rm=0,
+                reduction='mean')
 
 # Metrics
 bg_channel = 0
+SLICE_PER_PATIENT = 256
 metrics=dict(mIoU=mIoU(n_class=num_classses, 
                        prob_inputs=False, # Decoder does not return probas explicitly
                        soft=True,
                        bg_ch_to_rm=bg_channel,  # bg channel to be removed 
-                       reduction='mean'), # average over batches and classes
+                       reduction='mean',
+                       vol_batch_sz=SLICE_PER_PATIENT), # average over batches and classes
              dice=DiceScore(n_class=num_classses, 
                             prob_inputs=False,  # Decoder does not return probas explicitly
                             soft=True,
                             bg_ch_to_rm=bg_channel,
                             reduction='mean',
                             k=1, 
-                            epsilon=1e-6,))
+                            epsilon=1e-6,
+                            vol_batch_sz=SLICE_PER_PATIENT))
+
+val_metrics_over_vol = False  #@TODO when true it's too slow fix it
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,
@@ -216,7 +226,9 @@ wnadb_config = dict(backbone_name=backbone_name,
                     augmentations=augmentations,
                     nb_epochs=nb_epochs,
                     lr_cfg=lr_cfg,
-                    optm_cfg=optm_cfg)
+                    optm_cfg=optm_cfg,
+                    loss=loss.__class__.__name__,
+                    val_metrics_over_vol=val_metrics_over_vol)
 
 
 wandb_log_path = dino_main_pth / 'Logs'
@@ -230,11 +242,10 @@ logger = wandb.init(project='FoundationModels_MedDino',
                     name=time_str(),
                     mode=log_mode)
 
-seg_res_log_itv = nb_epochs//4  # Log seg reult every xxx epochs
+seg_res_log_itv = max(nb_epochs//4, 1)   # Log seg reult every xxx epochs
 seg_res_nb_patient = 1
 seg_log_per_batch = 3
 
-SLICE_PER_PATIENT = 256
 first_n_batch_to_seg_log = math.ceil(SLICE_PER_PATIENT/batch_sz*seg_res_nb_patient)
 
 
@@ -255,29 +266,28 @@ if not save_checkpoints:
 train(model=model, train_loader=train_dataloader, 
       val_loader=val_dataloader, loss_fn=loss, 
       optimizer=optm, scheduler=scheduler,
-      n_epochs=nb_epochs, device=device, logger=logger,
+      n_epochs=nb_epochs, logger=logger,
       checkpointer=cp, metrics=metrics,
       seg_val_intv=seg_res_log_itv,
       first_n_batch_to_seg_log=first_n_batch_to_seg_log,
-      seg_log_per_batch=seg_log_per_batch)
+      seg_log_per_batch=seg_log_per_batch,
+      val_metrics_over_vol=val_metrics_over_vol)
 
 # Test hard decision predicted seg classes per pix
 test(model=model, test_loader=test_dataloader, loss_fn=loss, 
-     device=device, logger=logger, metrics=metrics, soft=False,
+     logger=logger, metrics=metrics, soft=False,
      first_n_batch_to_seg_log=first_n_batch_to_seg_log, 
-     seg_log_per_batch=seg_log_per_batch)
+     seg_log_per_batch=seg_log_per_batch,
+     metrics_over_vol=val_metrics_over_vol)
 
-#@TODO log input pred gt randomly every n iter (dice scores per class)
+
 #@TODO add types and comments
 #@TODO write readme.md
 #@TODO maybe torchlighning Friday
+#@TODO use the original hdf5 files 
 
-#@TODO ASK
-# validate and test at the original resolution, also for training ???
-# x --> scale up resize --> model --> scale down resize  --> accuracy 
-# Which decoder architecture 
-# which segmentations to log (test, how frequent, val ?)
-
+#@ TODO Compute metrics over the volume (concat all slices and compute metrics at onece)
+#@ TODO Also Compute dice, miou scores for each class
 
 
 #finish logging
