@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Load the pre-trained backbone
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
@@ -187,12 +187,12 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 #@TODO: check tuning strategies for LR
 
 # Loss function
-loss = CrossEntropyLoss()
+# loss = CrossEntropyLoss()
 
-# loss = DiceLoss(n_class=num_classses, 
-#                 prob_inputs=False, 
-#                 bg_ch_to_rm=0,
-#                 reduction='mean')
+loss = DiceLoss(n_class=num_classses, 
+                prob_inputs=False, 
+                bg_ch_to_rm=0,
+                reduction='mean')
 
 # Metrics
 bg_channel = 0
@@ -212,7 +212,7 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                             epsilon=1e-6,
                             vol_batch_sz=SLICE_PER_PATIENT))
 
-val_metrics_over_vol = False  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
+val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,

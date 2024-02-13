@@ -5,6 +5,7 @@ from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
 import lightning as L
+from typing import Union, Optional
 
 
 class Segmentor(nn.Module):
@@ -79,8 +80,31 @@ class Segmentor(nn.Module):
         assert x.shape[-2:] == out.shape[-2:], \
             f'input and output image shapes do not match, {x.shape[:-2]} =! {out.shape[:-2]}'
         return out
-    
 
+
+class LitBaseModule(L.LightningModule):
+    def __init__(self,
+                 optimizer_config:dict,
+                 schedulers_config:Union[list, dict]) -> None:
+        
+        super().__init__()  
+        self.optimizer_config = optimizer_config
+        
+        
+    def _get_optimizer(self, optimizer_config):
+        optimizer_name = optimizer_config['name']
+        optimizer_params = optimizer_config['params']
+
+        if optimizer_name == 'SGD':
+            optimizer = torch.optim.SGD(self.parameters(), **optimizer_params)
+        elif optimizer_name == 'Adam':
+            optimizer = torch.optim.Adam(self.parameters(), **optimizer_params)
+        elif optimizer_name == 'AdamW':
+            optimizer = torch.optim.Adam(self.parameters(), **optimizer_params)
+        else:
+            raise ValueError(f"Optimizer '{optimizer_name}' not supported.")
+
+        return optimizer
 
 class LitSegmentor(L.LightningModule):
     def __init__(self,
@@ -88,7 +112,8 @@ class LitSegmentor(L.LightningModule):
                  decode_head, 
                  train_backbone=False, 
                  reshape_dec_oup=False, 
-                 align_corners=False,) -> None:
+                 align_corners=False,
+                 ) -> None:
         super().__init__()
         self.segmentor = Segmentor(backbone=backbone,
                                    decode_head=decode_head,
@@ -99,7 +124,12 @@ class LitSegmentor(L.LightningModule):
     def forward(self, x):
         return self.segmentor(x)
     
-    # def conf
+    
+    
+    def configure_optimizers(self):
+        optm = None
+        scheduler = None
+        return [optm], [scheduler]
     
     
     
