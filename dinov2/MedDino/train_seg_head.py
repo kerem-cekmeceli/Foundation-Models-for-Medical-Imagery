@@ -81,7 +81,7 @@ dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
                     # in_index=None,
                     # in_resize_factors=None,
                     # align_corners=False,
-                    dropout_rat_cls_seg=0.0,
+                    dropout_rat_cls_seg=0.1,
                     nb_up_blocks=4,
                     upsample_facs=2,
                     bilinear=False,
@@ -212,7 +212,7 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                             epsilon=1e-6,
                             vol_batch_sz=SLICE_PER_PATIENT))
 
-val_metrics_over_vol = False  #@TODO when true it's too slow fix it
+val_metrics_over_vol = False  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,
