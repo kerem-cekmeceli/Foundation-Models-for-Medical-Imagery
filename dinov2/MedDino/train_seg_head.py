@@ -269,7 +269,9 @@ logger = wandb.init(project='FoundationModels_MedDino',
                     config=wnadb_config,
                     dir=wandb_log_path,
                     name=time_str(),
-                    mode=log_mode)
+                    mode=log_mode,
+                    settings=wandb.Settings(_service_wait=300)  # Increase timeout
+                    ) 
 
 seg_res_log_itv = max(nb_epochs//4, 1)   # Log seg reult every xxx epochs
 seg_res_nb_patient = 1
