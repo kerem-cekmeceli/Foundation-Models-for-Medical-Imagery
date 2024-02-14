@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Load the pre-trained backbone
 train_backbone = False
@@ -136,9 +136,10 @@ print(f'SegModel trainable: {trainable}, non-trainable: {non_trainable}')
 img_scale_fac = 1  # Try without first
 central_crop = True
 augmentations = []
-augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
-augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
-augmentations.append(dict(type='PhotoMetricDistortion'))
+train_augmentations = []
+train_augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
+train_augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
+train_augmentations.append(dict(type='PhotoMetricDistortion'))
 
 if img_scale_fac > 1:
     augmentations.append(dict(type='Resize2',
@@ -156,6 +157,8 @@ else:
     augmentations.append(dict(type='CentralPad',  
                             size_divisor=backbone.patch_size,
                             pad_val=0, seg_pad_val=0))
+    
+train_augmentations = train_augmentations + augmentations
 
 # Get the data loader
 if cluster_paths:
@@ -168,21 +171,21 @@ train_dataset = SegmentationDataset(img_dir=data_root_pth/'images/train-filtered
                                     num_classes=num_classses,
                                     file_extension='.png',
                                     mask_suffix='_labelTrainIds',
-                                    augmentations=augmentations,
+                                    augmentations=train_augmentations,
                                     )
 val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                   mask_dir=data_root_pth/'labels/val',
                                   num_classes=num_classses,
                                   file_extension='.png',
                                   mask_suffix='_labelTrainIds',
-                                  augmentations=None,
+                                  augmentations=augmentations,
                                   )
 test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                    mask_dir=data_root_pth/'labels/test',
                                    num_classes=num_classses,
                                    file_extension='.png',
                                    mask_suffix='_labelTrainIds',
-                                   augmentations=None,
+                                   augmentations=augmentations,
                                    )
 batch_sz = 16
 train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_sz,
