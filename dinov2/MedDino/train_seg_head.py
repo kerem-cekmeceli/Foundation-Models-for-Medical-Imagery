@@ -37,13 +37,26 @@ save_checkpoints = True
 log_the_run = True
 
 # Load the pre-trained backbone
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 backbone_name = get_bb_name(backbone_sz)
 bb_checkpoint_path = dino_main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
 backbone = get_dino_backbone(backbone_name, backbone_cp=bb_checkpoint_path)
 
+
 print("Dino backbone")
 summary(backbone)
+
+trainable = 0
+non_trainable = 0
+for p in backbone.parameters():
+    if p.requires_grad:
+        trainable += 1
+    else:
+        non_trainable +=1
+        
+print(f'Backbone trainable: {trainable}, non-trainable: {non_trainable}')
+
 
 # Initialize the segmentation decode head
 num_classses = 15
@@ -52,11 +65,11 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
-#                     num_classses=num_classses,
-#                     out_upsample_fac=backbone.patch_size,
-#                     bilinear=True)
-# dec_head = ConvHeadLinear(**dec_head_cfg)
+dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
+                    num_classses=num_classses,
+                    out_upsample_fac=backbone.patch_size,
+                    bilinear=True)
+dec_head = ConvHeadLinear(**dec_head_cfg)
 
 # dec_head_cfg = dict(num_convs=3,
 #                    kernel_size=3,
@@ -76,29 +89,28 @@ print('Using device:', device)
 # dec_head = FCNHead(**dec_head_cfg)
 
 
-dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
-                    num_classses=num_classses,
-                    # in_index=None,
-                    # in_resize_factors=None,
-                    # align_corners=False,
-                    dropout_rat_cls_seg=0.1,
-                    nb_up_blocks=4,
-                    upsample_facs=2,
-                    bilinear=False,
-                    conv_per_up_blk=2,
-                    res_con=True,
-                    res_con_interv=1
-                    )
-dec_head = ConvUNet(**dec_head_cfg)
+# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
+#                     num_classses=num_classses,
+#                     # in_index=None,
+#                     # in_resize_factors=None,
+#                     # align_corners=False,
+#                     dropout_rat_cls_seg=0.1,
+#                     nb_up_blocks=4,
+#                     upsample_facs=2,
+#                     bilinear=False,
+#                     conv_per_up_blk=2,
+#                     res_con=True,
+#                     res_con_interv=1
+#                     )
+# dec_head = ConvUNet(**dec_head_cfg)
 
 dec_head.to(device)
 
 print("Convolutional decode head")
 summary(dec_head)
 
-
 # Initialize the segmentor
-segmentor_cfg = dict(train_backbone=False,
+segmentor_cfg = dict(train_backbone=train_backbone,
                      reshape_dec_oup=True)
 model = Segmentor(backbone=backbone,
                   decode_head=dec_head,
@@ -108,6 +120,17 @@ model.to(device)
 # Print model info
 print("Segmentor model")
 summary(model)
+
+trainable = 0
+non_trainable = 0
+for p in model.parameters():
+    if p.requires_grad:
+        trainable += 1
+    else:
+        non_trainable +=1
+        
+print(f'SegModel trainable: {trainable}, non-trainable: {non_trainable}')
+
 
 # Define data augmentations
 img_scale_fac = 1  # Try without first
@@ -152,14 +175,14 @@ val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                   num_classes=num_classses,
                                   file_extension='.png',
                                   mask_suffix='_labelTrainIds',
-                                  augmentations=augmentations,
+                                  augmentations=None,
                                   )
 test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                    mask_dir=data_root_pth/'labels/test',
                                    num_classes=num_classses,
                                    file_extension='.png',
                                    mask_suffix='_labelTrainIds',
-                                   augmentations=augmentations,
+                                   augmentations=None,
                                    )
 batch_sz = 16
 train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_sz,
@@ -173,11 +196,15 @@ test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_sz,
 optm_cfg = dict(lr = 0.001,
                 weight_decay = 0.0001,
                 betas = (0.9, 0.999))
-optm = torch.optim.AdamW(model.parameters(), 
+
+parameter_groups = []
+optm = torch.optim.AdamW(model.parameters() if train_backbone else model.decode_head.parameters(), 
                          **optm_cfg)
 
+
+
 # LR scheduler
-nb_epochs = 100
+nb_epochs = 50
 warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
@@ -186,26 +213,28 @@ scheduler2 = PolynomialLR(optm, **lr_cfg['polynomial_lr'])
 scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[warmup_iters])
 #@TODO: check tuning strategies for LR
 
-# Loss function
-loss = CrossEntropyLoss()
 
-# loss = DiceLoss(n_class=num_classses, 
-#                 prob_inputs=False, 
-#                 bg_ch_to_rm=0,
-#                 reduction='mean')
+# Loss function
+# loss = CrossEntropyLoss()
+
+loss = DiceLoss(n_class=num_classses, 
+                prob_inputs=False, 
+                bg_ch_to_rm=None,
+                reduction='mean')
 
 # Metrics
 bg_channel = 0
 SLICE_PER_PATIENT = 256
 metrics=dict(mIoU=mIoU(n_class=num_classses, 
                        prob_inputs=False, # Decoder does not return probas explicitly
-                       soft=True,
+                       soft=False,
                        bg_ch_to_rm=bg_channel,  # bg channel to be removed 
                        reduction='mean',
-                       vol_batch_sz=SLICE_PER_PATIENT), # average over batches and classes
+                       vol_batch_sz=SLICE_PER_PATIENT,
+                       epsilon=1e-6,), # average over batches and classes
              dice=DiceScore(n_class=num_classses, 
                             prob_inputs=False,  # Decoder does not return probas explicitly
-                            soft=True,
+                            soft=False,
                             bg_ch_to_rm=bg_channel,
                             reduction='mean',
                             k=1, 
@@ -261,6 +290,8 @@ cp = Checkpointer(save_pth=models_pth,
 
 if not save_checkpoints:
     cp = None
+ 
+
     
 # Training loop
 train(model=model, train_loader=train_dataloader, 

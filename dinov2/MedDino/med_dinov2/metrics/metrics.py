@@ -150,11 +150,12 @@ class mIoU(SegScoreBase):
     def __init__(self, 
                  n_class, 
                  prob_inputs=False, 
-                 soft=True,
+                 soft=False,
                  bg_ch_to_rm=None,
                  reduction='mean',
                  ret_per_class_scores=True,
-                 vol_batch_sz=None):
+                 vol_batch_sz=None,
+                 epsilon=1e-6):
         super(mIoU, self).__init__(n_class=n_class, 
                                    prob_inputs=prob_inputs, 
                                    soft=soft,  # score => not differentiable => can be hard
@@ -162,6 +163,9 @@ class mIoU(SegScoreBase):
                                    reduction=reduction,
                                    ret_per_class_scores=ret_per_class_scores,
                                    vol_batch_sz=vol_batch_sz)  
+        
+        assert epsilon>0, f'Epsilon must be positive, got: {epsilon}'
+        self.epsilon=epsilon
         
 
     def _compute_score(self, mask_pred, mask_gt):
@@ -179,7 +183,7 @@ class mIoU(SegScoreBase):
         union = union.reshape(N, C, -1).sum(-1)
         
         # Score per batch and classes
-        iou = inter/union  # N x C
+        iou = (inter+self.epsilon)/(union+self.epsilon)  # N x C
 
         return iou
     
@@ -188,14 +192,16 @@ class mIoULoss(mIoU):
                  n_class, 
                  prob_inputs=False, 
                  bg_ch_to_rm=None,
-                 reduction='mean'):
+                 reduction='mean',
+                 epsilon=1e-6):
         super().__init__(n_class=n_class, 
                          prob_inputs=prob_inputs, 
                          soft=True,  # loss => must be differentiable => soft
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
                          ret_per_class_scores=False,
-                         vol_batch_sz=None)
+                         vol_batch_sz=None,
+                         epsilon=epsilon)
     
     def forward(self, inputs, target_oneHot):
         return 1 - super().forward(inputs, target_oneHot)
@@ -206,7 +212,7 @@ class DiceScore(SegScoreBase):
     def __init__(self, 
                  n_class, 
                  prob_inputs=False, 
-                 soft=True,
+                 soft=False,
                  bg_ch_to_rm=None,
                  reduction='mean',
                  k=1, 

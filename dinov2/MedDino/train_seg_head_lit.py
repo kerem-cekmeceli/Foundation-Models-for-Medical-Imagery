@@ -181,6 +181,19 @@ nb_epochs = 100
 warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
+
+scheduler_configs = []
+scheduler_configs.append(\
+    dict(name='LinearLR',
+         params=dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)))
+scheduler_configs.append(\
+    dict(name='PolynomialLR',
+         params=dict(power=1.0, total_iters=nb_epochs-warmup_iters)))
+
+scheduler_cfg = dict(name='SequentialLR',
+                     params=dict(scheduler_configs=scheduler_configs,
+                                  milestones=[warmup_iters]),
+                      )
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
 scheduler2 = PolynomialLR(optm, **lr_cfg['polynomial_lr'])
 scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[warmup_iters])
