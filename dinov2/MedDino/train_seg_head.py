@@ -219,14 +219,14 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 # Loss function
 bg_channel = 0
-# loss_cfg = dict()
-# loss = CrossEntropyLoss(**loss_cfg)
+loss_cfg = dict()
+loss = CrossEntropyLoss(**loss_cfg)
 
-loss_cfg = dict(n_class=num_classses, 
-                prob_inputs=False, 
-                bg_ch_to_rm=bg_channel,
-                reduction='mean')
-loss = DiceLoss(**loss_cfg)
+# loss_cfg = dict(n_class=num_classses, 
+#                 prob_inputs=False, 
+#                 bg_ch_to_rm=bg_channel,
+#                 reduction='mean')
+# loss = DiceLoss(**loss_cfg)
 
 # Metrics
 SLICE_PER_PATIENT = 256
