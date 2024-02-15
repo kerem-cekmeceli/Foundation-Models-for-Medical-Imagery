@@ -46,6 +46,7 @@ class SegScoreBase(nn.Module, ABC):
     def _get_probas(self, mask_pred):
         if not self.prob_inputs:
             mask_pred = F.softmax(mask_pred, dim=1)
+            #@TODO add sigmoid if binary
         if not self.soft:
             dtype = mask_pred.dtype
             mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), self.n_class).transpose(-1, 1).to(dtype)  # [0, 3, 1, 2]
@@ -68,6 +69,7 @@ class SegScoreBase(nn.Module, ABC):
     
     def _score_reduction(self, score, dim=None):
         assert (score>=0).all(), 'Score has negative components !'
+        assert (score<=1).all(), 'Score has components greater than 1 !'
         if self.reduction == 'mean':
             return score.mean(dim=dim)
         elif self.reduction == 'sum':
@@ -145,6 +147,7 @@ class SegScoreBase(nn.Module, ABC):
         # Apply the selcted reduction
         score_red = self._score_reduction(scores)
         return score_red
+    
 
 class mIoU(SegScoreBase):
     def __init__(self, 
@@ -187,6 +190,7 @@ class mIoU(SegScoreBase):
 
         return iou
     
+    
 class mIoULoss(mIoU):
     def __init__(self, 
                  n_class, 
@@ -194,6 +198,7 @@ class mIoULoss(mIoU):
                  bg_ch_to_rm=None,
                  reduction='mean',
                  epsilon=1e-6):
+        assert reduction in ['mean , sum']
         super().__init__(n_class=n_class, 
                          prob_inputs=prob_inputs, 
                          soft=True,  # loss => must be differentiable => soft
@@ -205,8 +210,7 @@ class mIoULoss(mIoU):
     
     def forward(self, inputs, target_oneHot):
         return 1 - super().forward(inputs, target_oneHot)
-    
-    
+     
 
 class DiceScore(SegScoreBase):
     def __init__(self, 
@@ -217,13 +221,16 @@ class DiceScore(SegScoreBase):
                  reduction='mean',
                  k=1, 
                  epsilon=1e-6,
-                 vol_batch_sz=None) -> None:
+                 vol_batch_sz=None,
+                 ret_per_class_scores=True) -> None:
         super().__init__(n_class=n_class, 
                          prob_inputs=prob_inputs, 
                          soft=soft,  # score => not differentiable => can be hard
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
-                         vol_batch_sz=vol_batch_sz)
+                         ret_per_class_scores=ret_per_class_scores,
+                         vol_batch_sz=vol_batch_sz,
+                         )
         assert epsilon>0, f'Epsilon must be positive, got: {epsilon}'
         self.epsilon=epsilon
         assert k>0, f'k must be positive, got: {k}'
@@ -239,12 +246,13 @@ class DiceScore(SegScoreBase):
         mask_gt = mask_gt.reshape(N, C, -1)
 
         # Compute the dices over batches x classes
-        inter = torch.sum(mask_gt * mask_pred, dim=-1)
-        pred = torch.sum(mask_pred ** self.k, dim=-1)
-        gt = torch.sum(mask_gt ** self.k, dim=-1)
+        inter = (mask_gt * mask_pred).sum(dim=-1)
+        pred = (mask_pred ** self.k).sum(dim=-1)
+        gt = (mask_gt ** self.k).sum(dim=-1)
         dices = (2 * inter + self.epsilon) / (pred + gt + self.epsilon)  # [N, C]
 
         return dices
+    
     
 class DiceLoss(DiceScore):
     def __init__(self, 
@@ -258,6 +266,7 @@ class DiceLoss(DiceScore):
                          soft=True,  # loss => must be differentiable => soft
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
+                         ret_per_class_scores=False,
                          vol_batch_sz=None)
     
     def forward(self, inputs, target_oneHot):

@@ -33,7 +33,7 @@ from mmseg.models.decode_heads import *
 
 
 cluster_paths = True
-save_checkpoints = True
+save_checkpoints = False
 log_the_run = True
 
 # Load the pre-trained backbone
@@ -65,11 +65,11 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
-#                     num_classses=num_classses,
-#                     out_upsample_fac=backbone.patch_size,
-#                     bilinear=True)
-# dec_head = ConvHeadLinear(**dec_head_cfg)
+dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
+                    num_classses=num_classses,
+                    out_upsample_fac=backbone.patch_size,
+                    bilinear=True)
+dec_head = ConvHeadLinear(**dec_head_cfg)
 
 # dec_head_cfg = dict(num_convs=3,
 #                    kernel_size=3,
@@ -89,20 +89,20 @@ print('Using device:', device)
 # dec_head = FCNHead(**dec_head_cfg)
 
 
-dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
-                    num_classses=num_classses,
-                    # in_index=None,
-                    # in_resize_factors=None,
-                    # align_corners=False,
-                    dropout_rat_cls_seg=0.1,
-                    nb_up_blocks=4,
-                    upsample_facs=2,
-                    bilinear=False,
-                    conv_per_up_blk=2,
-                    res_con=True,
-                    res_con_interv=1
-                    )
-dec_head = ConvUNet(**dec_head_cfg)
+# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
+#                     num_classses=num_classses,
+#                     # in_index=None,
+#                     # in_resize_factors=None,
+#                     # align_corners=False,
+#                     dropout_rat_cls_seg=0.1,
+#                     nb_up_blocks=4,
+#                     upsample_facs=2,
+#                     bilinear=False,
+#                     conv_per_up_blk=2,
+#                     res_con=True,
+#                     res_con_interv=1
+#                     )
+# dec_head = ConvUNet(**dec_head_cfg)
 
 dec_head.to(device)
 
@@ -207,10 +207,10 @@ optm = torch.optim.AdamW(model.parameters() if train_backbone else model.decode_
 
 
 # LR scheduler
-nb_epochs = 50
-warmup_iters = 20
+nb_epochs = 30
+warmup_iters = 10
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
-              polynomial_lr = dict(power=1.0, total_iters=nb_epochs-warmup_iters))
+              polynomial_lr = dict(power=1.0, total_iters=3*(nb_epochs-warmup_iters)))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
 scheduler2 = PolynomialLR(optm, **lr_cfg['polynomial_lr'])
 scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[warmup_iters])
@@ -218,15 +218,17 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 
 # Loss function
-# loss = CrossEntropyLoss()
+bg_channel = 0
+# loss_cfg = dict()
+# loss = CrossEntropyLoss(**loss_cfg)
 
-loss = DiceLoss(n_class=num_classses, 
+loss_cfg = dict(n_class=num_classses, 
                 prob_inputs=False, 
-                bg_ch_to_rm=None,
+                bg_ch_to_rm=bg_channel,
                 reduction='mean')
+loss = DiceLoss(**loss_cfg)
 
 # Metrics
-bg_channel = 0
 SLICE_PER_PATIENT = 256
 metrics=dict(mIoU=mIoU(n_class=num_classses, 
                        prob_inputs=False, # Decoder does not return probas explicitly
@@ -244,7 +246,7 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                             epsilon=1e-6,
                             vol_batch_sz=SLICE_PER_PATIENT))
 
-val_metrics_over_vol = False  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
+val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 
 # Init the logger (wandb)
 wnadb_config = dict(backbone_name=backbone_name,
@@ -260,6 +262,7 @@ wnadb_config = dict(backbone_name=backbone_name,
                     lr_cfg=lr_cfg,
                     optm_cfg=optm_cfg,
                     loss=loss.__class__.__name__,
+                    loss_cfg=loss_cfg,
                     val_metrics_over_vol=val_metrics_over_vol)
 
 
