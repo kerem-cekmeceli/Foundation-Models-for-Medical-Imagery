@@ -49,21 +49,22 @@ class SegScoreBase(nn.Module, ABC):
             #@TODO add sigmoid if binary
         if not self.soft:
             dtype = mask_pred.dtype
-            mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), self.n_class).transpose(-1, 1).to(dtype)  # [0, 3, 1, 2]
+            mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), mask_pred.size(1)).transpose(-1, 1).to(dtype)  # [0, 3, 1, 2]
         return mask_pred  
     
     def _prep_inputs(self, mask_pred, mask_gt):
         # Verify shapes and values
         self._verify(mask_pred, mask_gt)
         
-        # Prep mask prediction
-        mask_pred = self._get_probas(mask_pred)
-        
         # remove bg
         if self.bg_ch_to_rm is not None:
             fg_mask = (torch.arange(mask_pred.shape[1]) != self.bg_ch_to_rm)
             mask_pred = mask_pred[:, fg_mask, ...]  # Indexing, not slicing => returns a copy
             mask_gt = mask_gt[:, fg_mask, ...]
+        
+        # Prep mask prediction
+        mask_pred = self._get_probas(mask_pred)
+        
         
         return mask_pred, mask_gt
     
