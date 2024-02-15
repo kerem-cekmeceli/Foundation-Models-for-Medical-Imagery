@@ -56,14 +56,14 @@ class SegScoreBase(nn.Module, ABC):
         # Verify shapes and values
         self._verify(mask_pred, mask_gt)
         
+        # Prep mask prediction
+        mask_pred = self._get_probas(mask_pred)
+        
         # remove bg
         if self.bg_ch_to_rm is not None:
             fg_mask = (torch.arange(mask_pred.shape[1]) != self.bg_ch_to_rm)
             mask_pred = mask_pred[:, fg_mask, ...]  # Indexing, not slicing => returns a copy
             mask_gt = mask_gt[:, fg_mask, ...]
-        
-        # Prep mask prediction
-        mask_pred = self._get_probas(mask_pred)
         
         
         return mask_pred, mask_gt
@@ -253,14 +253,16 @@ class DiceScore(SegScoreBase):
         dices = (2 * inter + self.epsilon) / (pred + gt + self.epsilon)  # [N, C]
 
         return dices
-    
+
     
 class DiceLoss(DiceScore):
     def __init__(self, 
                  n_class, 
                  prob_inputs=False, 
                  bg_ch_to_rm=None,
-                 reduction='mean'):
+                 reduction='mean',
+                 k=1, 
+                 epsilon=1e-6,):
         assert reduction in ['mean', 'sum']
         super().__init__(n_class=n_class, 
                          prob_inputs=prob_inputs, 
@@ -268,7 +270,9 @@ class DiceLoss(DiceScore):
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
                          ret_per_class_scores=False,
-                         vol_batch_sz=None)
+                         vol_batch_sz=None,
+                         k=k,
+                         epsilon=epsilon)
     
     def forward(self, inputs, target_oneHot):
         return 1 - super().forward(inputs, target_oneHot)

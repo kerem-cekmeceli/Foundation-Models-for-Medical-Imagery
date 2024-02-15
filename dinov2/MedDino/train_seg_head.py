@@ -219,13 +219,17 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 # Loss function
 bg_channel = 0
+epsilon=1e-2,
+k=1
 # loss_cfg = dict()
 # loss = CrossEntropyLoss(**loss_cfg)
 
 loss_cfg = dict(n_class=num_classses, 
                 prob_inputs=False, 
                 bg_ch_to_rm=bg_channel,
-                reduction='mean')
+                reduction='mean',
+                epsilon=epsilon,
+                k=1)
 loss = DiceLoss(**loss_cfg)
 
 # Metrics
@@ -236,14 +240,14 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                        bg_ch_to_rm=bg_channel,  # bg channel to be removed 
                        reduction='mean',
                        vol_batch_sz=SLICE_PER_PATIENT,
-                       epsilon=1e-6,), # average over batches and classes
+                       epsilon=epsilon,), # average over batches and classes
              dice=DiceScore(n_class=num_classses, 
                             prob_inputs=False,  # Decoder does not return probas explicitly
                             soft=False,
                             bg_ch_to_rm=bg_channel,
                             reduction='mean',
-                            k=1, 
-                            epsilon=1e-6,
+                            k=k, 
+                            epsilon=epsilon,
                             vol_batch_sz=SLICE_PER_PATIENT))
 
 val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
