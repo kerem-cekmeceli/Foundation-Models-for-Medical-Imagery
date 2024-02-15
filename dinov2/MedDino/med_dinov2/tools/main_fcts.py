@@ -323,7 +323,7 @@ def test_batches(model: nn.Module,
                 
                 # Append the row for the table
                 if i_batch < first_n_batch_to_seg_log:
-                    log_row.append(metric_dict[''])
+                    log_row.append(metric.get_res_dict(y_pred, y_batch)[''])
                 
             if i_batch < first_n_batch_to_seg_log:
                 log_table.add_data(*log_row)
@@ -340,7 +340,7 @@ def test_batches(model: nn.Module,
             log_test['test_seg_table'] = log_table
          
     return log_test
-            
+
     
 def test(model: nn.Module,
          test_loader: DataLoader, 

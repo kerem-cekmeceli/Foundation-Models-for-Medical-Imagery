@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = False
-log_the_run = True
+log_the_run = False
 
 # Load the pre-trained backbone
 train_backbone = False
@@ -219,7 +219,7 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 # Loss function
 bg_channel = 0
-epsilon=1e-2,
+epsilon = 5e-3
 k=1
 # loss_cfg = dict()
 # loss = CrossEntropyLoss(**loss_cfg)
@@ -234,21 +234,23 @@ loss = DiceLoss(**loss_cfg)
 
 # Metrics
 SLICE_PER_PATIENT = 256
-metrics=dict(mIoU=mIoU(n_class=num_classses, 
-                       prob_inputs=False, # Decoder does not return probas explicitly
-                       soft=False,
-                       bg_ch_to_rm=bg_channel,  # bg channel to be removed 
-                       reduction='mean',
-                       vol_batch_sz=SLICE_PER_PATIENT,
-                       epsilon=epsilon,), # average over batches and classes
-             dice=DiceScore(n_class=num_classses, 
-                            prob_inputs=False,  # Decoder does not return probas explicitly
-                            soft=False,
-                            bg_ch_to_rm=bg_channel,
-                            reduction='mean',
-                            k=k, 
-                            epsilon=epsilon,
-                            vol_batch_sz=SLICE_PER_PATIENT))
+metrics_cfg = dict(miou_cfg=dict(n_class=num_classses, 
+                                prob_inputs=False, # Decoder does not return probas explicitly
+                                soft=False,
+                                bg_ch_to_rm=bg_channel,  # bg channel to be removed 
+                                reduction='mean',
+                                vol_batch_sz=SLICE_PER_PATIENT,
+                                epsilon=epsilon,),
+                   dice_cfg=dict(n_class=num_classses, 
+                                prob_inputs=False,  # Decoder does not return probas explicitly
+                                soft=False,
+                                bg_ch_to_rm=bg_channel,
+                                reduction='mean',
+                                k=k, 
+                                epsilon=epsilon,
+                                vol_batch_sz=SLICE_PER_PATIENT))
+metrics=dict(mIoU=mIoU(**metrics_cfg['miou_cfg']), # average over batches and classes
+             dice=DiceScore(**metrics_cfg['dice_cfg']))
 
 val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 
@@ -267,7 +269,8 @@ wnadb_config = dict(backbone_name=backbone_name,
                     optm_cfg=optm_cfg,
                     loss=loss.__class__.__name__,
                     loss_cfg=loss_cfg,
-                    val_metrics_over_vol=val_metrics_over_vol)
+                    val_metrics_over_vol=val_metrics_over_vol,
+                    metrics_cfg=metrics_cfg)
 
 
 wandb_log_path = dino_main_pth / 'Logs'
@@ -304,7 +307,6 @@ if not save_checkpoints:
     cp = None
  
 
-    
 # Training loop
 train(model=model, train_loader=train_dataloader, 
       val_loader=val_dataloader, loss_fn=loss, 
