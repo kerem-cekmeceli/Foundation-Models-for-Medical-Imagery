@@ -32,9 +32,9 @@ from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
 
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = False
-log_the_run = True
+log_the_run = False
 
 # Load the pre-trained backbone
 train_backbone = False

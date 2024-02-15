@@ -49,7 +49,7 @@ class SegScoreBase(nn.Module, ABC):
             #@TODO add sigmoid if binary
         if not self.soft:
             dtype = mask_pred.dtype
-            mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), mask_pred.size(1)).transpose(-1, 1).to(dtype)  # [0, 3, 1, 2]
+            mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), mask_pred.size(1)).permute([0, 3, 1, 2]).to(dtype) 
         return mask_pred  
     
     def _prep_inputs(self, mask_pred, mask_gt):

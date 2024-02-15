@@ -137,7 +137,7 @@ def validate_batches(model: nn.Module,
                 caption = f'Eval batch: {i_batch+1}/{tot_batches}, samples: '
                 for idx in log_idxs:
                     # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
-                    imgs.append(x_batch[idx].detach().transpose(0, -1).flip(-1))  # CHW -> HWC and BGR -> RGB
+                    imgs.append(x_batch[idx].detach().permute([1, 2, 0]).flip(-1))  # CHW -> HWC and BGR -> RGB
                     masks_pred.append(y_pred[idx].detach().argmax(dim=0))
                     masks_gt.append(y_batch[idx].detach().argmax(dim=0))
                     caption += f'{idx+1}/{batch_sz}, '
@@ -297,7 +297,7 @@ def test_batches(model: nn.Module,
             if i_batch < first_n_batch_to_seg_log:
                 log_row = []
                 for idx in log_idxs:
-                    log_img = wandb.Image(data_or_path=x_batch[idx].detach().transpose(0, -1).flip(-1).cpu().numpy(),
+                    log_img = wandb.Image(data_or_path=x_batch[idx].detach().permute([1, 2, 0]).flip(-1).cpu().numpy(),
                                     masks={
                                         'predictions': {'mask_data': y_pred[idx].detach().argmax(dim=0).cpu().numpy(),
                                                         },
