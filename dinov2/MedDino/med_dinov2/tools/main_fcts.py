@@ -122,13 +122,22 @@ def validate_batches(model: nn.Module,
             
             # Compute the metrics
             for metric_n, metric in metrics.items():
-                metric_dict = metric.get_res_dict(y_pred, y_batch, depth_idx=i_batch if metrics_over_vol else None)  
+                metric_dict = metric.get_res_dict(y_pred, y_batch)
                 for k, v in metric_dict.items():
                     key_epoch = 'val_'+metric_n+k
                     if not key_epoch in log_epoch.keys():
                         log_epoch[key_epoch] = 0.
                     log_epoch[key_epoch] += v.item()
-                
+                    
+                if metrics_over_vol:
+                    metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=i_batch )  
+                    for k, v in metric_dict_vol.items():
+                        key_epoch = 'val_'+metric_n+k+'_vol'
+                        if not key_epoch in log_epoch.keys():
+                            log_epoch[key_epoch] = 0.
+                        log_epoch[key_epoch] += v.item()
+                    
+                    
             # save the segmentation result
             if i_batch < first_n_batch_to_seg_log:
                 imgs = []

@@ -33,7 +33,7 @@ from mmseg.models.decode_heads import *
 
 
 cluster_paths = True
-save_checkpoints = False
+save_checkpoints = True
 log_the_run = True
 
 # Load the pre-trained backbone
@@ -207,8 +207,8 @@ optm = torch.optim.AdamW(model.parameters() if train_backbone else model.decode_
 
 
 # LR scheduler
-nb_epochs = 30
-warmup_iters = 10
+nb_epochs = 70
+warmup_iters = 20
 lr_cfg = dict(linear_lr = dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters),
               polynomial_lr = dict(power=1.0, total_iters=3*(nb_epochs-warmup_iters)))
 scheduler1 = LinearLR(optm, **lr_cfg['linear_lr'])
@@ -219,7 +219,7 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 # Loss function
 bg_channel = None
-epsilon = 1e-6
+epsilon = 1
 k=1
 # loss_cfg = dict()
 # loss = CrossEntropyLoss(**loss_cfg)
