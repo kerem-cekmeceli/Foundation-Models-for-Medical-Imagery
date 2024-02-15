@@ -33,7 +33,7 @@ from mmseg.models.decode_heads import *
 
 
 cluster_paths = True
-save_checkpoints = True
+save_checkpoints = False
 log_the_run = True
 
 # Load the pre-trained backbone
@@ -218,7 +218,7 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 
 # Loss function
-bg_channel = None
+bg_channel = 0
 epsilon = 1
 k=1
 # loss_cfg = dict()
@@ -226,11 +226,13 @@ k=1
 
 loss_cfg = dict(n_class=num_classses, 
                 prob_inputs=False, 
-                bg_ch_to_rm=bg_channel,
+                bg_ch_to_rm=None,
                 reduction='mean',
                 epsilon=epsilon,
                 k=1)
 loss = DiceLoss(**loss_cfg)
+
+# try focal loss and 20 focal 1 dice
 
 # Metrics
 SLICE_PER_PATIENT = 256
