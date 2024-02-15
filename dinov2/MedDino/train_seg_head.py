@@ -226,7 +226,7 @@ k=1
 
 loss_cfg = dict(n_class=num_classses, 
                 prob_inputs=False, 
-                bg_ch_to_rm=None,
+                bg_ch_to_rm=bg_channel,
                 reduction='mean',
                 epsilon=epsilon,
                 k=1)
