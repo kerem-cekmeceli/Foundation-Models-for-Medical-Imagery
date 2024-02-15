@@ -218,7 +218,7 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 
 # Loss function
-bg_channel = 0
+bg_channel = None
 epsilon = 1e-6
 k=1
 # loss_cfg = dict()
