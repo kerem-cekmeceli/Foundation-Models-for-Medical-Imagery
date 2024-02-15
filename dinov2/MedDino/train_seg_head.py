@@ -219,7 +219,7 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 # Loss function
 bg_channel = 0
-epsilon = 5e-3
+epsilon = 1
 k=1
 # loss_cfg = dict()
 # loss = CrossEntropyLoss(**loss_cfg)
