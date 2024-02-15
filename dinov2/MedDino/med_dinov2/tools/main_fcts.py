@@ -169,7 +169,7 @@ def validate_batches(model: nn.Module,
         # Average out the epoch logs 
         for key in log_epoch.keys():
             if not key.startswith('val_seg_batch'):
-                if key == 'val_loss' or not metrics_over_vol:
+                if '_vol' not in key:
                     log_epoch[key] /= tot_batches
                 else:
                     log_epoch[key] /= (tot_batches / (next(iter(metrics.items()))[1].vol_batch_sz / x_batch.size(0)))
@@ -346,7 +346,7 @@ def test_batches(model: nn.Module,
         
         # Average out the epoch logs 
         for key in log_test.keys():
-            if key == 'test_loss' or not metrics_over_vol:
+            if '_vol' not in key:
                 log_test[key] /= tot_batches
             else:
                 log_test[key] /= (tot_batches / (next(iter(metrics.items()))[1].vol_batch_sz / x_batch.size(0)))

@@ -222,7 +222,7 @@ bg_channel = 0
 epsilon = 1
 k=1
 loss_cfg = dict()
-loss = CrossEntropyLoss(**loss_cfg)
+# loss = CrossEntropyLoss(**loss_cfg)
 
 loss_cfg = dict(n_class=num_classses, 
                 prob_inputs=False, 
@@ -247,7 +247,7 @@ class DiceCE(torch.nn.Module):
         
         return self.ce_rat * ce_loss + (1-self.ce_rat) * dice_loss
     
-# loss = DiceCE()
+loss = DiceCE()
 
 # try focal loss and 20 focal 1 dice
 
