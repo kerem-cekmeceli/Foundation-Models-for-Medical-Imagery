@@ -230,7 +230,24 @@ loss_cfg = dict(n_class=num_classses,
                 reduction='mean',
                 epsilon=epsilon,
                 k=1)
-loss = DiceLoss(**loss_cfg)
+# loss = DiceLoss(**loss_cfg)
+
+
+class DiceCE(torch.nn.Module):
+    def __init__(self, ce_rat=0.5) -> None:
+        super().__init__()
+        self.ce_loss = CrossEntropyLoss()
+        self.dice_loss = DiceLoss(**loss_cfg)
+        
+        self.ce_rat = ce_rat
+        
+    def forward(self, x, x_pred):
+        ce_loss = self.ce_loss(x, x_pred)
+        dice_loss = self.dice_loss(x, x_pred)
+        
+        return self.ce_rat * ce_loss + (1-self.ce_rat) * dice_loss
+    
+loss = DiceCE()
 
 # try focal loss and 20 focal 1 dice
 
