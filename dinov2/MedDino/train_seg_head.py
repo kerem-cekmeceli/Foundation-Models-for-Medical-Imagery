@@ -226,15 +226,15 @@ k=1
 
 # CE Loss
 loss_cfg_ce = dict()
-loss = CrossEntropyLoss(**loss_cfg_ce)
+# loss = CrossEntropyLoss(**loss_cfg_ce)
 
 # Dice Loss
 loss_cfg_dice = dict(prob_inputs=False, 
-                    bg_ch_to_rm=bg_channel, # removing results in better results
+                    bg_ch_to_rm=None, # removing results in better results ?
                     reduction='mean',
                     epsilon=epsilon,
                     k=1)
-# loss = DiceLoss(**loss_cfg_dice)
+loss = DiceLoss(**loss_cfg_dice)
 
 
 # CE-Dice Loss
@@ -250,12 +250,12 @@ loss_cfg_focal = dict(gamma=2,
                       alpha=None)
 # loss = FocalLoss(**loss_cfg_focal)
 
-# # Focal-Dice Loss
-# loss_cfg_comp=dict(loss1=dict(name='Focal',
-#                                  params=loss_cfg_focal),
-#                       loss2=dict(name='Dice', 
-#                                  params=loss_cfg_dice),
-#                       comp_rat=20/21)
+# Focal-Dice Loss
+loss_cfg_comp=dict(loss1=dict(name='Focal',
+                                 params=loss_cfg_focal),
+                      loss2=dict(name='Dice', 
+                                 params=loss_cfg_dice),
+                      comp_rat=20/21)
 # loss = CompositionLoss(**loss_cfg_comp)    
 
 # Metrics
