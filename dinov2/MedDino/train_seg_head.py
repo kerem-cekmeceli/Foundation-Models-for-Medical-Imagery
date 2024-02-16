@@ -67,11 +67,11 @@ n_concat = 4
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
 
-dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
-                    num_classses=num_classses,
-                    out_upsample_fac=backbone.patch_size,
-                    bilinear=True)
-dec_head = ConvHeadLinear(**dec_head_cfg)
+# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat, 
+#                     num_classses=num_classses,
+#                     out_upsample_fac=backbone.patch_size,
+#                     bilinear=True)
+# dec_head = ConvHeadLinear(**dec_head_cfg)
 
 # dec_head_cfg = dict(num_convs=3,
 #                    kernel_size=3,
@@ -91,20 +91,20 @@ dec_head = ConvHeadLinear(**dec_head_cfg)
 # dec_head = FCNHead(**dec_head_cfg)
 
 
-# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
-#                     num_classses=num_classses,
-#                     # in_index=None,
-#                     # in_resize_factors=None,
-#                     # align_corners=False,
-#                     dropout_rat_cls_seg=0.1,
-#                     nb_up_blocks=4,
-#                     upsample_facs=2,
-#                     bilinear=False,
-#                     conv_per_up_blk=2,
-#                     res_con=True,
-#                     res_con_interv=1
-#                     )
-# dec_head = ConvUNet(**dec_head_cfg)
+dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
+                    num_classses=num_classses,
+                    # in_index=None,
+                    # in_resize_factors=None,
+                    # align_corners=False,
+                    dropout_rat_cls_seg=0.1,
+                    nb_up_blocks=4,
+                    upsample_facs=2,
+                    bilinear=False,
+                    conv_per_up_blk=2,
+                    res_con=True,
+                    res_con_interv=1
+                    )
+dec_head = ConvUNet(**dec_head_cfg)
 
 dec_head.to(device)
 
@@ -226,7 +226,7 @@ k=1
 
 # CE Loss
 loss_cfg_ce = dict()
-# loss = CrossEntropyLoss(**loss_cfg_ce)
+loss = CrossEntropyLoss(**loss_cfg_ce)
 
 # Dice Loss
 loss_cfg_dice = dict(prob_inputs=False, 
@@ -256,7 +256,7 @@ loss_cfg_comp=dict(loss1=dict(name='Focal',
                       loss2=dict(name='Dice', 
                                  params=loss_cfg_dice),
                       comp_rat=20/21)
-loss = CompositionLoss(**loss_cfg_comp)    
+# loss = CompositionLoss(**loss_cfg_comp)    
 
 # Metrics
 SLICE_PER_PATIENT = 256

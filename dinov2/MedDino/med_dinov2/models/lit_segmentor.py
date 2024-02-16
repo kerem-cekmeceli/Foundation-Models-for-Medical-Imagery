@@ -1,12 +1,14 @@
 # from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 # from abc import abstractclassmethod
 # from torch.nn import CrossEntropyLoss
-# from MedDino.med_dinov2.metrics.metrics import mIoU, DiceScore, DiceLoss
+# from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
+# from MedDino.med_dinov2.eval.losses import DiceLoss, FocalLoss, CompositionLoss
 # import lightning as L
 # from torch.optim.optimizer import Optimizer
 # from OrigDino.dinov2.hub.utils import CenterPadding
 # from lightning.pytorch.core.optimizer import LightningOptimizer
 # from MedDino.med_dinov2.models.segmentor import Segmentor
+# import torch
 
 # from typing import Union, Optional, Sequence, Callable, Any
 
@@ -42,6 +44,12 @@
         
 #         elif loss_name == 'DiceLoss':
 #             return DiceLoss(**loss_params)
+        
+#         elif loss_name == 'FocalLoss':
+#             return FocalLoss(**loss_params)
+        
+#         elif loss_name == 'CompositionLoss':
+#             return CompositionLoss(**loss_params)
         
 #         else:
 #             raise ValueError(f"Loss '{loss_name}' is not implemented.")
@@ -203,7 +211,7 @@
 #         return super().backward(loss, *args, **kwargs)
     
 #     def optimizer_step(self, epoch: int, batch_idx: int, optimizer: Optimizer | LightningOptimizer, optimizer_closure: Callable[[], Any] | None = None) -> None:
-#         self.log('lr', optimizer.param_groups[0]["lr"])
+#         self.log('lr', optimizer.param_groups[0]["lr"], on_epoch=True)
 #         return super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
     
 #     def lr_scheduler_step(self, scheduler: Any , metric: Any | None) -> None:
