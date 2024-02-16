@@ -226,7 +226,7 @@ k=1
 
 # CE Loss
 loss_cfg_ce = dict()
-# loss = CrossEntropyLoss(**loss_cfg_ce)
+loss = CrossEntropyLoss(**loss_cfg_ce)
 
 # Dice Loss
 loss_cfg_dice = dict(prob_inputs=False, 
@@ -234,7 +234,7 @@ loss_cfg_dice = dict(prob_inputs=False,
                     reduction='mean',
                     epsilon=epsilon,
                     k=1)
-loss = DiceLoss(**loss_cfg_dice)
+# loss = DiceLoss(**loss_cfg_dice)
 
 
 # CE-Dice Loss
