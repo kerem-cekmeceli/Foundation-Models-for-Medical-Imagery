@@ -222,11 +222,11 @@ bg_channel = 0
 epsilon = 1
 k=1
 loss_cfg = dict()
-loss = CrossEntropyLoss(**loss_cfg)
+# loss = CrossEntropyLoss(**loss_cfg)
 
 loss_cfg = dict(n_class=num_classses, 
                 prob_inputs=False, 
-                bg_ch_to_rm=bg_channel,
+                bg_ch_to_rm=None,
                 reduction='mean',
                 epsilon=epsilon,
                 k=1)
@@ -247,7 +247,7 @@ class DiceCE(torch.nn.Module):
         
         return self.ce_rat * ce_loss + (1-self.ce_rat) * dice_loss
     
-# loss = DiceCE()
+loss = DiceCE()
 
 # try focal loss and 20 focal 1 dice
 
@@ -339,7 +339,7 @@ train(model=model, train_loader=train_dataloader,
 
 # Test hard decision predicted seg classes per pix
 test(model=model, test_loader=test_dataloader, loss_fn=loss, 
-     logger=logger, metrics=metrics, soft=False,
+     logger=logger, metrics=metrics,
      first_n_batch_to_seg_log=first_n_batch_to_seg_log, 
      seg_log_per_batch=seg_log_per_batch,
      metrics_over_vol=val_metrics_over_vol)

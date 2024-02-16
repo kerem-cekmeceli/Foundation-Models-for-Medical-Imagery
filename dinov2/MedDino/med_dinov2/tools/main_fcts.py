@@ -246,7 +246,6 @@ def test_batches(model: nn.Module,
                 val_loader: DataLoader, 
                 loss_fn: Callable, 
                 metrics: Optional[Dict[str, SegScoreBase]]=None, 
-                soft: bool=False,
                 first_n_batch_to_seg_log=16,
                 seg_log_per_batch=3,
                 metrics_over_vol=False) -> dict:
@@ -295,10 +294,9 @@ def test_batches(model: nn.Module,
             y_pred = model(x_batch)
             
             # Hard decision
-            if not soft:
-                n_classes = y_pred.shape[1]
-                dtype = y_pred.dtype
-                y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(dtype)
+            n_classes = y_pred.shape[1]
+            dtype = y_pred.dtype
+            y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(dtype)
             
             loss = loss_fn(y_pred, y_batch)
             
@@ -363,11 +361,10 @@ def test(model: nn.Module,
          loss_fn: Callable, 
          logger: wandb.wandb_sdk.wandb_run.Run,
          metrics: Optional[Dict[str, Callable]]=None, 
-         soft:bool = False,
          first_n_batch_to_seg_log=16,
          seg_log_per_batch=3,
          metrics_over_vol=False):
-    log_test = test_batches(model, test_loader, loss_fn, metrics, soft, 
+    log_test = test_batches(model, test_loader, loss_fn, metrics,
                             first_n_batch_to_seg_log, seg_log_per_batch,
                             metrics_over_vol)
     
