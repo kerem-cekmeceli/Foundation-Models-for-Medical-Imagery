@@ -234,16 +234,16 @@ loss_cfg_dice = dict(prob_inputs=False,
                     reduction='mean',
                     epsilon=epsilon,
                     k=1)
-# loss = DiceLoss(**loss_cfg_dice)
+loss = DiceLoss(**loss_cfg_dice)
 
 
 # CE-Dice Loss
-loss_cfg_comp=dict(loss1=dict(name='CE',
-                                 params=loss_cfg_ce),
-                      loss2=dict(name='Dice', 
-                                 params=loss_cfg_dice),
-                      comp_rat=0.5)
-loss = CompositionLoss(**loss_cfg_comp)    
+# loss_cfg_comp=dict(loss1=dict(name='CE',
+#                                  params=loss_cfg_ce),
+#                       loss2=dict(name='Dice', 
+#                                  params=loss_cfg_dice),
+#                       comp_rat=0.5)
+# loss = CompositionLoss(**loss_cfg_comp)    
 
 # Focal Loss
 loss_cfg_focal = dict(gamma=2,
