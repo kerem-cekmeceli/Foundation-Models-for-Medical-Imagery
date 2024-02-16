@@ -166,7 +166,7 @@ train_augmentations = train_augmentations + augmentations
 if cluster_paths:
     data_root_pth = Path('/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/hcp1') 
 else:            
-    data_root_pth = dino_main_pth.parent.parent / 'DataFoundationModels/HPC1'
+    data_root_pth = dino_main_pth.parent.parent / 'DataFoundationModels/hcp1'
 
 train_dataset = SegmentationDataset(img_dir=data_root_pth/'images/train-filtered',
                                     mask_dir=data_root_pth/'labels/train-filtered',
@@ -238,12 +238,12 @@ loss_cfg_dice = dict(prob_inputs=False,
 
 
 # CE-Dice Loss
-# loss_cfg_ce_dice=dict(loss1=dict(name='CE',
+# loss_cfg_comp=dict(loss1=dict(name='CE',
 #                                  params=loss_cfg_ce),
 #                       loss2=dict(name='Dice', 
 #                                  params=loss_cfg_dice),
 #                       comp_rat=0.5)
-# loss = CompositionLoss(**loss_cfg_ce_dice)    
+# loss = CompositionLoss(**loss_cfg_comp)    
 
 # Focal Loss
 loss_cfg_focal = dict(gamma=2,
@@ -251,12 +251,12 @@ loss_cfg_focal = dict(gamma=2,
 # loss = FocalLoss(**loss_cfg_focal)
 
 # Focal-Dice Loss
-loss_cfg_ce_dice=dict(loss1=dict(name='Focal',
+loss_cfg_comp=dict(loss1=dict(name='Focal',
                                  params=loss_cfg_focal),
                       loss2=dict(name='Dice', 
                                  params=loss_cfg_dice),
                       comp_rat=20/21)
-loss = CompositionLoss(**loss_cfg_ce_dice)    
+loss = CompositionLoss(**loss_cfg_comp)    
 
 # Metrics
 SLICE_PER_PATIENT = 256
@@ -280,6 +280,9 @@ metrics=dict(mIoU=mIoU(**metrics_cfg['miou_cfg']), # average over batches and cl
 val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 
 # Init the logger (wandb)
+loss_name = loss.__class__.__name__ if not loss.__class__.__name__=='CompositionLoss' else \
+                f'{loss_cfg_comp["loss1"]["name"]}{loss_cfg_comp["loss2"]["name"]}Loss'
+run_name = f'{data_root_pth.stem}_{dec_head.__class__.__name__}_{loss_name}'
 wnadb_config = dict(backbone_name=backbone_name,
                     backbone_last_n_concat=n_concat,
                     decode_head=dec_head.__class__.__name__,
@@ -295,7 +298,8 @@ wnadb_config = dict(backbone_name=backbone_name,
                     loss=loss.__class__.__name__,
                     loss_cfg=loss_cfg_ce,
                     val_metrics_over_vol=val_metrics_over_vol,
-                    metrics_cfg=metrics_cfg)
+                    metrics_cfg=metrics_cfg,
+                    timestamp=time_str())
 
 
 wandb_log_path = dino_main_pth / 'Logs'
@@ -306,7 +310,7 @@ logger = wandb.init(project='FoundationModels_MedDino',
                     group=wandb_group_name,
                     config=wnadb_config,
                     dir=wandb_log_path,
-                    name=time_str(),
+                    name=run_name,
                     mode=log_mode,
                     settings=wandb.Settings(_service_wait=300)  # Increase timeout
                     ) 
