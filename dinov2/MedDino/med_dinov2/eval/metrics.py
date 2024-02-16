@@ -6,27 +6,24 @@ import torch
 from abc import ABC, abstractmethod
 
 
-class SegScoreBase(nn.Module, ABC):
+class ScoreBase(nn.Module, ABC):
     def __init__(self, 
-                 n_class, 
                  prob_inputs=False, 
                  soft=True, 
                  bg_ch_to_rm=None,
                  reduction='mean',
                  ret_per_class_scores=True,
-                 vol_batch_sz=None):
-        super(SegScoreBase, self).__init__()
+                 vol_batch_sz=None,
+                 log_probas=False):
+        super(ScoreBase, self).__init__()
         
-        assert n_class>0, f'number of classes should be a positive integer, got {n_class}'
-        self.n_class = n_class
+ 
         self.prob_inputs=prob_inputs
         self.soft=soft
         
         assert reduction in ['none', 'mean', 'sum'], f'Undefined reduction: {reduction}'
         self.reduction=reduction
         
-        if bg_ch_to_rm is not None:
-            assert bg_ch_to_rm>=0 and bg_ch_to_rm<n_class, f'BG channel to remove:{bg_ch_to_rm} not in range [0, {n_class-1}]'
         self.bg_ch_to_rm=bg_ch_to_rm
         
         self.ret_per_class_scores = ret_per_class_scores
@@ -35,17 +32,17 @@ class SegScoreBase(nn.Module, ABC):
             assert vol_batch_sz > 0
         self.vol_batch_sz = vol_batch_sz
         
+        self.log_probas = log_probas
+        
     def _verify(self, mask_pred, mask_gt):
         assert mask_pred.shape == mask_gt.shape, f'mask_pred and mask_gt shapes do not match, {mask_pred.shape} != {mask_gt.shape}'
-        # assert len(mask_pred.shape)==4, f'wrong mask shape length, should be 4 [N, n_class, H, W], but got: {len(mask_pred.shape)}' 
-        assert mask_pred.shape[1]==self.n_class, f'mask prediction, wrong nb of classes, expected: {self.n_class}, got: {mask_pred.shape[1]}'
         assert (mask_gt>=0).all() and (mask_gt[mask_gt>0]==1).all(), 'mask gt can be 0 or 1'
         if self.prob_inputs:
            assert (mask_pred>=0).all() and (mask_pred<=1).all(), 'mask prediction out of bounds [0, 1]'
         
     def _get_probas(self, mask_pred):
         if not self.prob_inputs:
-            mask_pred = F.softmax(mask_pred, dim=1)
+            mask_pred = F.softmax(mask_pred, dim=1)                
             #@TODO add sigmoid if binary
         if not self.soft:
             dtype = mask_pred.dtype
@@ -81,12 +78,8 @@ class SegScoreBase(nn.Module, ABC):
     def _put_in_res_dict(self, scores):
         '''scores: [N, (C or C-1)]'''
         offset = 0
-        if self.bg_ch_to_rm is None:
-            assert scores.shape[-1] == self.n_class
-        else:
-            assert scores.shape[-1] == self.n_class - 1
-            if self.bg_ch_to_rm==0:
-                offset = 1
+        if not self.bg_ch_to_rm is None and self.bg_ch_to_rm==0:
+            offset = 1
                 
         res = {'':self._score_reduction(score=scores)}
         if self.ret_per_class_scores:
@@ -120,18 +113,19 @@ class SegScoreBase(nn.Module, ABC):
             
             if depth_idx % vol_minibatch_sz == 0:
                 # Reinit the slices for the next volume batch
-                self.slices_mask_pred = [mask_pred]
-                self.slices_mask_gt = [mask_gt]
+                self.slices_mask_pred = [mask_pred.transpose(0, 1)]
+                self.slices_mask_gt = [mask_gt.transpose(0, 1)]
                 
             else:
                 # Concat on depth dimension
-                self.slices_mask_pred.append(mask_pred)
-                self.slices_mask_gt.append(mask_gt)
+                # [N, C, H, W] --> [C, N, H, W]
+                self.slices_mask_pred.append(mask_pred.transpose(0, 1))
+                self.slices_mask_gt.append(mask_gt.transpose(0, 1))
                 
                 if depth_idx % vol_minibatch_sz == (vol_minibatch_sz-1):
                     # Compute the scores over the complete volume
-                    scores = self._compute_score(torch.stack(self.slices_mask_pred, dim=-3), \
-                                                 torch.stack(self.slices_mask_gt, dim=-3))
+                    scores = self._compute_score(torch.cat(self.slices_mask_pred, dim=-3).unsqueeze(0), \
+                                                 torch.cat(self.slices_mask_gt, dim=-3).unsqueeze(0))  # [1, C, D, H, W]
                     self.slices_mask_pred.clear()
                     self.slices_mask_gt.clear()
                     return self._put_in_res_dict(scores)
@@ -143,16 +137,15 @@ class SegScoreBase(nn.Module, ABC):
         mask_pred, mask_gt = self._prep_inputs(inputs, target_oneHot)
         
         # Compute the scores
-        scores = self._compute_score(mask_pred, mask_gt)  # scores: [N, C]
+        scores = self._compute_score(mask_pred, mask_gt)  # scores: [N, C] or [N]
         
         # Apply the selcted reduction
         score_red = self._score_reduction(scores)
         return score_red
     
 
-class mIoU(SegScoreBase):
+class mIoU(ScoreBase):
     def __init__(self, 
-                 n_class, 
                  prob_inputs=False, 
                  soft=False,
                  bg_ch_to_rm=None,
@@ -160,8 +153,7 @@ class mIoU(SegScoreBase):
                  ret_per_class_scores=True,
                  vol_batch_sz=None,
                  epsilon=1e-6):
-        super(mIoU, self).__init__(n_class=n_class, 
-                                   prob_inputs=prob_inputs, 
+        super(mIoU, self).__init__(prob_inputs=prob_inputs, 
                                    soft=soft,  # score => not differentiable => can be hard
                                    bg_ch_to_rm=bg_ch_to_rm,
                                    reduction=reduction,
@@ -190,32 +182,10 @@ class mIoU(SegScoreBase):
         iou = (inter+self.epsilon)/(union+self.epsilon)  # N x C
 
         return iou
-    
-    
-class mIoULoss(mIoU):
-    def __init__(self, 
-                 n_class, 
-                 prob_inputs=False, 
-                 bg_ch_to_rm=None,
-                 reduction='mean',
-                 epsilon=1e-6):
-        assert reduction in ['mean , sum']
-        super().__init__(n_class=n_class, 
-                         prob_inputs=prob_inputs, 
-                         soft=True,  # loss => must be differentiable => soft
-                         bg_ch_to_rm=bg_ch_to_rm,
-                         reduction=reduction,
-                         ret_per_class_scores=False,
-                         vol_batch_sz=None,
-                         epsilon=epsilon)
-    
-    def forward(self, inputs, target_oneHot):
-        return 1 - super().forward(inputs, target_oneHot)
      
 
-class DiceScore(SegScoreBase):
+class DiceScore(ScoreBase):
     def __init__(self, 
-                 n_class, 
                  prob_inputs=False, 
                  soft=False,
                  bg_ch_to_rm=None,
@@ -224,8 +194,7 @@ class DiceScore(SegScoreBase):
                  epsilon=1e-6,
                  vol_batch_sz=None,
                  ret_per_class_scores=True) -> None:
-        super().__init__(n_class=n_class, 
-                         prob_inputs=prob_inputs, 
+        super().__init__(prob_inputs=prob_inputs, 
                          soft=soft,  # score => not differentiable => can be hard
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
@@ -254,54 +223,5 @@ class DiceScore(SegScoreBase):
 
         return dices
 
-    
-class DiceLoss(DiceScore):
-    def __init__(self, 
-                 n_class, 
-                 prob_inputs=False, 
-                 bg_ch_to_rm=None,
-                 reduction='mean',
-                 k=1, 
-                 epsilon=1e-6,):
-        assert reduction in ['mean', 'sum']
-        super().__init__(n_class=n_class, 
-                         prob_inputs=prob_inputs, 
-                         soft=True,  # loss => must be differentiable => soft
-                         bg_ch_to_rm=bg_ch_to_rm,
-                         reduction=reduction,
-                         ret_per_class_scores=False,
-                         vol_batch_sz=None,
-                         k=k,
-                         epsilon=epsilon)
-    
-    def forward(self, inputs, target_oneHot):
-        return 1 - super().forward(inputs, target_oneHot)
 
-
-# def dice_score(mask_pred, mask_gt, soft=True, reduction='mean', bg_channel=0, k=1, epsilon=0):
-
-#     if not soft:
-#         n_classes = mask_pred.shape[1]
-#         mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), n_classes)
-
-#     N, C = mask_pred.shape[0:2]
-#     mask_pred = mask_pred.view(N, C, -1)
-#     mask_gt = mask_gt.view(N, C, -1)
-
-#     assert mask_pred.shape == mask_gt.shape
-
-#     inter = torch.sum(mask_gt * mask_pred, dim=-1)
-#     pred = torch.sum(mask_pred ** k, dim=-1)
-#     gt = torch.sum(mask_gt ** k, dim=-1)
-#     dices = (2 * inter + epsilon) / (pred + gt + epsilon)
-
-#     assert reduction in ['none', 'mean', 'sum'], f'Unrecognised reduction: {reduction}'
-
-#     fg_mask = (torch.arange(mask_pred.shape[1]) != bg_channel)
-#     if reduction == 'none':
-#         return dices, dices[:, fg_mask, ...]
-#     elif reduction == 'mean':
-#         return dices.nanmean(), dices[:, fg_mask, ...].nanmean()
-#     elif reduction == 'sum':
-#         return dices.nansum(), dices[:, fg_mask, ...].nansum()
 

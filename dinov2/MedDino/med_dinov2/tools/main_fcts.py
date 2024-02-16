@@ -20,7 +20,7 @@ from typing import Callable, Optional, Union, Dict
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from MedDino.med_dinov2.tools.plot import show_result
 import math
-from MedDino.med_dinov2.metrics.metrics import SegScoreBase
+from MedDino.med_dinov2.eval.metrics import ScoreBase
 
 def train_batches(model : nn.Module, 
                       train_loader : DataLoader, 
@@ -77,7 +77,7 @@ def train_batches(model : nn.Module,
 def validate_batches(model: nn.Module, 
                      val_loader: DataLoader, 
                      loss_fn: Callable, 
-                     metrics: Optional[Dict[str, SegScoreBase]]=None,
+                     metrics: Optional[Dict[str, ScoreBase]]=None,
                      first_n_batch_to_seg_log=0,
                      seg_log_per_batch=3,
                      metrics_over_vol=False) -> dict:
@@ -187,7 +187,7 @@ def train(model: nn.Module,
           val_loader: Optional[DataLoader]=None, 
           print_epoch_info: bool=True,
           checkpointer: Optional[Checkpointer]=None, 
-          metrics: Optional[Dict[str, SegScoreBase]]=None,
+          metrics: Optional[Dict[str, ScoreBase]]=None,
           seg_val_intv=20,
           first_n_batch_to_seg_log=16,
           seg_log_per_batch=3,
@@ -245,7 +245,7 @@ def train(model: nn.Module,
 def test_batches(model: nn.Module, 
                 val_loader: DataLoader, 
                 loss_fn: Callable, 
-                metrics: Optional[Dict[str, SegScoreBase]]=None, 
+                metrics: Optional[Dict[str, ScoreBase]]=None, 
                 first_n_batch_to_seg_log=16,
                 seg_log_per_batch=3,
                 metrics_over_vol=False) -> dict:

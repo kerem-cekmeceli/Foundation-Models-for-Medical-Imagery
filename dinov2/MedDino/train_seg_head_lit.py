@@ -22,7 +22,7 @@ from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.metrics.metrics import mIoU, DiceScore, DiceLoss
+from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore, DiceLoss
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary

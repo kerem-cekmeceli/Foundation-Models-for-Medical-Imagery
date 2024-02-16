@@ -22,7 +22,8 @@ from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.metrics.metrics import mIoU, DiceScore, DiceLoss
+from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
+from MedDino.med_dinov2.eval.losses import FocalLoss, DiceScore, CompositionLoss
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary
@@ -30,11 +31,12 @@ from torch.nn import CrossEntropyLoss
 import wandb
 from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from mmseg.models.decode_heads import *
+from MedDino.med_dinov2.eval.losses import * 
 
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = False
-log_the_run = True
+log_the_run = False
 
 # Load the pre-trained backbone
 train_backbone = False
@@ -219,49 +221,46 @@ scheduler = SequentialLR(optm, schedulers=[scheduler1, scheduler2], milestones=[
 
 # Loss function
 bg_channel = 0
-epsilon = 1e-5
+epsilon = 1
 k=1
-loss_cfg = dict()
-# loss = CrossEntropyLoss(**loss_cfg)
 
-loss_cfg = dict(n_class=num_classses, 
-                prob_inputs=False, 
-                bg_ch_to_rm=None,
-                reduction='mean',
-                epsilon=epsilon,
-                k=1)
-# loss = DiceLoss(**loss_cfg)
+# CE Loss
+loss_cfg_ce = dict()
+# loss = CrossEntropyLoss(**loss_cfg_ce)
+
+# Dice Loss
+loss_cfg_dice = dict(prob_inputs=False, 
+                    bg_ch_to_rm=bg_channel, # removing results in better results
+                    reduction='mean',
+                    epsilon=epsilon,
+                    k=1)
+# loss = DiceLoss(**loss_cfg_dice)
 
 
-class DiceCE(torch.nn.Module):
-    def __init__(self, ce_rat=0.5) -> None:
-        super().__init__()
-        self.ce_loss = CrossEntropyLoss()
-        self.dice_loss = DiceLoss(**loss_cfg)
-        
-        self.ce_rat = ce_rat
-        
-    def forward(self, x, x_pred):
-        ce_loss = self.ce_loss(x, x_pred)
-        dice_loss = self.dice_loss(x, x_pred)
-        
-        return self.ce_rat * ce_loss + (1-self.ce_rat) * dice_loss
-    
-loss = DiceCE()
+# CE-Dice Loss
+loss_cfg_ce_dice=dict(loss1=dict(name='CE',
+                                 params=loss_cfg_ce),
+                      loss2=dict(name='Dice', 
+                                 params=loss_cfg_dice),
+                      comp_rat=0.5)
+# loss = CompositionLoss(**loss_cfg_ce_dice)    
 
-# try focal loss and 20 focal 1 dice
+# @TODO try focal loss and 20 focal 1 dice
+# Focal Loss
+loss_cfg_focal = dict(gamma=2,
+                      alpha=None)
+loss = FocalLoss(**loss_cfg_focal)
 
 # Metrics
 SLICE_PER_PATIENT = 256
-metrics_cfg = dict(miou_cfg=dict(n_class=num_classses, 
-                                prob_inputs=False, # Decoder does not return probas explicitly
+assert SLICE_PER_PATIENT % batch_sz == 0, 'must be a multiple'
+metrics_cfg = dict(miou_cfg=dict(prob_inputs=False, # Decoder does not return probas explicitly
                                 soft=False,
                                 bg_ch_to_rm=bg_channel,  # bg channel to be removed 
                                 reduction='mean',
                                 vol_batch_sz=SLICE_PER_PATIENT,
                                 epsilon=epsilon,),
-                   dice_cfg=dict(n_class=num_classses, 
-                                prob_inputs=False,  # Decoder does not return probas explicitly
+                   dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
                                 soft=False,
                                 bg_ch_to_rm=bg_channel,
                                 reduction='mean',
@@ -287,7 +286,7 @@ wnadb_config = dict(backbone_name=backbone_name,
                     lr_cfg=lr_cfg,
                     optm_cfg=optm_cfg,
                     loss=loss.__class__.__name__,
-                    loss_cfg=loss_cfg,
+                    loss_cfg=loss_cfg_ce,
                     val_metrics_over_vol=val_metrics_over_vol,
                     metrics_cfg=metrics_cfg)
 
