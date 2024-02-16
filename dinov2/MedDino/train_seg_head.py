@@ -230,7 +230,7 @@ loss_cfg = dict(n_class=num_classses,
                 reduction='mean',
                 epsilon=epsilon,
                 k=1)
-loss = DiceLoss(**loss_cfg)
+# loss = DiceLoss(**loss_cfg)
 
 
 class DiceCE(torch.nn.Module):
@@ -247,7 +247,7 @@ class DiceCE(torch.nn.Module):
         
         return self.ce_rat * ce_loss + (1-self.ce_rat) * dice_loss
     
-# loss = DiceCE()
+loss = DiceCE()
 
 # try focal loss and 20 focal 1 dice
 
