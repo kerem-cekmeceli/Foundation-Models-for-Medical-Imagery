@@ -34,9 +34,9 @@ from mmseg.models.decode_heads import *
 from MedDino.med_dinov2.eval.losses import * 
 
 
-cluster_paths = False
-save_checkpoints = False
-log_the_run = False
+cluster_paths = True
+save_checkpoints = True
+log_the_run = True
 
 # Load the pre-trained backbone
 train_backbone = False
