@@ -238,18 +238,25 @@ loss_cfg_dice = dict(prob_inputs=False,
 
 
 # CE-Dice Loss
-loss_cfg_ce_dice=dict(loss1=dict(name='CE',
-                                 params=loss_cfg_ce),
-                      loss2=dict(name='Dice', 
-                                 params=loss_cfg_dice),
-                      comp_rat=0.5)
+# loss_cfg_ce_dice=dict(loss1=dict(name='CE',
+#                                  params=loss_cfg_ce),
+#                       loss2=dict(name='Dice', 
+#                                  params=loss_cfg_dice),
+#                       comp_rat=0.5)
 # loss = CompositionLoss(**loss_cfg_ce_dice)    
 
-# @TODO try focal loss and 20 focal 1 dice
 # Focal Loss
 loss_cfg_focal = dict(gamma=2,
                       alpha=None)
-loss = FocalLoss(**loss_cfg_focal)
+# loss = FocalLoss(**loss_cfg_focal)
+
+# Focal-Dice Loss
+loss_cfg_ce_dice=dict(loss1=dict(name='Focal',
+                                 params=loss_cfg_focal),
+                      loss2=dict(name='Dice', 
+                                 params=loss_cfg_dice),
+                      comp_rat=20/21)
+loss = CompositionLoss(**loss_cfg_ce_dice)    
 
 # Metrics
 SLICE_PER_PATIENT = 256
