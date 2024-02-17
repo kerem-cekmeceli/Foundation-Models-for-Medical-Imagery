@@ -73,38 +73,38 @@ print('Using device:', device)
 #                     bilinear=True)
 # dec_head = ConvHeadLinear(**dec_head_cfg)
 
-# dec_head_cfg = dict(num_convs=3,
-#                    kernel_size=3,
-#                    concat_input=True,
-#                    dilation=1,
-#                    in_channels=[backbone.embed_dim]*n_concat,  # input channels
-#                    channels=backbone.embed_dim,  # Conv channels
-#                    num_classes=num_classses,  # output channels
-#                    dropout_ratio=0.1,
-#                    conv_cfg=dict(type='Conv2d'), # None = conv2d
-#                    norm_cfg=dict(type='BN'),
-#                    act_cfg=dict(type='ReLU'),
-#                    in_index=[i for i in range(n_concat)],
-#                    input_transform='resize_concat',
-#                    init_cfg=dict(
-#                        type='Normal', std=0.01, override=dict(name='conv_seg')))
-# dec_head = FCNHead(**dec_head_cfg)
+dec_head_cfg = dict(num_convs=3,
+                   kernel_size=3,
+                   concat_input=True,
+                   dilation=1,
+                   in_channels=[backbone.embed_dim]*n_concat,  # input channels
+                   channels=backbone.embed_dim,  # Conv channels
+                   num_classes=num_classses,  # output channels
+                   dropout_ratio=0.1,
+                   conv_cfg=dict(type='Conv2d'), # None = conv2d
+                   norm_cfg=dict(type='BN'),
+                   act_cfg=dict(type='ReLU'),
+                   in_index=[i for i in range(n_concat)],
+                   input_transform='resize_concat',
+                   init_cfg=dict(
+                       type='Normal', std=0.01, override=dict(name='conv_seg')))
+dec_head = FCNHead(**dec_head_cfg)
 
 
-dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
-                    num_classses=num_classses,
-                    # in_index=None,
-                    # in_resize_factors=None,
-                    # align_corners=False,
-                    dropout_rat_cls_seg=0.1,
-                    nb_up_blocks=4,
-                    upsample_facs=2,
-                    bilinear=False,
-                    conv_per_up_blk=2,
-                    res_con=True,
-                    res_con_interv=1
-                    )
-dec_head = ConvUNet(**dec_head_cfg)
+# dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
+#                     num_classses=num_classses,
+#                     # in_index=None,
+#                     # in_resize_factors=None,
+#                     # align_corners=False,
+#                     dropout_rat_cls_seg=0.1,
+#                     nb_up_blocks=4,
+#                     upsample_facs=2,
+#                     bilinear=False,
+#                     conv_per_up_blk=2,
+#                     res_con=True,
+#                     res_con_interv=1
+#                     )
+# dec_head = ConvUNet(**dec_head_cfg)
 
 dec_head.to(device)
 
