@@ -58,7 +58,7 @@ dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
 # Select dataset
-dataset = 'hcp2'
+dataset = 'prostate_nci' # 'hcp2'
 
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
@@ -73,14 +73,14 @@ elif dataset=='hcp2':
     
 elif dataset=='cardiac_acdc':
     data_path_suffix = 'cardiac/acdc'
-    num_classses = 3
+    num_classses = 2
     bg_channel_loss = None
-    bg_channel_metric = None
+    bg_channel_metric = 0
 elif dataset=='cardiac_rvsc':
     data_path_suffix = 'cardiac/rvsc'
     num_classses = 2
     bg_channel_loss = None
-    bg_channel_metric = None
+    bg_channel_metric = 0
     
 elif dataset=='prostate_nci':
     data_path_suffix = 'prostate/nci'
@@ -89,7 +89,7 @@ elif dataset=='prostate_nci':
     bg_channel_metric = 0
 elif dataset=='prostate_usz':
     data_path_suffix = 'prostate/pirad_erc'
-    num_classses = 2
+    num_classses = 3
     bg_channel_loss = None
     bg_channel_metric = 0
     
@@ -139,7 +139,7 @@ decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
 
 # Choose the decode head config
-dec_head_cfg = decs_dict['fcn']
+dec_head_cfg = decs_dict['lin']
 
 
 # Training hyperparameters
