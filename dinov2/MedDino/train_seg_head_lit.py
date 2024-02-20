@@ -58,28 +58,40 @@ dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
 # Select dataset
-dataset = 'cardiac_acdc'
+dataset = 'hcp2'
 
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
     num_classses = 15
+    bg_channel_loss = None
+    bg_channel_metric = 0
 elif dataset=='hcp2':
     data_path_suffix = 'brain/hcp2'
     num_classses = 15
+    bg_channel_loss = None
+    bg_channel_metric = 0
     
 elif dataset=='cardiac_acdc':
     data_path_suffix = 'cardiac/acdc'
     num_classses = 3
+    bg_channel_loss = None
+    bg_channel_metric = None
 elif dataset=='cardiac_rvsc':
     data_path_suffix = 'cardiac/rvsc'
     num_classses = 2
+    bg_channel_loss = None
+    bg_channel_metric = None
     
 elif dataset=='prostate_nci':
     data_path_suffix = 'prostate/nci'
     num_classses = 3
+    bg_channel_loss = None
+    bg_channel_metric = 0
 elif dataset=='prostate_usz':
     data_path_suffix = 'prostate/pirad_erc'
     num_classses = 2
+    bg_channel_loss = None
+    bg_channel_metric = 0
     
 else:
     ValueError(f'Dataset: {dataset} is not defined')
@@ -127,7 +139,7 @@ decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
 
 # Choose the decode head config
-dec_head_cfg = decs_dict['lin']
+dec_head_cfg = decs_dict['fcn']
 
 
 # Training hyperparameters
@@ -158,7 +170,6 @@ scheduler_cfg = dict(name='SequentialLR',
                     )
 
 # Loss Config
-bg_channel = None
 epsilon = 1  # smoothing factor 
 k=1  # power
 
@@ -167,7 +178,7 @@ loss_cfg_ce = dict()
 
 # Dice Loss
 loss_cfg_dice = dict(prob_inputs=False, 
-                    bg_ch_to_rm=bg_channel, # not removing results in better segmentation
+                    bg_ch_to_rm=bg_channel_loss, # not removing results in better segmentation
                     reduction='mean',
                     epsilon=epsilon,
                     k=k)
@@ -200,7 +211,6 @@ loss_cfg = loss_cfgs_dict['ce']
 
 
 # Metrics
-bg_channel = 0
 epsilon = 1  # smoothing factor 
 k=1  # power
 
@@ -210,14 +220,14 @@ assert SLICE_PER_PATIENT % batch_sz == 0, \
 
 miou_cfg=dict(prob_inputs=False, # Decoder does not return probas explicitly
               soft=False,
-              bg_ch_to_rm=bg_channel,  # bg channel to be removed 
+              bg_ch_to_rm=bg_channel_metric,  # bg channel to be removed 
               reduction='mean',
               vol_batch_sz=SLICE_PER_PATIENT,
               epsilon=epsilon)
 
 dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
              soft=False,
-             bg_ch_to_rm=bg_channel,
+             bg_ch_to_rm=bg_channel_metric,
              reduction='mean',
              k=k, 
              epsilon=epsilon,
