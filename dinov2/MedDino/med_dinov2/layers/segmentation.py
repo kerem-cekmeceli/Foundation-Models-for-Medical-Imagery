@@ -243,10 +243,10 @@ class DoubleConv(nn.Module):
             mid_channels = out_channels
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(mid_channels),
+            nn.SyncBatchNorm(mid_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
-            nn.BatchNorm2d(out_channels),
+            nn.SyncBatchNorm(out_channels),
             nn.ReLU(inplace=True)
         )
 
@@ -270,7 +270,7 @@ class ConvBlk(nn.Module):
         
         self.do_batch_norm = batch_norm
         if batch_norm:
-            self.batch_norm = nn.BatchNorm2d(out_channel)
+            self.batch_norm = nn.SyncBatchNorm(out_channel)
         
         if isinstance(non_linearity, str):
             if non_linearity == 'ReLU':

@@ -5,6 +5,9 @@ import torch.nn as nn
 from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
+from MedDino.prep_model import get_dino_backbone
+from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
+from mmseg.models.decode_heads import FCNHead
 
 from typing import Union, Optional, Sequence, Callable, Any
 
@@ -16,7 +19,13 @@ class Segmentor(nn.Module):
 
         super().__init__()
         
-        self.backbone = backbone
+        # Assign the backbone
+        if isinstance(backbone, dict):
+            # config is given
+            self.backbone = get_dino_backbone(**backbone)
+        else:
+            # Model is given
+            self.backbone = backbone
         
         # Store which backbone parameters require grad
         backbone_req_grad = []
@@ -26,18 +35,41 @@ class Segmentor(nn.Module):
         
         self._set_backbone_training(train_backbone)
         
-        # params for the reshaping of the dec out
-        self.reshape_dec_oup = reshape_dec_oup
-        self.align_corners = align_corners
         
-        self.decode_head = decode_head
-        if isinstance(decode_head, BaseDecodeHead):
+        if isinstance(decode_head, dict):
+            # config is given
+            dec_head_name = decode_head['name']
+            dec_head_params = decode_head['params']
+            
+            if dec_head_name == 'ConvHeadLinear':
+                self.decode_head = ConvHeadLinear(**dec_head_params)
+                
+            elif dec_head_name == 'FCNHead':
+                self.decode_head = FCNHead(**dec_head_params)
+                
+            elif dec_head_name == 'ConvUNet':
+                self.decode_head = ConvUNet(**dec_head_params)
+                
+            else:
+                ValueError(f"Decode head {dec_head_name} is not supported from config.")
+        else:
+            # Model is given
+            self.decode_head = decode_head
+    
+        # Nb inputs from the decode head
+        if isinstance(self.decode_head, BaseDecodeHead):
             n_concat = len(decode_head.in_index)
-        elif isinstance(decode_head, DecBase):
-            n_concat = decode_head.nb_inputs
+        elif isinstance(self.decode_head, DecBase):
+            n_concat = self.decode_head.nb_inputs
         else:
             raise Exception(f'Unknown decode head type: {type(decode_head)}')
         self.n_concat_bb = n_concat
+        
+        
+         # params for the reshaping of the dec out
+        self.reshape_dec_oup = reshape_dec_oup
+        self.align_corners = align_corners
+        
     
     def _set_backbone_training(self, val):
         if val:

@@ -138,6 +138,18 @@ def get_dino_backbone(backbone_name, backbone_cp=None, eval=True):
     
     return backbone_model
 
+def get_backone_patch_embed_sizes(backbone_name):
+    if backbone_name == "dinov2_vits14":
+        return 14, 384 
+    elif backbone_name == "dinov2_vitb14":
+        return 14, 768
+    elif backbone_name == "dinov2_vitl14":
+        return 14, 1024
+    elif backbone_name == "dinov2_vitg14":
+        return 14, 1536
+    else:
+        ValueError(f"backbone name  {backbone_name} is undefined")
+        
 def load_config_from_url(url: str) -> str:
     with urllib.request.urlopen(url) as f:
         return f.read().decode()

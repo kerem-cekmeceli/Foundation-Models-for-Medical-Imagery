@@ -8,6 +8,7 @@ __pycache__/
 
 # model files
 *.pth
+*.ckpt
 
 # Distribution / packaging
 .Python

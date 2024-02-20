@@ -45,8 +45,7 @@ class ScoreBase(nn.Module, ABC):
             mask_pred = F.softmax(mask_pred, dim=1)                
             #@TODO add sigmoid if binary
         if not self.soft:
-            dtype = mask_pred.dtype
-            mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), mask_pred.size(1)).permute([0, 3, 1, 2]).to(dtype) 
+            mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), mask_pred.size(1)).permute([0, 3, 1, 2]).to(mask_pred)
         return mask_pred  
     
     def _prep_inputs(self, mask_pred, mask_gt):
@@ -80,10 +79,12 @@ class ScoreBase(nn.Module, ABC):
         offset = 0
         if not self.bg_ch_to_rm is None and self.bg_ch_to_rm==0:
             offset = 1
-                
-        res = {'':self._score_reduction(score=scores)}
-        if self.ret_per_class_scores:
+        
+        if not self.ret_per_class_scores:        
+            res = {'':self._score_reduction(score=scores)}
+        else:
             scores_per_class = self._score_reduction(scores, dim=0)
+            res = {'':self._score_reduction(score=scores_per_class)}
             for i in range(scores.shape[-1]):
                 res[f'_class{i+offset}'] = scores_per_class[i]
         return res
@@ -211,14 +212,14 @@ class DiceScore(ScoreBase):
         # Batch size and num_class (without the ignored one)
         N, C = mask_pred.shape[:2] # [N x n_class x H x W]
         
-        # Flatten the img dimensions
-        mask_pred = mask_pred.reshape(N, C, -1)
-        mask_gt = mask_gt.reshape(N, C, -1)
+        # # Flatten the img dimensions
+        # mask_pred = mask_pred.reshape(N, C, -1)
+        # mask_gt = mask_gt.reshape(N, C, -1)
 
         # Compute the dices over batches x classes
-        inter = (mask_gt * mask_pred).sum(dim=-1)
-        pred = (mask_pred ** self.k).sum(dim=-1)
-        gt = (mask_gt ** self.k).sum(dim=-1)
+        inter = (mask_gt * mask_pred).reshape(N, C, -1).sum(dim=-1)
+        pred = (mask_pred ** self.k).reshape(N, C, -1).sum(dim=-1) if self.k!=1 else mask_pred.reshape(N, C, -1).sum(dim=-1)
+        gt = (mask_gt ** self.k).reshape(N, C, -1).sum(dim=-1)  if self.k!=1 else mask_gt.reshape(N, C, -1).sum(dim=-1)
         dices = (2 * inter + self.epsilon) / (pred + gt + self.epsilon)  # [N, C]
 
         return dices
