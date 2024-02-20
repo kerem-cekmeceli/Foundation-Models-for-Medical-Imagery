@@ -58,7 +58,7 @@ class Segmentor(nn.Module):
     
         # Nb inputs from the decode head
         if isinstance(self.decode_head, BaseDecodeHead):
-            n_concat = len(decode_head.in_index)
+            n_concat = len(self.decode_head.in_index)
         elif isinstance(self.decode_head, DecBase):
             n_concat = self.decode_head.nb_inputs
         else:
