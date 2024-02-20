@@ -139,7 +139,7 @@ decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
 
 # Choose the decode head config
-dec_head_cfg = decs_dict['unet']
+dec_head_cfg = decs_dict['lin']
 
 
 # Training hyperparameters
@@ -335,15 +335,16 @@ test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
 
 num_workers = 16#min(os.cpu_count()//2, 10)
 persistent_workers=True
+drop_last=True
 train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_sz,
                               shuffle=True, pin_memory=True, num_workers=num_workers,
-                              persistent_workers=persistent_workers)
+                              persistent_workers=persistent_workers, drop_last=drop_last)
 val_dataloader = DataLoader(dataset=val_dataset, batch_size=batch_sz,
                               shuffle=False, pin_memory=True, num_workers=num_workers,
-                              persistent_workers=persistent_workers)
+                              persistent_workers=persistent_workers, drop_last=drop_last)
 test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_sz,
                               shuffle=False, pin_memory=True, num_workers=num_workers,
-                              persistent_workers=persistent_workers)
+                              persistent_workers=persistent_workers, drop_last=drop_last)
 
 
 # Init the logger (wandb)
