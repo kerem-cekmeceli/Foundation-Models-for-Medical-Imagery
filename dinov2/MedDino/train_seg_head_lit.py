@@ -131,8 +131,8 @@ dec_head_cfg = decs_dict['unet']
 
 
 # Training hyperparameters
-nb_epochs = 3#70
-warmup_iters = 1#20
+nb_epochs = 70
+warmup_iters = 20
 
 # Config the batch size for training
 batch_sz = 16
