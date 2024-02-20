@@ -139,7 +139,7 @@ decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
 
 # Choose the decode head config
-dec_head_cfg = decs_dict['lin']
+dec_head_cfg = decs_dict['fcn']
 
 
 # Training hyperparameters
