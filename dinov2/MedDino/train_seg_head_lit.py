@@ -39,7 +39,7 @@ import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
-cluster_paths = False
+cluster_paths = True
 save_checkpoints = True
 log_the_run = True
 
