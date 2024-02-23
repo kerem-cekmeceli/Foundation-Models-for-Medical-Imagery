@@ -58,7 +58,7 @@ dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
 # Select dataset
-dataset = 'hcp1' # 'hcp2'
+dataset = 'hcp2' # 'hcp2'
 
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
