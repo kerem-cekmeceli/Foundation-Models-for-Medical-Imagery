@@ -176,7 +176,7 @@ scheduler_configs.append(\
          params=dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)))
 scheduler_configs.append(\
     dict(name='PolynomialLR',
-         params=dict(power=1.0, total_iters=nb_epochs-warmup_iters)))
+         params=dict(power=1.0, total_iters=(nb_epochs-warmup_iters)*2)))
 
 scheduler_cfg = dict(name='SequentialLR',
                      params=dict(scheduler_configs=scheduler_configs,
@@ -391,17 +391,22 @@ wnadb_config = dict(backbone_name=backbone_name,
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
 
-bb_train_str = 'train_bb_YES' if not segmentor_cfg['train_backbone'] else 'train_bb_NO'
+bb_train_str = 'train_bb_YES' if segmentor_cfg['train_backbone'] else 'train_bb_NO'
 log_mode = 'online' if log_the_run else 'disabled'
+tags = [dataset, loss_name, bb_train_str]
+tags.extend(backbone_name.split('_'))
 
 logger = WandbLogger(project='FoundationModels_MedDino',
-                    group=backbone_name,
-                    config=wnadb_config,
-                    dir=wandb_log_path,
-                    name=run_name,
-                    mode=log_mode,
-                    settings=wandb.Settings(_service_wait=30),  # Can increase timeout
-                    tags=[dataset, loss_name, bb_train_str].extend(backbone_name.split('_')))
+                     group=backbone_name,
+                     config=wnadb_config,
+                     dir=wandb_log_path,
+                     name=run_name,
+                     mode=log_mode,
+                     settings=wandb.Settings(_service_wait=30),  # Can increase timeout
+                     tags=tags)
+
+# log gradients, parameter histogram and model topology
+logger.watch(model, log="all")
 
 checkpointers = []
 n_best = 2 if save_checkpoints else 0
