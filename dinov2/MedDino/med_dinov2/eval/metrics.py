@@ -34,19 +34,32 @@ class ScoreBase(nn.Module, ABC):
         
         self.log_probas = log_probas
         
+    def _verify_proba(self, vec_proba, dim=1):
+        # Verify proba range
+        assert (vec_proba>=0).all(), f"Prediction probas can't be negative, but got value {vec_proba.min()}"
+        assert (vec_proba<=1).all(), f"Prediction probas can't be >1, but got value {vec_proba.max()}"
+        thres = 1e-5
+        check_tensor = torch.abs(vec_proba.sum(dim=dim)-1)<thres
+        assert check_tensor.all(), f"Prediction probas do not add up to 1, {torch.count_nonzero(check_tensor)} elems invalidate the threshold {thres}"
+        
     def _verify(self, mask_pred, mask_gt):
         assert mask_pred.shape == mask_gt.shape, f'mask_pred and mask_gt shapes do not match, {mask_pred.shape} != {mask_gt.shape}'
-        assert (mask_gt>=0).all() and (mask_gt[mask_gt>0]==1).all(), 'mask gt can be 0 or 1'
-        if self.prob_inputs:
-           assert (mask_pred>=0).all() and (mask_pred<=1).all(), 'mask prediction out of bounds [0, 1]'
+        self._verify_proba(mask_gt)
         
     def _get_probas(self, mask_pred):
         if not self.prob_inputs:
-            mask_pred = F.softmax(mask_pred, dim=1)                
-            #@TODO add sigmoid if binary
+            if mask_pred.shape[1]>2:
+                mask_pred = F.softmax(mask_pred, dim=1)    
+            else:
+                assert mask_pred.shape[1] == 2, "Must have at least 2 classes on channel dim (1)"
+                mask_pred = F.sigmoid(mask_pred)
+        
+        self._verify_proba(mask_pred)
+                            
         if not self.soft:
             mask_pred = F.one_hot(torch.argmax(mask_pred, dim=1), mask_pred.size(1)).permute([0, 3, 1, 2]).to(mask_pred)
         return mask_pred  
+        
     
     def _prep_inputs(self, mask_pred, mask_gt):
         # Verify shapes and values
@@ -60,8 +73,7 @@ class ScoreBase(nn.Module, ABC):
             fg_mask = (torch.arange(mask_pred.shape[1]) != self.bg_ch_to_rm)
             mask_pred = mask_pred[:, fg_mask, ...]  # Indexing, not slicing => returns a copy
             mask_gt = mask_gt[:, fg_mask, ...]
-        
-        
+            
         return mask_pred, mask_gt
     
     def _score_reduction(self, score, dim=None):
@@ -211,10 +223,6 @@ class DiceScore(ScoreBase):
     def _compute_score(self, mask_pred, mask_gt):
         # Batch size and num_class (without the ignored one)
         N, C = mask_pred.shape[:2] # [N x n_class x H x W]
-        
-        # # Flatten the img dimensions
-        # mask_pred = mask_pred.reshape(N, C, -1)
-        # mask_gt = mask_gt.reshape(N, C, -1)
 
         # Compute the dices over batches x classes
         inter = (mask_gt * mask_pred).reshape(N, C, -1).sum(dim=-1)

@@ -172,9 +172,14 @@ class LitSegmentor(LitBaseModule):
     def training_step(self, batch, batch_idx):
         x_batch, y_batch = batch
         
+        assert (x_batch.isnan()==False).all(), f"x_batch nan ratio={torch.count_nonzero(x_batch.isnan()==True)/torch.numel(x_batch)}"
+        assert (y_batch.isnan()==False).all(), f"y_batch nan ratio={torch.count_nonzero(y_batch.isnan()==True)/torch.numel(y_batch)}"
+        
         # Forward pass
         y_pred = self.model(x_batch)
+        assert (y_pred.isnan()==False).all(), f"y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}"
         loss = self.loss_fn(y_pred, y_batch)
+        assert (loss.isnan()==False).all(), f"loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}"
                         
         # Log the loss
         self.log('loss', loss, on_epoch=True, on_step=False)
@@ -193,9 +198,14 @@ class LitSegmentor(LitBaseModule):
         sync_dist=False
         x_batch, y_batch = val_batch
         
+        assert (x_batch.isnan()==False).all(), f"x_batch nan ratio={torch.count_nonzero(x_batch.isnan()==True)/torch.numel(x_batch)}"
+        assert (y_batch.isnan()==False).all(), f"y_batch nan ratio={torch.count_nonzero(y_batch.isnan()==True)/torch.numel(y_batch)}"
+        
         # Forward pass
         y_pred = self.model(x_batch)
+        assert (y_pred.isnan()==False).all(), f"y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}"
         loss = self.loss_fn(y_pred, y_batch)
+        assert (loss.isnan()==False).all(), f"loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}"
         
         self.log('val_loss', loss, on_epoch=True, on_step=False, sync_dist=sync_dist)
                 
