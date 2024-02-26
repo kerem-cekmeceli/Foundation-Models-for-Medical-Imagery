@@ -10,27 +10,27 @@ sys.path.insert(2, orig_dino_pth.as_posix())
 import torch
 import math
 
-import cv2
-import numpy as np
-from matplotlib import pyplot as plt
+# import cv2
+# import numpy as np
+# from matplotlib import pyplot as plt
 
-from prep_model import get_bb_name, get_dino_backbone, time_str, get_backone_patch_embed_sizes
-from OrigDino.dinov2.eval.segmentation import models
+from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, get_dino_backbone
+# from OrigDino.dinov2.eval.segmentation import models
 
-from MedDino.med_dinov2.models.segmentor import Segmentor
+# from MedDino.med_dinov2.models.segmentor import Segmentor
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
-from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
-from MedDino.med_dinov2.eval.losses import FocalLoss, DiceScore, CompositionLoss
+# from MedDino.med_dinov2.tools.main_fcts import train, test
+# from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
+# from MedDino.med_dinov2.eval.losses import FocalLoss, DiceScore, CompositionLoss
 
-from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
+# from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary
-from torch.nn import CrossEntropyLoss
+# from torch.nn import CrossEntropyLoss
 import wandb
-from MedDino.med_dinov2.tools.checkpointer import Checkpointer
+# from MedDino.med_dinov2.tools.checkpointer import Checkpointer
 from MedDino.med_dinov2.eval.losses import * 
 from MedDino.med_dinov2.models.lit_segmentor import LitSegmentor
 import os
@@ -39,27 +39,47 @@ import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
-cluster_paths = True
-save_checkpoints = True
+cluster_paths = False
+save_checkpoints = False
 log_the_run = True
 
-# Set the precision
-precision = 'highest' if cluster_paths else 'high' 
-torch.set_float32_matmul_precision(precision)
-
-# Backbone config
+# Set the BB
 train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
+# Select dataset
+dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
+
+# Select the dec head
+dec_head_key = 'lin'  # 'lin', 'fcn', 'unet'
+
+# Select loss
+loss_cfg_key = 'ce'  # 'dice', 'dice_ce', 'focal', 'focal_dice'
+
+# Training hyperparameters
+nb_epochs = 90
+warmup_iters = 20
+
+# Config the batch size for training
+batch_sz = 16
+
+# Dataloader workers
+num_workers_dataloader = min(os.cpu_count()-1, 12)
+
+# Set the precision
+precision = 'highest' if cluster_paths else 'high'  # medium
+torch.set_float32_matmul_precision(precision)
+
+########################################################################################################################
+
+# Backbone config
 backbone_name = get_bb_name(backbone_sz)
 bb_checkpoint_path = dino_main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
 
 dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
-# Select dataset
-dataset = 'hcp1' # 'hcp2'
-
+# Dataset parameters
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
     num_classses = 15
@@ -139,15 +159,9 @@ decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
 
 # Choose the decode head config
-dec_head_cfg = decs_dict['lin']
+assert dec_head_key in decs_dict.keys()
+dec_head_cfg = decs_dict[dec_head_key]
 
-
-# Training hyperparameters
-nb_epochs = 90
-warmup_iters = 20
-
-# Config the batch size for training
-batch_sz = 16
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
@@ -207,7 +221,8 @@ loss_cfgs_dict = dict(ce=dict(name='CrossEntropyLoss', params=loss_cfg_ce),
                       focal=dict(name='FocalLoss', params=loss_cfg_focal),
                       focal_dice=dict(name='CompositionLoss', params=loss_cfg_comp_foc_dice))
 
-loss_cfg = loss_cfgs_dict['dice']  # ce
+assert loss_cfg_key in loss_cfgs_dict.keys()
+loss_cfg = loss_cfgs_dict[loss_cfg_key] 
 
 
 # Metrics
@@ -332,25 +347,26 @@ test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                    mask_suffix='_labelTrainIds',
                                    augmentations=augmentations,
                                    )
-
-num_workers = 16#min(os.cpu_count()//2, 10)
 persistent_workers=True
+pin_memory=True
 drop_last=True
-train_dataloader = DataLoader(dataset=train_dataset, batch_size=batch_sz,
-                              shuffle=True, pin_memory=True, num_workers=num_workers,
-                              persistent_workers=persistent_workers, drop_last=drop_last)
-val_dataloader = DataLoader(dataset=val_dataset, batch_size=batch_sz,
-                              shuffle=False, pin_memory=True, num_workers=num_workers,
-                              persistent_workers=persistent_workers, drop_last=drop_last)
-test_dataloader = DataLoader(dataset=test_dataset, batch_size=batch_sz,
-                              shuffle=False, pin_memory=True, num_workers=num_workers,
-                              persistent_workers=persistent_workers, drop_last=drop_last)
+
+train_dataloader_cfg = dict(batch_size=batch_sz, shuffle=True, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+                            persistent_workers=persistent_workers, drop_last=drop_last)
+val_dataloader_cfg = dict(batch_size=batch_sz, shuffle=False, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+                          persistent_workers=persistent_workers, drop_last=drop_last)
+test_dataloader_cfg = dict(batch_size=batch_sz, shuffle=False, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+                           persistent_workers=persistent_workers, drop_last=drop_last)
+
+train_dataloader = DataLoader(dataset=train_dataset, **train_dataloader_cfg)
+val_dataloader = DataLoader(dataset=val_dataset, **val_dataloader_cfg)
+test_dataloader = DataLoader(dataset=test_dataset,**test_dataloader_cfg)
 
 
 # Init the logger (wandb)
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
                 f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
-run_name = f'{data_root_pth.stem}_{model.model.decode_head.__class__.__name__}_{loss_name}'
+run_name = f'{dataset}_{backbone_name}_{dec_head_key}_{loss_name}'
 
 wnadb_config = dict(backbone_name=backbone_name,
                     backbone_last_n_concat=n_concat,
@@ -367,22 +383,25 @@ wnadb_config = dict(backbone_name=backbone_name,
                     loss_cfg=loss_cfg,
                     metrics_cfg=metric_cfgs,
                     timestamp=time_str(),
-                    torch_precision=precision)
-
+                    torch_precision=precision,
+                    train_dataloader_cfg=train_dataloader_cfg,
+                    val_dataloader_cfg=val_dataloader_cfg,
+                    test_dataloader_cfg=test_dataloader_cfg)
 
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
-wandb_group_name = 'SEG_bb_' + backbone_sz + '_frozen' if not segmentor_cfg['train_backbone'] else '_with_train'
+
+bb_train_str = 'train_bb_YES' if not segmentor_cfg['train_backbone'] else 'train_bb_NO'
 log_mode = 'online' if log_the_run else 'disabled'
 
 logger = WandbLogger(project='FoundationModels_MedDino',
-                    group=wandb_group_name,
+                    group=backbone_name,
                     config=wnadb_config,
                     dir=wandb_log_path,
                     name=run_name,
                     mode=log_mode,
                     settings=wandb.Settings(_service_wait=30),  # Can increase timeout
-                    tags=[dataset])
+                    tags=[dataset, loss_name, bb_train_str].extend(backbone_name.split('_')))
 
 checkpointers = []
 n_best = 2 if save_checkpoints else 0
@@ -403,12 +422,13 @@ trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val
 # Load the best checkpoint (highest val_dice)
 logs = trainer.test(model=model, dataloaders=test_dataloader, ckpt_path=checkpointers[0].best_model_path)
 
-#@TODO  multi GPU (performance optm) (metrics per volume are problematic)
-#@TODO add types and comments
-#@TODO write readme.md
-#@TODO use the original hdf5 files 
-
 print('Done !')
 #finish logging
 wandb.finish()
 print('***END***')
+
+
+#@TODO  multi GPU (performance optm) (metrics per volume are problematic)
+#@TODO add types and comments
+#@TODO write readme.md
+#@TODO use the original hdf5 files 

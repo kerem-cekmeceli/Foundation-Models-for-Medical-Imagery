@@ -175,7 +175,7 @@ class LitSegmentor(LitBaseModule):
         # Forward pass
         y_pred = self.model(x_batch)
         loss = self.loss_fn(y_pred, y_batch)
-        
+                        
         # Log the loss
         self.log('loss', loss, on_epoch=True, on_step=False)
         
