@@ -39,9 +39,9 @@ import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
-cluster_paths = False
-save_checkpoints = False
-log_the_run = False
+cluster_paths = True
+save_checkpoints = True
+log_the_run = True
 
 # Set the BB
 train_backbone = True
@@ -64,7 +64,7 @@ warmup_iters = 20
 batch_sz = 16
 
 # Dataloader workers
-num_workers_dataloader = min(os.cpu_count()-1, 12)
+num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
 
 # Set the precision
 precision = 'highest' if cluster_paths else 'high'  # medium
