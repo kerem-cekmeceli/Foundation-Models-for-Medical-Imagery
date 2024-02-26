@@ -58,7 +58,7 @@ dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
 # Select dataset
-dataset = 'hcp2' # 'hcp2'
+dataset = 'hcp1' # 'hcp2'
 
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
@@ -139,7 +139,7 @@ decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
 
 # Choose the decode head config
-dec_head_cfg = decs_dict['unet']
+dec_head_cfg = decs_dict['lin']
 
 
 # Training hyperparameters
@@ -205,9 +205,9 @@ loss_cfgs_dict = dict(ce=dict(name='CrossEntropyLoss', params=loss_cfg_ce),
                       dice=dict(name='DiceLoss', params=loss_cfg_dice),
                       dice_ce=dict(name='CompositionLoss', params=loss_cfg_dice_ce),
                       focal=dict(name='FocalLoss', params=loss_cfg_focal),
-                      focal_dixce=dict(name='CompositionLoss', params=loss_cfg_comp_foc_dice))
+                      focal_dice=dict(name='CompositionLoss', params=loss_cfg_comp_foc_dice))
 
-loss_cfg = loss_cfgs_dict['ce']
+loss_cfg = loss_cfgs_dict['dice']  # ce
 
 
 # Metrics
