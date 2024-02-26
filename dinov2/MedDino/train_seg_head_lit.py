@@ -366,7 +366,7 @@ test_dataloader = DataLoader(dataset=test_dataset,**test_dataloader_cfg)
 # Init the logger (wandb)
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
                 f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
-run_name = f'{dataset}_{backbone_name}_{dec_head_key}_{loss_name}'
+run_name = f'{dataset}_{backbone_name}_{dec_head_key}_{loss_cfg_key}'
 
 wnadb_config = dict(backbone_name=backbone_name,
                     backbone_last_n_concat=n_concat,
