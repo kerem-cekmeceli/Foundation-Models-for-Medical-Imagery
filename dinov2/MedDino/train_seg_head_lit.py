@@ -83,7 +83,7 @@ patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
     num_classses = 15
-    ignore_idx_loss = 0
+    ignore_idx_loss = None
     ignore_idx_metric = 0
 elif dataset=='hcp2':
     data_path_suffix = 'brain/hcp2'
@@ -165,7 +165,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
-                params=dict(lr = 0.001,
+                params=dict(lr = 1e-4,
                             weight_decay = 0.0001,
                             betas = (0.9, 0.999)))
 
