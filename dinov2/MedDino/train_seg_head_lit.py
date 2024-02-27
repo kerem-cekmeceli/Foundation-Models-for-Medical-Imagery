@@ -83,35 +83,35 @@ patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
     num_classses = 15
-    bg_channel_loss = None
-    bg_channel_metric = 0
+    ignore_idx_loss = 0
+    ignore_idx_metric = 0
 elif dataset=='hcp2':
     data_path_suffix = 'brain/hcp2'
     num_classses = 15
-    bg_channel_loss = None
-    bg_channel_metric = 0
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
     
 elif dataset=='cardiac_acdc':
     data_path_suffix = 'cardiac/acdc'
     num_classses = 2
-    bg_channel_loss = None
-    bg_channel_metric = 0
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
 elif dataset=='cardiac_rvsc':
     data_path_suffix = 'cardiac/rvsc'
     num_classses = 2
-    bg_channel_loss = None
-    bg_channel_metric = 0
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
     
 elif dataset=='prostate_nci':
     data_path_suffix = 'prostate/nci'
     num_classses = 3
-    bg_channel_loss = None
-    bg_channel_metric = 0
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
 elif dataset=='prostate_usz':
     data_path_suffix = 'prostate/pirad_erc'
     num_classses = 3
-    bg_channel_loss = None
-    bg_channel_metric = 0
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
     
 else:
     ValueError(f'Dataset: {dataset} is not defined')
@@ -188,11 +188,11 @@ epsilon = 1  # smoothing factor
 k=1  # power
 
 # CE Loss
-loss_cfg_ce = dict()
+loss_cfg_ce = dict(ignore_index=ignore_idx_loss if ignore_idx_loss is not None else -100)
 
 # Dice Loss
 loss_cfg_dice = dict(prob_inputs=False, 
-                    bg_ch_to_rm=bg_channel_loss, # not removing results in better segmentation
+                    bg_ch_to_rm=ignore_idx_loss, # not removing results in better segmentation
                     reduction='mean',
                     epsilon=epsilon,
                     k=k)
@@ -205,7 +205,8 @@ loss_cfg_dice_ce=dict(loss1=dict(name='CE',
                       comp_rat=0.5)
 
 # Focal Loss
-loss_cfg_focal = dict(gamma=2,
+loss_cfg_focal = dict(bg_ch_to_rm=ignore_idx_loss,
+                      gamma=2,
                       alpha=None)
 
 # Focal-Dice Loss
@@ -235,14 +236,14 @@ assert SLICE_PER_PATIENT % batch_sz == 0, \
 
 miou_cfg=dict(prob_inputs=False, # Decoder does not return probas explicitly
               soft=False,
-              bg_ch_to_rm=bg_channel_metric,  # bg channel to be removed 
+              bg_ch_to_rm=ignore_idx_metric,  # bg channel to be removed 
               reduction='mean',
               vol_batch_sz=SLICE_PER_PATIENT,
               epsilon=epsilon)
 
 dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
              soft=False,
-             bg_ch_to_rm=bg_channel_metric,
+             bg_ch_to_rm=ignore_idx_metric,
              reduction='mean',
              k=k, 
              epsilon=epsilon,
@@ -421,7 +422,9 @@ checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, moni
 
 
 trainer = L.Trainer(max_epochs=nb_epochs, logger=logger, log_every_n_steps=100, num_sanity_val_steps=0,
-                    enable_checkpointing=True, callbacks=checkpointers)
+                    enable_checkpointing=True, callbacks=checkpointers, 
+                    gradient_clip_val=0, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
+                    accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
 
 # Train the model
 trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
