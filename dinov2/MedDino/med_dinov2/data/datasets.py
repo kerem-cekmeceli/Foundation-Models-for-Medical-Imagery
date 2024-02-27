@@ -144,16 +144,16 @@ class SegmentationDataset(Dataset):
         
         [image, mask] = self.transforms([image, mask])
         image = image.to(self.dtype) # C, H, W
-        mask = mask.squeeze(0)  #.to(torch.int64) #.reshape(image.shape[1:]) # H, W
+        mask = mask.squeeze(0).to(torch.int64) #.reshape(image.shape[1:]) # H, W
                     
-        # Create a tensor to hold the binary masks (GT probas of each class)  [num_cls, H, W]
-        bin_mask = torch.zeros(self.num_classes, mask.shape[0], mask.shape[1], dtype=self.dtype)
+        # # Create a tensor to hold the binary masks (GT probas of each class)  [num_cls, H, W]
+        # bin_mask = torch.zeros(self.num_classes, mask.shape[0], mask.shape[1], dtype=self.dtype)
         
-        for i in range(self.num_classes):
-            bin_mask[i] = (mask == i).to(self.dtype)  # Ensure resulting mask is float type
+        # for i in range(self.num_classes):
+        #     bin_mask[i] = (mask == i).to(self.dtype)  # Ensure resulting mask is float type
             
-        # Bin_mask = gt_proba of all classes [num_cls, H, W]
-        return image, bin_mask
+        # # Bin_mask = gt_proba of all classes [num_cls, H, W]
+        return image, mask
     
 
 #################################################################################################

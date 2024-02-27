@@ -62,6 +62,10 @@ class ScoreBase(nn.Module, ABC):
         
     
     def _prep_inputs(self, mask_pred, mask_gt):
+        # One Hot Encode the integer lables
+        if mask_pred.shape != mask_gt.shape:
+            mask_gt = F.one_hot(mask_gt, mask_pred.size(1)).permute([0, 3, 1, 2])
+        
         # Verify shapes and values
         self._verify(mask_pred, mask_gt)
         

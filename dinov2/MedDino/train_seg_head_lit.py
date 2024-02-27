@@ -54,7 +54,7 @@ dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_u
 dec_head_key = 'lin'  # 'lin', 'fcn', 'unet'
 
 # Select loss
-loss_cfg_key = 'ce'  # 'dice', 'dice_ce', 'focal', 'focal_dice'
+loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
 nb_epochs = 90
@@ -62,6 +62,9 @@ warmup_iters = 20
 
 # Config the batch size for training
 batch_sz = 16
+
+# Test checkpoint
+#@TODO
 
 # Dataloader workers
 num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
@@ -83,7 +86,7 @@ patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
     num_classses = 15
-    ignore_idx_loss = None
+    ignore_idx_loss = 0
     ignore_idx_metric = 0
 elif dataset=='hcp2':
     data_path_suffix = 'brain/hcp2'
@@ -165,7 +168,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
-                params=dict(lr = 1e-3,
+                params=dict(lr = 1e-4,
                             weight_decay = 0.0001,
                             betas = (0.9, 0.999)))
 
@@ -363,6 +366,12 @@ train_dataloader = DataLoader(dataset=train_dataset, **train_dataloader_cfg)
 val_dataloader = DataLoader(dataset=val_dataset, **val_dataloader_cfg)
 test_dataloader = DataLoader(dataset=test_dataset,**test_dataloader_cfg)
 
+# Trainer config (loggable components)
+trainer_cfg = dict(max_epochs=nb_epochs, log_every_n_steps=100, num_sanity_val_steps=0,
+                   enable_checkpointing=True, 
+                   gradient_clip_val=0, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
+                   accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
+
 
 # Init the logger (wandb)
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
@@ -389,7 +398,8 @@ wnadb_config = dict(backbone_name=backbone_name,
                     torch_precision=precision,
                     train_dataloader_cfg=train_dataloader_cfg,
                     val_dataloader_cfg=val_dataloader_cfg,
-                    test_dataloader_cfg=test_dataloader_cfg)
+                    test_dataloader_cfg=test_dataloader_cfg,
+                    trainer_cfg=trainer_cfg)
 
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
@@ -420,11 +430,8 @@ checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, moni
 checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'))
 checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
 
-
-trainer = L.Trainer(max_epochs=nb_epochs, logger=logger, log_every_n_steps=100, num_sanity_val_steps=0,
-                    enable_checkpointing=True, callbacks=checkpointers, 
-                    gradient_clip_val=0.5, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
-                    accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
+# Create the trainer object
+trainer = L.Trainer(logger=logger, callbacks=checkpointers, **trainer_cfg)
 
 # Train the model
 trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
@@ -442,3 +449,18 @@ print('***END***')
 #@TODO add types and comments
 #@TODO write readme.md
 #@TODO use the original hdf5 files 
+
+
+
+# Try training with plain-vanilla SGD (no momentum nor weight decay).
+# Start with a low learning rate. Can you train successfully, even if slowly?
+# If so, try increasing the learning rate and possibly turning on momentum.
+
+# lr = 0.1
+# optimizer = optim.Adam(model.parameters(), lr = lr)
+# Although it often trains faster, Adam can be unstable sometimes.
+
+# Also, as a general rule, the learning rate with which Adam can train
+# stably tends to be numerically significantly smaller than those that
+# work with SGD. I would suggest starting with lr = 1.e-6 and increasing
+# it until you either get successful, if slow, training, or unstable training.
