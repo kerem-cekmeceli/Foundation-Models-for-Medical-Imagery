@@ -51,7 +51,7 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 dataset = 'hcp2' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'unet'
+dec_head_key = 'fcn'  # 'lin', 'fcn', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
