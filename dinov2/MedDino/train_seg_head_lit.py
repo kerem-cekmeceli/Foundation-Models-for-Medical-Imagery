@@ -165,7 +165,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
-                params=dict(lr = 1e-4,
+                params=dict(lr = 1e-3,
                             weight_decay = 0.0001,
                             betas = (0.9, 0.999)))
 
@@ -423,7 +423,7 @@ checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, moni
 
 trainer = L.Trainer(max_epochs=nb_epochs, logger=logger, log_every_n_steps=100, num_sanity_val_steps=0,
                     enable_checkpointing=True, callbacks=checkpointers, 
-                    gradient_clip_val=0, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
+                    gradient_clip_val=0.5, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
                     accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
 
 # Train the model
