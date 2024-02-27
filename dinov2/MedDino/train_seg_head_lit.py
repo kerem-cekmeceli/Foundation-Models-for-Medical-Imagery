@@ -48,7 +48,7 @@ train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
+dataset = 'hcp2' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
 dec_head_key = 'lin'  # 'lin', 'fcn', 'unet'
@@ -86,7 +86,7 @@ patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 if dataset=='hcp1':
     data_path_suffix = 'brain/hcp1'
     num_classses = 15
-    ignore_idx_loss = 0
+    ignore_idx_loss = None
     ignore_idx_metric = 0
 elif dataset=='hcp2':
     data_path_suffix = 'brain/hcp2'
