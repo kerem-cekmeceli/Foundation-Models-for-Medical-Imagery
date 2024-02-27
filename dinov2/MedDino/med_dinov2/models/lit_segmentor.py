@@ -198,6 +198,41 @@ class LitSegmentor(LitBaseModule):
                 
         return loss
     
+    def get_segmentations(self, x_batch, y_batch, y_pred):
+        imgs = []
+        masks_pred = []
+        masks_gt = []
+        caption = f'Epoch={self.current_epoch}, Samples: '
+        for idx in self.minibatch_log_idxs:
+            # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
+            imgs.append(x_batch[idx]) 
+            masks_pred.append(y_pred[idx].argmax(dim=0, keepdim=True))
+            masks_gt.append(y_batch[idx].argmax(dim=0, keepdim=True))
+            caption += f'{idx+1}, '
+        
+        # Concat the seg results for the samples from the same batch
+        nb_rows = 2 
+        rem = len(self.minibatch_log_idxs) % nb_rows
+        if rem > 0:
+            imgs.extend([torch.zeros_like(imgs[0])]*rem)
+            masks_pred.extend([torch.zeros_like(masks_pred[0])]*rem)
+            masks_gt.extend([torch.zeros_like(masks_gt[0])]*rem)
+            
+        assert len(imgs) % nb_rows == 0
+        
+        imgs = make_grid(imgs, nrow=nb_rows, padding=0).permute([1, 2, 0]).flip(-1)
+        masks_pred = make_grid(masks_pred, nrow=nb_rows, padding=0)[0]
+        masks_gt = make_grid(masks_gt, nrow=nb_rows, padding=0)[0]
+            
+        log_img = wandb.Image(data_or_path=imgs.cpu().numpy(), # CHW -> HWC and BGR -> RGB
+                                masks={
+                                    'predictions': {'mask_data': masks_pred.cpu().numpy(),
+                                                    },
+                                    'ground_truth': {'mask_data': masks_gt.cpu().numpy()} 
+                                    },
+                                caption=caption)
+        return log_img
+    
     def validation_step(self, val_batch, batch_idx):
         sync_dist=False
         x_batch, y_batch = val_batch
@@ -231,39 +266,8 @@ class LitSegmentor(LitBaseModule):
         # save the segmentation result
         if batch_idx < self.first_n_batch_to_seg_log:
             if (self.current_epoch+1)%self.seg_val_intv==0:
-                imgs = []
-                masks_pred = []
-                masks_gt = []
-                caption = f'Epoch={self.current_epoch}, Samples: '
-                for idx in self.minibatch_log_idxs:
-                    # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
-                    imgs.append(x_batch[idx]) 
-                    masks_pred.append(y_pred[idx].argmax(dim=0, keepdim=True))
-                    masks_gt.append(y_batch[idx].argmax(dim=0, keepdim=True))
-                    caption += f'{idx+1}, '
-                
-                # Concat the seg results for the samples from the same batch
-                nb_rows = 2 
-                rem = len(self.minibatch_log_idxs) % nb_rows
-                if rem > 0:
-                    imgs.extend([torch.zeros_like(imgs[0])]*rem)
-                    masks_pred.extend([torch.zeros_like(masks_pred[0])]*rem)
-                    masks_gt.extend([torch.zeros_like(masks_gt[0])]*rem)
-                 
-                assert len(imgs) % nb_rows == 0
-                
-                imgs = make_grid(imgs, nrow=nb_rows, padding=0).permute([1, 2, 0]).flip(-1)
-                masks_pred = make_grid(masks_pred, nrow=nb_rows, padding=0)[0]
-                masks_gt = make_grid(masks_gt, nrow=nb_rows, padding=0)[0]
-                    
-                log_img = wandb.Image(data_or_path=imgs.cpu().numpy(), # CHW -> HWC and BGR -> RGB
-                                      masks={
-                                          'predictions': {'mask_data': masks_pred.cpu().numpy(),
-                                                          },
-                                          'ground_truth': {'mask_data': masks_gt.cpu().numpy()} 
-                                          },
-                                      caption=caption)
-                self.logger.experiment.log({f'val_seg_batch{batch_idx+1}': [log_img],}, commit=False)  
+                self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
+                    [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)  
     
     def on_train_epoch_start(self) -> None:
         super().on_train_epoch_start()
@@ -298,41 +302,9 @@ class LitSegmentor(LitBaseModule):
         
         # save the segmentation result
         if batch_idx < self.first_n_batch_to_seg_log:
-            if (self.current_epoch+1)%self.seg_val_intv==0:
-                imgs = []
-                masks_pred = []
-                masks_gt = []
-                caption = f'Epoch={self.current_epoch}, Samples: '
-                for idx in self.minibatch_log_idxs:
-                    # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
-                    imgs.append(x_batch[idx]) 
-                    masks_pred.append(y_pred[idx].argmax(dim=0, keepdim=True))
-                    masks_gt.append(y_batch[idx].argmax(dim=0, keepdim=True))
-                    caption += f'{idx+1}, '
-                
-                # Concat the seg results for the samples from the same batch
-                nb_rows = 2 
-                rem = len(self.minibatch_log_idxs) % nb_rows
-                if rem > 0:
-                    imgs.extend([torch.zeros_like(imgs[0])]*rem)
-                    masks_pred.extend([torch.zeros_like(masks_pred[0])]*rem)
-                    masks_gt.extend([torch.zeros_like(masks_gt[0])]*rem)
-                 
-                assert len(imgs) % nb_rows == 0
-                
-                imgs = make_grid(imgs, nrow=nb_rows, padding=0).permute([1, 2, 0]).flip(-1)
-                masks_pred = make_grid(masks_pred, nrow=nb_rows, padding=0)[0]
-                masks_gt = make_grid(masks_gt, nrow=nb_rows, padding=0)[0]
-                    
-                log_img = wandb.Image(data_or_path=imgs.cpu().numpy(), # CHW -> HWC and BGR -> RGB
-                                      masks={
-                                          'predictions': {'mask_data': masks_pred.cpu().numpy(),
-                                                          },
-                                          'ground_truth': {'mask_data': masks_gt.cpu().numpy()} 
-                                          },
-                                      caption=caption)
-                self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': [log_img],}, commit=False)
-    
+            self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
+                [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
+
         # Log the test loss        
         self.log('test_loss', loss, on_epoch=True, on_step=False, sync_dist=sync_dist)
         

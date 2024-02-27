@@ -366,11 +366,12 @@ test_dataloader = DataLoader(dataset=test_dataset,**test_dataloader_cfg)
 # Init the logger (wandb)
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
                 f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
+dec_head_name = model.model.decode_head.__class__.__name__
 run_name = f'{dataset}_{backbone_name}_{dec_head_key}_{loss_cfg_key}'
 
 wnadb_config = dict(backbone_name=backbone_name,
                     backbone_last_n_concat=n_concat,
-                    decode_head=model.model.decode_head.__class__.__name__,
+                    decode_head=dec_head_name,
                     dec_head_cfg=dec_head_cfg,
                     segmentor_cfg=segmentor_cfg,
                     dataset=str(data_root_pth),
@@ -393,7 +394,7 @@ wandb_log_path.mkdir(parents=True, exist_ok=True)
 
 bb_train_str = 'train_bb_YES' if segmentor_cfg['train_backbone'] else 'train_bb_NO'
 log_mode = 'online' if log_the_run else 'disabled'
-tags = [dataset, loss_name, bb_train_str]
+tags = [dataset, loss_name, bb_train_str, dec_head_name]
 tags.extend(backbone_name.split('_'))
 
 logger = WandbLogger(project='FoundationModels_MedDino',
