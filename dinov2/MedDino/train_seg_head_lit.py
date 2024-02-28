@@ -51,7 +51,7 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'psp'  # 'lin', 'fcn', 'psp', 'unet', 
+dec_head_key = 'fcn'  # 'lin', 'fcn', 'psp', 'unet', 
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -62,7 +62,7 @@ warmup_iters = 20
 
 # Config the batch size and lr for training
 batch_sz = 16
-lr = 0.8e-4
+lr = 0.5e-4
 
 # Test checkpoint
 test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
@@ -130,7 +130,7 @@ dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat,
                              bilinear=True)
 
 # https://arxiv.org/abs/1411.4038
-dec_head_cfg_fcn = dict(num_convs=3,
+dec_head_cfg_fcn = dict(num_convs=6,
                         kernel_size=3,
                         concat_input=True,
                         dilation=1,
