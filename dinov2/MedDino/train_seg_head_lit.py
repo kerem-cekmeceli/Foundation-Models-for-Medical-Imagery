@@ -48,23 +48,24 @@ train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp2' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
+dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'fcn'  # 'lin', 'fcn', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 90
+nb_epochs = 100
 warmup_iters = 20
 
-# Config the batch size for training
+# Config the batch size and lr for training
 batch_sz = 16
+lr = 0.8e-4
 
 # Test checkpoint
-#@TODO
+test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
 
 # Dataloader workers
 num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
@@ -168,7 +169,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
-                params=dict(lr = 1e-4,
+                params=dict(lr = lr,
                             weight_decay = 0.0001,
                             betas = (0.9, 0.999)))
 
@@ -421,23 +422,22 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 # log gradients, parameter histogram and model topology
 logger.watch(model, log="all")
 
-checkpointers = []
 n_best = 2 if save_checkpoints else 0
 models_pth = dino_main_pth / f'Checkpoints/MedDino/{model.model.decode_head.__class__.__name__}'
 models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
-checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'))
-checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'))
-checkpointers.append(ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
+checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
+                     val_dice = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
+                     val_mIoU = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
 
 # Create the trainer object
-trainer = L.Trainer(logger=logger, callbacks=checkpointers, **trainer_cfg)
+trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)
 
 # Train the model
 trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 # Load the best checkpoint (highest val_dice)
-logs = trainer.test(model=model, dataloaders=test_dataloader, ckpt_path=checkpointers[0].best_model_path)
+logs = trainer.test(model=model, dataloaders=test_dataloader, ckpt_path=checkpointers[test_checkpoint_key].best_model_path)
 
 print('Done !')
 #finish logging

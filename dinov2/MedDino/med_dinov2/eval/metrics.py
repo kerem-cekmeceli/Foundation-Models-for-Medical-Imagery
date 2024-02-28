@@ -45,6 +45,7 @@ class ScoreBase(nn.Module, ABC):
     def _verify(self, mask_pred, mask_gt):
         assert mask_pred.shape == mask_gt.shape, f'mask_pred and mask_gt shapes do not match, {mask_pred.shape} != {mask_gt.shape}'
         self._verify_proba(mask_gt)
+        assert ((mask_gt==0) + (mask_gt==1)).all(), "mask_gt must be one-hot-encoded"
         
     def _get_probas(self, mask_pred):
         if not self.prob_inputs:

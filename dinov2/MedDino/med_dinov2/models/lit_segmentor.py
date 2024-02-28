@@ -207,7 +207,7 @@ class LitSegmentor(LitBaseModule):
             # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
             imgs.append(x_batch[idx]) 
             masks_pred.append(y_pred[idx].argmax(dim=0, keepdim=True))
-            masks_gt.append(y_batch[idx].argmax(dim=0, keepdim=True))
+            masks_gt.append(y_batch[idx].unsqueeze(0))
             caption += f'{idx+1}, '
         
         # Concat the seg results for the samples from the same batch
