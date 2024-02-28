@@ -71,6 +71,7 @@ class DecBase(nn.Module, ABC):
             if bilinear:
                 self.up = nn.Upsample(scale_factor=out_upsample_fac, mode='bilinear', align_corners=False)
             else:
+                assert isinstance(out_upsample_fac, int)
                 self.up = nn.ConvTranspose2d(num_classses , num_classses, kernel_size=out_upsample_fac, stride=out_upsample_fac)
         self.out_upsample_fac = out_upsample_fac
         

@@ -51,7 +51,7 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'unet'
+dec_head_key = 'psp'  # 'lin', 'fcn', 'psp', 'unet', 
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -123,15 +123,31 @@ else:
 
 # Decoder config
 n_concat = 4
+# Linear classification of each patch + upsampling to pixel dim
 dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat, 
                              num_classses=num_classses,
                              out_upsample_fac=patch_sz,
                              bilinear=True)
 
+# https://arxiv.org/abs/1411.4038
 dec_head_cfg_fcn = dict(num_convs=3,
                         kernel_size=3,
                         concat_input=True,
                         dilation=1,
+                        in_channels=[embed_dim]*n_concat,  # input channels
+                        channels=embed_dim,  # Conv channels
+                        num_classes=num_classses,  # output channels
+                        dropout_ratio=0.1,
+                        conv_cfg=dict(type='Conv2d'), # None = conv2d
+                        norm_cfg=dict(type='BN'),
+                        act_cfg=dict(type='ReLU'),
+                        in_index=[i for i in range(n_concat)],
+                        input_transform='resize_concat',
+                        init_cfg=dict(
+                            type='Normal', std=0.01, override=dict(name='conv_seg')))
+
+# https://arxiv.org/abs/1612.01105
+dec_head_cfg_psp = dict(pool_scales=(1, 2, 3, 6),
                         in_channels=[embed_dim]*n_concat,  # input channels
                         channels=embed_dim,  # Conv channels
                         num_classes=num_classses,  # output channels
@@ -160,7 +176,9 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
-                 unet=dict(name='ConvUNet', params=dec_head_cfg_unet))
+                 psp=dict(name='PSPHead', params=dec_head_cfg_psp),
+                 unet=dict(name='ConvUNet', params=dec_head_cfg_unet),
+                 )
 
 # Choose the decode head config
 assert dec_head_key in decs_dict.keys()

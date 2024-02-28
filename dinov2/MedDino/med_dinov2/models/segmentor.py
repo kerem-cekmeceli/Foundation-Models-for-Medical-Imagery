@@ -7,7 +7,7 @@ from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
 from MedDino.prep_model import get_dino_backbone
 from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
-from mmseg.models.decode_heads import FCNHead
+from mmseg.models.decode_heads import FCNHead, PSPHead
 
 from typing import Union, Optional, Sequence, Callable, Any
 
@@ -46,6 +46,9 @@ class Segmentor(nn.Module):
                 
             elif dec_head_name == 'FCNHead':
                 self.decode_head = FCNHead(**dec_head_params)
+                
+            elif dec_head_name == 'PSPHead':
+                self.decode_head = PSPHead(**dec_head_params)
                 
             elif dec_head_name == 'ConvUNet':
                 self.decode_head = ConvUNet(**dec_head_params)
