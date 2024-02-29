@@ -44,7 +44,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = False
+train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
