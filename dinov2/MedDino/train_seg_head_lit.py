@@ -44,7 +44,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = False
+train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -204,7 +204,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
                 params=dict(lr = lr,
-                            weight_decay = 0.0001,
+                            weight_decay = 0.5e-4,
                             betas = (0.9, 0.999)))
 
 # LR scheduler config
