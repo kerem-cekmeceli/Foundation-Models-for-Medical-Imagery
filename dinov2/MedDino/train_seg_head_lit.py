@@ -44,14 +44,14 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'da'  # 'lin', 'fcn', 'psp', 'unet', 'da'
+dec_head_key = 'psp'  # 'lin', 'fcn', 'psp', 'unet', 'da'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -160,6 +160,7 @@ dec_head_cfg_psp = dict(pool_scales=(1, 2, 3, 6),
                         init_cfg=dict(
                             type='Normal', std=0.01, override=dict(name='conv_seg')))
 
+# https://arxiv.org/abs/1505.04597
 dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         num_classses=num_classses,
                         # in_index=None,
@@ -174,6 +175,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         res_con_interv=1
                         )
 
+# https://arxiv.org/abs/1809.02983
 dec_head_cfg_da = dict(pam_channels=embed_dim,
                        in_channels=[embed_dim]*n_concat,  # input channels
                        channels=embed_dim,  # Conv channels
