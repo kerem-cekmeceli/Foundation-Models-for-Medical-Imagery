@@ -7,7 +7,7 @@ from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
 from MedDino.prep_model import get_dino_backbone
 from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
-from mmseg.models.decode_heads import FCNHead, PSPHead
+from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead
 
 from typing import Union, Optional, Sequence, Callable, Any
 
@@ -52,6 +52,9 @@ class Segmentor(nn.Module):
                 
             elif dec_head_name == 'ConvUNet':
                 self.decode_head = ConvUNet(**dec_head_params)
+                
+            elif dec_head_name == 'DAHead':
+                self.decode_head = DAHead(**dec_head_params)
                 
             else:
                 ValueError(f"Decode head {dec_head_name} is not supported from config.")
@@ -125,6 +128,9 @@ class Segmentor(nn.Module):
     def forward(self, x):
         feats = self.forward_backbone(x)
         out = self.decode_head(feats)
+        
+        if self.decode_head.__class__.__name__ == 'DAHead':
+            out = out[0]
         
         if self.reshape_dec_oup:
             out = self.reshape_dec_out(out, x.shape[-2:])
