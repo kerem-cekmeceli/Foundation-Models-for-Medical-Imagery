@@ -186,7 +186,7 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         bilinear=False,
                         conv_per_up_blk=2,
                         res_con=True,
-                        res_con_interv=1
+                        res_con_interv=None
                         )
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
