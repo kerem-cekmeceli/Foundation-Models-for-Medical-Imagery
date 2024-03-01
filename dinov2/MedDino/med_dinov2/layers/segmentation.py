@@ -304,28 +304,42 @@ class NConv(nn.Module):
                  kernel_sz:Union[int, Sequence[int]],
                  mid_channels:Optional[int]=None,
                  res_con:bool=False, 
-                 res_con_interv:int=1,
-                 nb_convs:int=2,
+                 res_con_interv:Optional[int]=None,
+                 nb_convs:int=3,
                  batch_norm:Union[bool, Sequence[bool]]=True,
                  non_linearity:Union[str, nn.Module]='ReLU',
                  padding:Union[str, int, Sequence[str], Sequence[int]]='same') -> None:
         super().__init__()
-        assert nb_convs>1
+        assert nb_convs>0
         self.nb_convs = nb_convs
         
         if not mid_channels:
             mid_channels = out_channels
-        
-        if res_con:
-            assert nb_convs>=2, 'Need at least 2 convolutions for a resifual connection'
-            assert mid_channels == out_channels, \
-                f'mid channels and out_channels should be the same for residual connections, {mid_channels}!={out_channels}'
-                
-            assert res_con_interv > 0, f'res_con_interv must be >0 but got {res_con_interv}'
-            assert res_con_interv < nb_convs
-            self.res_con_interv = res_con_interv
             
+        # Residual connections    
         self.res_con=res_con
+        self.do_res_con_first = in_channels == mid_channels
+        self.do_res_con_last = mid_channels == out_channels
+        
+        if self.res_con:
+            if res_con_interv is None:
+                res_con_interv = nb_convs
+                res_con_interv = res_con_interv if self.do_res_con_first else res_con_interv-1
+                assert res_con_interv > 0, "With bilinear interp nb conv must be >=2 for res con"
+                res_con_interv = res_con_interv if self.do_res_con_last else res_con_interv-1
+                assert res_con_interv > 0, "When mid_channles != out_channels last res con can't be made need 1 more conv blk"
+                
+            # assert nb_convs>=2, 'Need at least 2 convolutions for a resifual connection'
+            # assert mid_channels == out_channels, \
+            #     f'mid channels and out_channels should be the same for residual connections, {mid_channels}!={out_channels}'
+            
+            assert res_con_interv > 0, f'res_con_interv must be >0 but got {res_con_interv}'
+            offset = 0
+            offset = offset if self.do_res_con_first else offset+1
+            offset = offset if self.do_res_con_last else offset+1
+            assert nb_convs-offset > 0, f'Insufficient nb of conv blks for residual connections, need {offset-nb_convs} more'
+            assert res_con_interv <= nb_convs-offset
+            self.res_con_interv = res_con_interv
         
         
         kernel_sz = self.get_attr_list(kernel_sz)
@@ -336,7 +350,6 @@ class NConv(nn.Module):
         self.non_linearity = non_linearity
         padding = self.get_attr_list('same')
         self.padding = padding
-        
         
         conv_blk_list = [ConvBlk(in_channel=in_channels,
                                  out_channel=mid_channels,
@@ -369,16 +382,45 @@ class NConv(nn.Module):
         return attr
     
     
-    def forward(self, x):
-        for i, blk in enumerate(self.conv_blks):
+    def fwd_no_res_con_first(self, x):
+        # Forward conv blk
+        x = blk(x)
+        
+        for i, blk in enumerate(self.conv_blks[1:]):
+            if self.res_con:
+                if i%self.res_con_interv==0:
+                    x_residual = x
+                    
+            # Forward conv blk
             x = blk(x)
             
             if self.res_con:
-                if (i+1)%(self.res_con_interv+1)==1:
-                    x_residual = x
-                if (i+1)%(self.res_con_interv+1)==0:
-                    x = x + x_residual     
+                if (i+1)%self.res_con_interv == 0:
+                    if i<len(self.conv_blks)-1 or self.do_res_con_last:
+                        x = x + x_residual     
         return x
+    
+    def fwd_with_res_con_first(self, x):
+        for i, blk in enumerate(self.conv_blks):
+            if self.res_con:
+                if i%self.res_con_interv==0:
+                    x_residual = x
+                    
+            # Forward conv blk
+            x = blk(x)
+            
+            if self.res_con:
+                if (i+1)%self.res_con_interv == 0:
+                    if i<len(self.conv_blks)-1 or self.do_res_con_last:
+                        x = x + x_residual     
+        return x
+    
+    
+    def forward(self, x):
+        if self.do_res_con_first:
+            return self.fwd_with_res_con_first(x)
+        else:
+            return self.fwd_no_res_con_first(x)
         
             
 class Up(nn.Module):
@@ -462,7 +504,7 @@ class ResNetHead(DecBase):
         self.res_con = res_con
         
         # interval between residual connections for the conv layers of the Up blocks (summation)
-        res_con_interv = self.get_attr_list(res_con_interv, cond=lambda a: a>0)
+        res_con_interv = self.get_attr_list(res_con_interv, cond=lambda a: True if a is None else a>0)
         self.res_con_interv = res_con_interv
         
         # Set kernel size to 3
