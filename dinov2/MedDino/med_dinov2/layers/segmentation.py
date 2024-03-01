@@ -426,7 +426,7 @@ class Up(nn.Module):
         return self.conv_xn(self.up(x))
     
     
-class ConvUNet(DecBase):
+class ResNetHead(DecBase):
     def __init__(self, 
                  in_channels: Union[int,Sequence[int]],
                  num_classses: int, 
@@ -488,18 +488,6 @@ class ConvUNet(DecBase):
         self.last_out_ch = last_out_ch 
         assert self.last_out_ch >= num_classses, \
             f"Too many ch size reduction, input to seg_cls: {self.last_out_ch}, but num class: {num_classses} "
-            
-            
-        # in_channels
-        # out_channels
-        # kernel_sz
-        # mid_channels
-        # res_con 
-        # res_con_interv
-        # nb_convs
-        # batch_norm
-        # non_linearity
-        # padding
         
         super().__init__(in_channels=in_channels,
                          cls_in_channels=self.last_out_ch,

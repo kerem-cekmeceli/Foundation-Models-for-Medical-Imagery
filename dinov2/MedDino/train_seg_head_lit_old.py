@@ -18,7 +18,7 @@ from prep_model import get_bb_name, get_dino_backbone, time_str
 from OrigDino.dinov2.eval.segmentation import models
 
 from MedDino.med_dinov2.models.segmentor import Segmentor
-from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
+from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead
 from MedDino.med_dinov2.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from MedDino.med_dinov2.tools.main_fcts import train, test
@@ -89,7 +89,7 @@ dec_head_cfg = dict(in_channels=[backbone.embed_dim]*n_concat,
                     res_con=True,
                     res_con_interv=1
                     )
-dec_head = ConvUNet(**dec_head_cfg)
+dec_head = ResNetHead(**dec_head_cfg)
 
 dec_head.to(device)
 

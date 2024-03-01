@@ -6,7 +6,7 @@ from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
 from MedDino.prep_model import get_dino_backbone
-from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
+from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead
 
 from typing import Union, Optional, Sequence, Callable, Any
@@ -50,11 +50,11 @@ class Segmentor(nn.Module):
             elif dec_head_name == 'PSPHead':
                 self.decode_head = PSPHead(**dec_head_params)
                 
-            elif dec_head_name == 'ConvUNet':
-                self.decode_head = ConvUNet(**dec_head_params)
-                
             elif dec_head_name == 'DAHead':
                 self.decode_head = DAHead(**dec_head_params)
+                
+            elif dec_head_name == 'ResNetHead':
+                self.decode_head = ResNetHead(**dec_head_params)
                 
             else:
                 ValueError(f"Decode head {dec_head_name} is not supported from config.")
