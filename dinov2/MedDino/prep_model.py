@@ -30,8 +30,8 @@ from pathlib import Path
 import mmcv
 import numpy as np
 
-from OrigDino.dinov2.hub.backbones import dinov2_vits14
-from OrigDino.dinov2.models.vision_transformer import vit_small
+# from OrigDino.dinov2.hub.backbones import dinov2_vits14
+from OrigDino.dinov2.models.vision_transformer import vit_small, vit_base, vit_large, vit_giant2
 
 import urllib
 from mmcv.runner import load_checkpoint
@@ -113,9 +113,18 @@ def get_dino_backbone(backbone_name, backbone_cp=None, eval=True):
             raise Exception(f"File: {backbone_cp} does not exist")
         
         # Instantiate an empty DinoVisionTransformer model for the selected size
-        backbone_model = torch.hub.load('./', backbone_name, source='local', pretrained=False)
+        # backbone_model = torch.hub.load('./', backbone_name, source='local', pretrained=False)
         # backbone_model = dinov2_vits14(pretrained=False)
-        # backbone_model = vit_small(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+        if backbone_name == 'dinov2_vits14':
+            backbone_model = vit_small(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+        elif backbone_name == 'dinov2_vitb14':
+            backbone_model = vit_base(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+        elif backbone_name == 'dinov2_vitl14':
+            backbone_model = vit_large(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+        elif backbone_name == 'dinov2_vitg14':
+            backbone_model = vit_giant2(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+        else:
+            raise ValueError(f'Unknown backbone name {backbone_name}')
 
         # Load the checkpoint using torch.load
         checkpoint = torch.load(backbone_cp)
