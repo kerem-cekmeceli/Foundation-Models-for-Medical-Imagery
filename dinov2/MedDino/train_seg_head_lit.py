@@ -45,7 +45,7 @@ log_the_run = True
 
 # Set the BB
 train_backbone = False
-backbone_sz = "base" # in ("small", "base", "large" or "giant")
+backbone_sz = "large" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
