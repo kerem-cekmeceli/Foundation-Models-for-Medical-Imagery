@@ -562,29 +562,29 @@ class ResNetHead(DecBase):
     
     
     
-class UNetHead(DecBase):
-    def __init__(self, 
-                 in_channels: int | Sequence[int], 
-                 num_classses: int, 
-                 cls_in_channels: int | None = None, 
-                 in_index: int | Sequence[int] | None = None, 
-                 input_transform: str | None = None, 
-                 in_resize_factors: int | Sequence[int] | None = None, 
-                 align_corners: bool = False, 
-                 dropout_rat: float = 0, 
-                 out_upsample_fac: int | None = None, 
-                 bilinear: bool = True) -> None:
+# class UNetHead(DecBase):
+#     def __init__(self, 
+#                  in_channels: int | Sequence[int], 
+#                  num_classses: int, 
+#                  cls_in_channels: int | None = None, 
+#                  in_index: int | Sequence[int] | None = None, 
+#                  input_transform: str | None = None, 
+#                  in_resize_factors: int | Sequence[int] | None = None, 
+#                  align_corners: bool = False, 
+#                  dropout_rat: float = 0, 
+#                  out_upsample_fac: int | None = None, 
+#                  bilinear: bool = True) -> None:
         
-        super().__init__(in_channels, 
-                         num_classses, 
-                         cls_in_channels, 
-                         in_index, 
-                         input_transform, 
-                         in_resize_factors, 
-                         align_corners, 
-                         dropout_rat, 
-                         out_upsample_fac, 
-                         bilinear)
+#         super().__init__(in_channels, 
+#                          num_classses, 
+#                          cls_in_channels, 
+#                          in_index, 
+#                          input_transform, 
+#                          in_resize_factors, 
+#                          align_corners, 
+#                          dropout_rat, 
+#                          out_upsample_fac, 
+#                          bilinear)
             
         
         
