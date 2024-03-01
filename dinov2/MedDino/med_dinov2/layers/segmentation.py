@@ -325,7 +325,7 @@ class NConv(nn.Module):
             if res_con_interv is None:
                 res_con_interv = nb_convs
                 res_con_interv = res_con_interv if self.do_res_con_first else res_con_interv-1
-                assert res_con_interv > 0, "With bilinear interp nb conv must be >=2 for res con"
+                assert res_con_interv > 0, "When in_channles != mid_channles first res con can't be made need 1 more conv blk"
                 res_con_interv = res_con_interv if self.do_res_con_last else res_con_interv-1
                 assert res_con_interv > 0, "When mid_channles != out_channels last res con can't be made need 1 more conv blk"
                 
@@ -559,6 +559,32 @@ class ResNetHead(DecBase):
         for i, up in enumerate(self.ups):
             x = up(x)
         return x
+    
+    
+    
+class UNetHead(DecBase):
+    def __init__(self, 
+                 in_channels: int | Sequence[int], 
+                 num_classses: int, 
+                 cls_in_channels: int | None = None, 
+                 in_index: int | Sequence[int] | None = None, 
+                 input_transform: str | None = None, 
+                 in_resize_factors: int | Sequence[int] | None = None, 
+                 align_corners: bool = False, 
+                 dropout_rat: float = 0, 
+                 out_upsample_fac: int | None = None, 
+                 bilinear: bool = True) -> None:
+        
+        super().__init__(in_channels, 
+                         num_classses, 
+                         cls_in_channels, 
+                         in_index, 
+                         input_transform, 
+                         in_resize_factors, 
+                         align_corners, 
+                         dropout_rat, 
+                         out_upsample_fac, 
+                         bilinear)
             
         
         
