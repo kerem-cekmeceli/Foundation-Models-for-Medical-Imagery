@@ -113,9 +113,9 @@ def get_dino_backbone(backbone_name, backbone_cp=None, eval=True):
             raise Exception(f"File: {backbone_cp} does not exist")
         
         # Instantiate an empty DinoVisionTransformer model for the selected size
-        # backbone_model = torch.hub.load('./', backbone_name, source='local', pretrained=False)
+        backbone_model = torch.hub.load('./', backbone_name, source='local', pretrained=False)
         # backbone_model = dinov2_vits14(pretrained=False)
-        backbone_model = vit_small(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+        # backbone_model = vit_small(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
 
         # Load the checkpoint using torch.load
         checkpoint = torch.load(backbone_cp)
