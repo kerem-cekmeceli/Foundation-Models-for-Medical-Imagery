@@ -45,13 +45,13 @@ log_the_run = True
 
 # Set the BB
 train_backbone = False
-backbone_sz = "large" # in ("small", "base", "large" or "giant")
+backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -186,7 +186,8 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         bilinear=False,
                         conv_per_up_blk=2,
                         res_con=True,
-                        res_con_interv=1
+                        res_con_interv=None, # Largest possible
+                        skip_first_res_con=True,
                         )
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),

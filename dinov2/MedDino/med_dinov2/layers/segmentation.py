@@ -305,10 +305,12 @@ class NConv(nn.Module):
                  mid_channels:Optional[int]=None,
                  res_con:bool=False, 
                  res_con_interv:Optional[int]=None,
+                 skip_first_res_con:bool=False,
                  nb_convs:int=3,
                  batch_norm:Union[bool, Sequence[bool]]=True,
                  non_linearity:Union[str, nn.Module]='ReLU',
-                 padding:Union[str, int, Sequence[str], Sequence[int]]='same') -> None:
+                 padding:Union[str, int, Sequence[str], Sequence[int]]='same',
+                 ) -> None:
         super().__init__()
         assert nb_convs>0
         self.nb_convs = nb_convs
@@ -318,14 +320,15 @@ class NConv(nn.Module):
             
         # Residual connections    
         self.res_con=res_con
-        self.do_res_con_first = in_channels == mid_channels
+        self.do_res_con_first = (in_channels == mid_channels) and not skip_first_res_con
+        self.skipped_res_cons_from_beg = 0 if self.do_res_con_first else 1
         self.do_res_con_last = mid_channels == out_channels
         
         if self.res_con:
             if res_con_interv is None:
                 res_con_interv = nb_convs
                 res_con_interv = res_con_interv if self.do_res_con_first else res_con_interv-1
-                assert res_con_interv > 0, "When in_channles != mid_channles first res con can't be made need 1 more conv blk"
+                assert res_con_interv > 0, "First res con is skipped, need 1 more conv blk"
                 res_con_interv = res_con_interv if self.do_res_con_last else res_con_interv-1
                 assert res_con_interv > 0, "When mid_channles != out_channels last res con can't be made need 1 more conv blk"
                 
@@ -382,11 +385,15 @@ class NConv(nn.Module):
         return attr
     
     
-    def fwd_no_res_con_first(self, x):
-        # Forward conv blk
-        x = blk(x)
+    def forward(self, x):        
+        # Fwd Blocks without residual connections
+        for blk in self.conv_blks[:self.skipped_res_cons_from_beg]:
+            # Forward conv blk
+            x = blk(x)
         
-        for i, blk in enumerate(self.conv_blks[1:]):
+        # Fwd Blocks with residual connections
+        blks_res = self.conv_blks[self.skipped_res_cons_from_beg:]
+        for i, blk in enumerate(blks_res):
             if self.res_con:
                 if i%self.res_con_interv==0:
                     x_residual = x
@@ -396,31 +403,9 @@ class NConv(nn.Module):
             
             if self.res_con:
                 if (i+1)%self.res_con_interv == 0:
-                    if i<len(self.conv_blks)-1 or self.do_res_con_last:
+                    if i<len(blks_res)-1 or self.do_res_con_last:
                         x = x + x_residual     
         return x
-    
-    def fwd_with_res_con_first(self, x):
-        for i, blk in enumerate(self.conv_blks):
-            if self.res_con:
-                if i%self.res_con_interv==0:
-                    x_residual = x
-                    
-            # Forward conv blk
-            x = blk(x)
-            
-            if self.res_con:
-                if (i+1)%self.res_con_interv == 0:
-                    if i<len(self.conv_blks)-1 or self.do_res_con_last:
-                        x = x + x_residual     
-        return x
-    
-    
-    def forward(self, x):
-        if self.do_res_con_first:
-            return self.fwd_with_res_con_first(x)
-        else:
-            return self.fwd_no_res_con_first(x)
         
             
 class Up(nn.Module):
@@ -432,6 +417,7 @@ class Up(nn.Module):
                  bilinear=False, 
                  res_con=True,
                  res_con_interv=1,
+                 skip_first_res_con=False,
                  fact=2, 
                  nb_convs=2,
                  kernel_size=3,
@@ -462,7 +448,8 @@ class Up(nn.Module):
                                 batch_norm=batch_norm,
                                 non_linearity=non_linearity,
                                 res_con=res_con,
-                                res_con_interv=res_con_interv)
+                                res_con_interv=res_con_interv,
+                                skip_first_res_con=skip_first_res_con)
         
     def forward(self, x):
         return self.conv_xn(self.up(x))
@@ -481,7 +468,8 @@ class ResNetHead(DecBase):
                  bilinear:Union[bool, Sequence[bool]]=True,
                  conv_per_up_blk:Union[int,Sequence[int]]=2,
                  res_con:Union[bool,Sequence[bool]]=True,
-                 res_con_interv:Union[int,Sequence[int]]=1) -> None:
+                 res_con_interv:Optional[Union[int,Sequence[int]]]=1,
+                 skip_first_res_con:Union[bool,Sequence[bool]]=False) -> None:
         
         # Number of up layers in the UNet architecture
         assert nb_up_blocks>0
@@ -507,6 +495,10 @@ class ResNetHead(DecBase):
         res_con_interv = self.get_attr_list(res_con_interv, cond=lambda a: True if a is None else a>0)
         self.res_con_interv = res_con_interv
         
+        # If to skip the first residual connection for the conv layers of the Up blocks
+        skip_first_res_con = self.get_attr_list(skip_first_res_con)
+        self.skip_first_res_con = skip_first_res_con
+        
         # Set kernel size to 3
         self.kernel_sz = 3
         
@@ -523,7 +515,8 @@ class ResNetHead(DecBase):
                               nb_convs=conv_per_up_blk[i],
                               kernel_size=self.kernel_sz,
                               res_con=res_con[i],
-                              res_con_interv=res_con_interv[i]))
+                              res_con_interv=res_con_interv[i],
+                              skip_first_res_con=self.skip_first_res_con[i]))
             last_out_ch = last_out_ch // f
             
         self.tot_upsample_fac = tot_upsample_fac
