@@ -262,6 +262,8 @@ class ConvBlk(nn.Module):
                  padding:Union[str, int]=0,
                  batch_norm:bool=True,
                  non_linearity:Union[str, nn.Module]='ReLU',
+                 recurrent:bool=False,
+                 recursion_steps:int=4,
                  **kwargs) -> None:
         super().__init__()
         
@@ -270,8 +272,20 @@ class ConvBlk(nn.Module):
         self.conv = nn.Conv2d(in_channel, out_channel, kernel_size, padding=padding, **kwargs)
         
         self.do_batch_norm = batch_norm
+        
+        self.recurrent = recurrent
+        if self.recurrent:
+            assert recursion_steps>=2
+            self.recursion_steps = recursion_steps
+            
+            assert in_channel == out_channel, f"For RCL in_channel and out_channel can't be different but got {in_channel} and {out_channel}"
+            self.rec_conv = nn.Conv2d(in_channel, out_channel, kernel_size, padding=padding, **kwargs)
+            
         if batch_norm:
-            self.batch_norm = nn.SyncBatchNorm(out_channel)
+            if self.recurrent:
+                self.batch_norm = nn.ModuleList([nn.SyncBatchNorm(out_channel) for i in range(recursion_steps)])
+            else:
+                self.batch_norm = nn.SyncBatchNorm(out_channel)
         
         if isinstance(non_linearity, str):
             if non_linearity == 'ReLU':
@@ -287,16 +301,40 @@ class ConvBlk(nn.Module):
         else:
             self.nonlin = non_linearity
             
-    def forward(self, x):
-        x = self.conv(x)
+            
+    def forward_recurrent(self, x):
+        rec_x = x
+        rec_out = self.rec_conv(rec_x)
         
-        x = self.nonlin(x)
+        for i in range(self.recursion_steps):
+            if i==0:
+                z = self.conv(x)
+            else:
+                z = self.conv(x) + rec_out
+            
+            x = self.nonlin(z)
+            x = self.batch_norm[i](x)
+            
+        return x
+        
+    
+    def forward_ff(self, x):
+        x = self.conv(x)
         
         if self.do_batch_norm:
             x = self.batch_norm(x)
             
+        x = self.nonlin(x)
         
         return x
+        
+            
+    def forward(self, x):
+        if self.recurrent:
+            y = self.forward_recurrent(x)
+        else:
+            y = self.forward_ff(x)
+        return y
       
 
 class NConv(nn.Module):
@@ -312,6 +350,8 @@ class NConv(nn.Module):
                  batch_norm:Union[bool, Sequence[bool]]=True,
                  non_linearity:Union[str, nn.Module]='ReLU',
                  padding:Union[str, int, Sequence[str], Sequence[int]]='same',
+                 recurrent:bool=False,
+                 recursion_steps:int=4,
                  ) -> None:
         super().__init__()
         assert nb_convs>0
@@ -359,7 +399,11 @@ class NConv(nn.Module):
         conv_blk_list = [ConvBlk(in_channel=in_channels,
                                  out_channel=mid_channels,
                                  kernel_size=kernel_sz[0],
-                                 padding=padding[0])]
+                                 batch_norm=batch_norm[0],
+                                 non_linearity=non_linearity[0],
+                                 padding=padding[0],
+                                 recurrent=recurrent and in_channels==mid_channels,
+                                 recursion_steps=recursion_steps)]
         if nb_convs>2:
             for i in range(1, nb_convs-1):
                 conv_blk_list.append(ConvBlk(in_channel=mid_channels,
@@ -367,14 +411,18 @@ class NConv(nn.Module):
                                              kernel_size=kernel_sz[i],
                                              batch_norm=batch_norm[i],
                                              non_linearity=non_linearity[i],
-                                             padding=padding[i]))
+                                             padding=padding[i],
+                                             recurrent=recurrent,
+                                             recursion_steps=recursion_steps))
                 
         conv_blk_list.append(ConvBlk(in_channel=mid_channels,
                                     out_channel=out_channels,
                                     kernel_size=kernel_sz[-1],
                                     batch_norm=batch_norm[-1],
                                     non_linearity=non_linearity[-1],
-                                    padding=padding[-1]))
+                                    padding=padding[-1],
+                                    recurrent=recurrent and mid_channels==out_channels,
+                                    recursion_steps=recursion_steps))
         
         self.conv_blks = nn.ModuleList(conv_blk_list)
         
@@ -424,7 +472,9 @@ class Up(nn.Module):
                  nb_convs=2,
                  kernel_size=3,
                  batch_norm=True,
-                 non_linearity='ReLU'):
+                 non_linearity='ReLU',
+                 recurrent:bool=False,
+                 recursion_steps:int=4,):
         super().__init__()
         assert fact>1 and isinstance(fact, int)
         assert nb_convs > 1
@@ -451,7 +501,9 @@ class Up(nn.Module):
                                 non_linearity=non_linearity,
                                 res_con=res_con,
                                 res_con_interv=res_con_interv,
-                                skip_first_res_con=skip_first_res_con)
+                                skip_first_res_con=skip_first_res_con,
+                                recurrent=recurrent,
+                                recursion_steps=recursion_steps)
         
     def forward(self, x):
         return self.conv_xn(self.up(x))
@@ -471,7 +523,9 @@ class ResNetHead(DecBase):
                  conv_per_up_blk:Union[int,Sequence[int]]=2,
                  res_con:Union[bool,Sequence[bool]]=True,
                  res_con_interv:Optional[Union[int,Sequence[int]]]=1,
-                 skip_first_res_con:Union[bool,Sequence[bool]]=False) -> None:
+                 skip_first_res_con:Union[bool,Sequence[bool]]=False,
+                 recurrent:Union[bool,Sequence[bool]]=False,
+                 recursion_steps:Union[int,Sequence[int]]=4,) -> None:
         
         # Number of up layers in the UNet architecture
         assert nb_up_blocks>0
@@ -501,6 +555,14 @@ class ResNetHead(DecBase):
         skip_first_res_con = self.get_attr_list(skip_first_res_con)
         self.skip_first_res_con = skip_first_res_con
         
+        # If to use recursive conv blocks
+        recurrent = self.get_attr_list(recurrent)
+        self.recurrent = recurrent
+        
+        # If recursive conv blocks are used how many recursion steps
+        recursion_steps = self.get_attr_list(recursion_steps)
+        self.recursion_steps = recursion_steps
+        
         # Set kernel size to 3
         self.kernel_sz = 3
         
@@ -518,7 +580,9 @@ class ResNetHead(DecBase):
                               kernel_size=self.kernel_sz,
                               res_con=res_con[i],
                               res_con_interv=res_con_interv[i],
-                              skip_first_res_con=self.skip_first_res_con[i]))
+                              skip_first_res_con=self.skip_first_res_con[i],
+                              recurrent=self.recurrent[i],
+                              recursion_steps=self.recursion_steps[i]))
             last_out_ch = last_out_ch // f
             
         self.tot_upsample_fac = tot_upsample_fac

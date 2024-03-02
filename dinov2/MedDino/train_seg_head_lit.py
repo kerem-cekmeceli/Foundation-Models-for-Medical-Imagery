@@ -39,9 +39,9 @@ import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Set the BB
 train_backbone = False
@@ -61,7 +61,7 @@ nb_epochs = 100
 warmup_iters = 20
 
 # Config the batch size and lr for training
-batch_sz = 16
+batch_sz = 8
 lr = 0.5e-4
 
 # Test checkpoint
@@ -187,8 +187,9 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         conv_per_up_blk=2,
                         res_con=True,
                         res_con_interv=None, # Largest possible
-                        skip_first_res_con=True,
-                        )
+                        skip_first_res_con=False,
+                        recurrent=True,
+                        recursion_steps=2)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
