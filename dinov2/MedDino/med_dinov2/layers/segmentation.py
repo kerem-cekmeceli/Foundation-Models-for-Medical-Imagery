@@ -290,10 +290,12 @@ class ConvBlk(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         
+        x = self.nonlin(x)
+        
         if self.do_batch_norm:
             x = self.batch_norm(x)
             
-        x = self.nonlin(x)
+        
         return x
       
 
