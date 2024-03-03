@@ -61,7 +61,7 @@ nb_epochs = 100
 warmup_iters = 20
 
 # Config the batch size and lr for training
-batch_sz = 6
+batch_sz = 4  # [4, 8, 16, ...]
 lr = 0.5e-4
 
 # Test checkpoint
@@ -301,11 +301,17 @@ assert seg_log_per_batch<=batch_sz
 first_n_batch_to_seg_log = math.ceil(SLICE_PER_PATIENT/batch_sz*seg_res_nb_patient)
 
 sp = seg_log_per_batch+1
+multp = batch_sz//sp
 # maximal separation from each other and from edges (from edges is prioritized)
-log_idxs = torch.arange(batch_sz//sp, 
-                        batch_sz//sp*sp, 
-                        batch_sz//sp)
-log_idxs = log_idxs + (batch_sz%sp)//2
+if multp>0:
+    log_idxs = torch.arange(multp, 
+                            multp*sp, 
+                            multp)
+    log_idxs = log_idxs + (batch_sz%sp)//2
+else:
+    log_idxs = torch.arange(0, 
+                            batch_sz, 
+                            1)
 log_idxs = log_idxs.tolist()
 
 # Init the segmentor model
