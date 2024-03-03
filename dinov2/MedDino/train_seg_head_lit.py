@@ -44,7 +44,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = False
+train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -185,7 +185,7 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         upsample_facs=2,
                         bilinear=False,
                         conv_per_up_blk=2,
-                        res_con=False,
+                        res_con=True,
                         res_con_interv=None, # None = Largest possible (better)
                         skip_first_res_con=True, # Skipping is better
                         recurrent=True,
