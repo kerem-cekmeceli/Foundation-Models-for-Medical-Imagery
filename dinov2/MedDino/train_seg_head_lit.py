@@ -187,7 +187,7 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         conv_per_up_blk=2,
                         res_con=True,
                         res_con_interv=None, # Largest possible
-                        skip_first_res_con=False,
+                        skip_first_res_con=True,
                         recurrent=True,
                         recursion_steps=2)
 
