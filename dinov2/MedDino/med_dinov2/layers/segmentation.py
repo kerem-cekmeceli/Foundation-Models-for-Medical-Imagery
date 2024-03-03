@@ -317,15 +317,15 @@ class ConvBlk(nn.Module):
             
         return x
         
-    
+    # BN after ReLU gives better performance
     def forward_ff(self, x):
         x = self.conv(x)
+        
+        x = self.nonlin(x)
         
         if self.do_batch_norm:
             x = self.batch_norm(x)
             
-        x = self.nonlin(x)
-        
         return x
         
             
