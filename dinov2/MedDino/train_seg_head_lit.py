@@ -61,7 +61,7 @@ nb_epochs = 100
 warmup_iters = 20
 
 # Config the batch size and lr for training
-batch_sz = 4
+batch_sz = 2
 lr = 0.5e-4
 
 # Test checkpoint
