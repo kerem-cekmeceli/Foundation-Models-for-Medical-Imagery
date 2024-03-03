@@ -57,7 +57,7 @@ dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 100
+nb_epochs = 75
 warmup_iters = 20
 
 # Config the batch size and lr for training
