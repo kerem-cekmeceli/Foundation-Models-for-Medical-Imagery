@@ -458,7 +458,7 @@ class NConv(nn.Module):
         return x
         
             
-class Up(nn.Module):
+class UpRes(nn.Module):
     """Upscaling by f, channel depth reduction by f then n times conv"""
 
     def __init__(self, 
@@ -490,7 +490,8 @@ class Up(nn.Module):
         if bilinear:
             self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact)
+            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),
+                                    nn.ReLU())
             
         self.conv_xn = NConv(in_channels = in_channels if bilinear else in_channels//fact,
                                 out_channels=out_channels,
@@ -572,7 +573,7 @@ class ResNetHead(DecBase):
         for i in range(nb_up_blocks):
             f = upsample_facs[i]
             tot_upsample_fac = tot_upsample_fac*f
-            modules.append(Up(in_channels=last_out_ch, 
+            modules.append(UpRes(in_channels=last_out_ch, 
                               out_channels=last_out_ch//f, 
                               bilinear=bilinear[i], 
                               fact=f, 

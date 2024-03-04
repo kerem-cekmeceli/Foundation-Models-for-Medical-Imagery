@@ -61,7 +61,7 @@ nb_epochs = 100
 warmup_iters = 20
 
 # Config the batch size and lr for training
-batch_sz = 4  # [4, 8, 16, ...]
+batch_sz = 8  # [4, 8, 16, ...]
 lr = 0.5e-4
 
 # Test checkpoint
@@ -189,7 +189,7 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         res_con_interv=None, # None = Largest possible (better)
                         skip_first_res_con=False, 
                         recurrent=True,
-                        recursion_steps=6)
+                        recursion_steps=2)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
