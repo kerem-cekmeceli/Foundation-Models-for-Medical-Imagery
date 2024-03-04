@@ -202,12 +202,13 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         nb_up_blocks=4,
                         upsample_facs=2,
                         bilinear=False,
-                        conv_per_up_blk=8,
+                        conv_per_up_blk=5, # 8
                         res_con=True,
                         res_con_interv=None, # None = Largest possible (better)
                         skip_first_res_con=False, 
                         recurrent=True,
-                        recursion_steps=3)
+                        recursion_steps=2, # 3
+                        resnet_cat_inp_upscaling=True)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from mmseg.ops import resize
 from typing import Sequence, Union, Optional
 from torch import functional as F
+import math
 
 
 class DecBase(nn.Module, ABC):
@@ -526,7 +527,8 @@ class UpUNet(nn.Module):
                  batch_norm=True,
                  non_linearity='ReLU',
                  recurrent:bool=False,
-                 recursion_steps:int=4,):
+                 recursion_steps:int=4,
+                 resnet_cat_inp_upscaling:bool=True):
         super().__init__()
         assert fact>1 and isinstance(fact, int)
         assert fact_cat_inp>1 and isinstance(fact, int)
@@ -545,12 +547,36 @@ class UpUNet(nn.Module):
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
             self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
-            self.up_cat = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+            if not resnet_cat_inp_upscaling:
+                self.up_cat = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
         else:
             self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),)
                                     #nn.ReLU())
-            self.up_cat = nn.Sequential(nn.ConvTranspose2d(in_channels_cat , in_channels // fact, kernel_size=fact_cat_inp, stride=fact_cat_inp),)
-                                    #nn.ReLU())
+            if not resnet_cat_inp_upscaling:
+                self.up_cat = nn.Sequential(nn.ConvTranspose2d(in_channels_cat , in_channels // fact, kernel_size=fact_cat_inp, stride=fact_cat_inp),)
+                                        #nn.ReLU())
+        if resnet_cat_inp_upscaling:
+            nb_ups = math.log(fact_cat_inp) / math.log(fact)
+            assert nb_ups == int(nb_ups)
+            nb_ups = int(nb_ups)
+            
+            inp_ups = [UpRes(in_channels=in_channels_cat // (fact**i), 
+                            out_channels=in_channels_cat // fact // (fact**i), 
+                            bilinear=bilinear, 
+                            res_con=res_con,
+                            res_con_interv=res_con_interv,
+                            skip_first_res_con=skip_first_res_con,
+                            fact=fact, 
+                            nb_convs=nb_convs,
+                            kernel_size=kernel_size,
+                            batch_norm=kernel_size,
+                            non_linearity=non_linearity,
+                            recurrent=recurrent,
+                            recursion_steps=recursion_steps,) for i in range(nb_ups)]
+            
+            assert in_channels_cat // fact // (fact**(nb_ups - 1)) == in_channels // fact
+            self.up_cat = nn.Sequential(*inp_ups)
+       
             
         self.conv_xn = NConv(in_channels = 2*in_channels if bilinear else 2*in_channels//fact,
                                 out_channels=out_channels,
@@ -760,10 +786,13 @@ class UNetHead(UpNetHeadBase):
                  skip_first_res_con:Union[bool,Sequence[bool]]=False,
                  recurrent:Union[bool,Sequence[bool]]=False,
                  recursion_steps:Union[int,Sequence[int]]=4,
+                 resnet_cat_inp_upscaling:Union[bool,Sequence[bool]]=True,
                  ) -> None:
         
         for in_ch in in_channels[1:]:
             assert in_ch == in_channels[0], "All inputs must have the same nb of channels"
+            
+        self.resnet_cat_inp_upscaling = [resnet_cat_inp_upscaling]*nb_up_blocks
         
         super().__init__(in_channels,
                          num_classses, 
@@ -815,7 +844,8 @@ class UNetHead(UpNetHeadBase):
                                   res_con_interv=self.res_con_interv[i],
                                   skip_first_res_con=self.skip_first_res_con[i],
                                   recurrent=self.recurrent[i],
-                                  recursion_steps=self.recursion_steps[i]))
+                                  recursion_steps=self.recursion_steps[i],
+                                  resnet_cat_inp_upscaling=self.resnet_cat_inp_upscaling[i]))
             last_out_ch = last_out_ch // f
             
         self.tot_upsample_fac = tot_upsample_fac
