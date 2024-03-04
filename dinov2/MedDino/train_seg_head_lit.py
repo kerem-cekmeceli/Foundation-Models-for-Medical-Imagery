@@ -44,7 +44,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -123,7 +123,7 @@ else:
 
 
 # Decoder config
-n_concat = 4
+n_concat = 4 if dec_head_key != 'unet' else 5
 # Linear classification of each patch + upsampling to pixel dim
 dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat, 
                              num_classses=num_classses,

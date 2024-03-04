@@ -825,10 +825,10 @@ class UNetHead(UpNetHeadBase):
         
     def compute_feats(self, x):
         x_up = self.unet_init_conv(x[0])
-        x_up = self.ups[0](x_up, x[0])
+        x_up = self.ups[0](x_up, x[1])
         
-        offset = 1
-        for i, up in enumerate(self.ups[offset:]):
+        offset = 2
+        for i, up in enumerate(self.ups[1:]):
             x_up = up(x_up, x[i+offset])
         return x_up
     
