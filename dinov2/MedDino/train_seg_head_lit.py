@@ -44,14 +44,14 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -174,7 +174,7 @@ dec_head_cfg_da = dict(pam_channels=embed_dim,
                        init_cfg=dict(
                            type='Normal', std=0.01, override=dict(name='conv_seg')))
 
-# https://arxiv.org/abs/1505.04597 (unet papaer)
+# ResNet-like with recurrent convs
 dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         num_classses=num_classses,
                         # in_index=None,
@@ -191,12 +191,29 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         recurrent=True,
                         recursion_steps=2)
 
+# https://arxiv.org/abs/1505.04597 (unet papaer)
+dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
+                        num_classses=num_classses,
+                        # in_index=None,
+                        # in_resize_factors=None,
+                        # align_corners=False,
+                        dropout_rat_cls_seg=0.1,
+                        nb_up_blocks=4,
+                        upsample_facs=2,
+                        bilinear=False,
+                        conv_per_up_blk=8,
+                        res_con=True,
+                        res_con_interv=None, # None = Largest possible (better)
+                        skip_first_res_con=False, 
+                        recurrent=True,
+                        recursion_steps=3)
+
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
                  psp=dict(name='PSPHead', params=dec_head_cfg_psp),
                  da=dict(name='DAHead', params=dec_head_cfg_da),
                  resnet=dict(name='ResNetHead', params=dec_head_cfg_resnet),
-                 )
+                 unet=dict(name='UNetHead', params=dec_head_cfg_unet))
 
 # Choose the decode head config
 assert dec_head_key in decs_dict.keys()

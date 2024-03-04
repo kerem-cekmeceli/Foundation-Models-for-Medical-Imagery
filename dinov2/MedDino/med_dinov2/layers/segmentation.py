@@ -490,8 +490,8 @@ class UpRes(nn.Module):
         if bilinear:
             self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),
-                                    nn.ReLU())
+            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),)
+                                    #nn.ReLU())
             
         self.conv_xn = NConv(in_channels = in_channels if bilinear else in_channels//fact,
                                 out_channels=out_channels,
@@ -509,8 +509,75 @@ class UpRes(nn.Module):
     def forward(self, x):
         return self.conv_xn(self.up(x))
     
+
+class UpUNet(nn.Module):
+    def __init__(self, 
+                 in_channels, 
+                 in_channels_cat,
+                 out_channels, 
+                 bilinear=False, 
+                 res_con=True,
+                 res_con_interv=1,
+                 skip_first_res_con=False,
+                 fact=2, 
+                 fact_cat_inp=2,
+                 nb_convs=2,
+                 kernel_size=3,
+                 batch_norm=True,
+                 non_linearity='ReLU',
+                 recurrent:bool=False,
+                 recursion_steps:int=4,):
+        super().__init__()
+        assert fact>1 and isinstance(fact, int)
+        assert fact_cat_inp>1 and isinstance(fact, int)
+        assert nb_convs > 1
+        
+        self.fact=fact
+        self.fact_cat_inp=fact_cat_inp
+        
+        assert in_channels // fact_cat_inp >= 1
+        
+        # If to use residual connections 
+        self.res_con=res_con
+        if res_con:
+            self.res_con_interv = res_con_interv
+
+        # if bilinear, use the normal convolutions to reduce the number of channels
+        if bilinear:
+            self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+            self.up_cat = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+        else:
+            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),)
+                                    #nn.ReLU())
+            self.up_cat = nn.Sequential(nn.ConvTranspose2d(in_channels_cat , in_channels // fact, kernel_size=fact_cat_inp, stride=fact_cat_inp),)
+                                    #nn.ReLU())
+            
+        self.conv_xn = NConv(in_channels = 2*in_channels if bilinear else 2*in_channels//fact,
+                                out_channels=out_channels,
+                                mid_channels=in_channels//fact,
+                                kernel_sz=kernel_size,
+                                nb_convs=nb_convs,
+                                batch_norm=batch_norm,
+                                non_linearity=non_linearity,
+                                res_con=res_con,
+                                res_con_interv=res_con_interv,
+                                skip_first_res_con=skip_first_res_con,
+                                recurrent=recurrent,
+                                recursion_steps=recursion_steps)
+        
+    def forward(self, x, x_cat):
+        # Do the transposed convs
+        y_cat = self.up_cat(x_cat)
+        _y = self.up(x)
+        assert _y.shape == y_cat.shape
+        
+        # Cat the inputs
+        _x = torch.cat([y_cat, _y], dim=1)
+        
+        # Perform the convolutions
+        return self.conv_xn(_x)
     
-class ResNetHead(DecBase):
+class UpNetHeadBase(DecBase):
     def __init__(self, 
                  in_channels: Union[int,Sequence[int]],
                  num_classses: int, 
@@ -526,7 +593,8 @@ class ResNetHead(DecBase):
                  res_con_interv:Optional[Union[int,Sequence[int]]]=1,
                  skip_first_res_con:Union[bool,Sequence[bool]]=False,
                  recurrent:Union[bool,Sequence[bool]]=False,
-                 recursion_steps:Union[int,Sequence[int]]=4,) -> None:
+                 recursion_steps:Union[int,Sequence[int]]=4,
+                 inp_transform:str='resize_concat') -> None:
         
         # Number of up layers in the UNet architecture
         assert nb_up_blocks>0
@@ -538,7 +606,7 @@ class ResNetHead(DecBase):
         
         # If to use bilinear interp or transposed conv for each Up layer
         bilinear = self.get_attr_list(bilinear)
-        self.bilinear = bilinear
+        self.bilinear_ups = bilinear
         
         # Number of convloutional blocks per each up layer
         conv_per_up_blk = self.get_attr_list(conv_per_up_blk, cond=lambda a: a>0)
@@ -567,42 +635,30 @@ class ResNetHead(DecBase):
         # Set kernel size to 3
         self.kernel_sz = 3
         
-        tot_upsample_fac = 1
-        modules = []
-        last_out_ch = sum(in_channels) if isinstance(in_channels, list) else in_channels
-        for i in range(nb_up_blocks):
-            f = upsample_facs[i]
-            tot_upsample_fac = tot_upsample_fac*f
-            modules.append(UpRes(in_channels=last_out_ch, 
-                              out_channels=last_out_ch//f, 
-                              bilinear=bilinear[i], 
-                              fact=f, 
-                              nb_convs=conv_per_up_blk[i],
-                              kernel_size=self.kernel_sz,
-                              res_con=res_con[i],
-                              res_con_interv=res_con_interv[i],
-                              skip_first_res_con=self.skip_first_res_con[i],
-                              recurrent=self.recurrent[i],
-                              recursion_steps=self.recursion_steps[i]))
-            last_out_ch = last_out_ch // f
-            
-        self.tot_upsample_fac = tot_upsample_fac
-        self.last_out_ch = last_out_ch 
+        ups = self._init_up_layers(in_channels=in_channels)
         assert self.last_out_ch >= num_classses, \
             f"Too many ch size reduction, input to seg_cls: {self.last_out_ch}, but num class: {num_classses} "
         
         super().__init__(in_channels=in_channels,
-                         cls_in_channels=self.last_out_ch,
+                         cls_in_channels=self.last_out_ch,  # Assigned in "_init_up_layers"
                          num_classses=num_classses, 
                          in_index=in_index,
-                         input_transform='resize_concat',
+                         input_transform=inp_transform,
                          in_resize_factors=in_resize_factors,
                          align_corners=align_corners,
                          dropout_rat=dropout_rat_cls_seg,
                          out_upsample_fac=None,  # Not used
                          bilinear=True)  # Not used
         
-        self.ups = nn.ModuleList(modules)
+        self.ups = ups
+    
+    @abstractmethod            
+    def _init_up_layers(self, in_channels, *args, **kwargs):
+        """
+            Assign the following fields: self.tot_upsample_fac:int, self.last_out_ch:int 
+            Returns ups:nn.ModuleList
+        """
+        pass
         
     def get_attr_list(self, attr, cond=None):
         if isinstance(attr, list):
@@ -615,6 +671,71 @@ class ResNetHead(DecBase):
                 assert cond(a)
         return attr
     
+    @abstractmethod
+    def compute_feats(self, x):
+        pass
+    
+class ResNetHead(UpNetHeadBase):
+    def __init__(self, 
+                 in_channels: Union[int,Sequence[int]],
+                 num_classses: int, 
+                 in_index: Optional[Union[int,Sequence[int]]]=None,
+                 in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
+                 align_corners: bool=False,
+                 dropout_rat_cls_seg:float=0.,
+                 nb_up_blocks:int=2,
+                 upsample_facs: Union[int, Sequence[int]]=2,
+                 bilinear:Union[bool, Sequence[bool]]=True,
+                 conv_per_up_blk:Union[int,Sequence[int]]=2,
+                 res_con:Union[bool,Sequence[bool]]=True,
+                 res_con_interv:Optional[Union[int,Sequence[int]]]=1,
+                 skip_first_res_con:Union[bool,Sequence[bool]]=False,
+                 recurrent:Union[bool,Sequence[bool]]=False,
+                 recursion_steps:Union[int,Sequence[int]]=4,
+                 ) -> None:
+        
+        super().__init__(in_channels,
+                         num_classses, 
+                         in_index,
+                         in_resize_factors,
+                         align_corners,
+                         dropout_rat_cls_seg,
+                         nb_up_blocks,
+                         upsample_facs,
+                         bilinear,
+                         conv_per_up_blk,
+                         res_con,
+                         res_con_interv,
+                         skip_first_res_con,
+                         recurrent,
+                         recursion_steps,
+                         inp_transform='resize_concat')
+                
+    def _init_up_layers(self, in_channels, *args, **kwargs)->nn.ModuleList:
+        tot_upsample_fac = 1
+        modules = []
+        last_out_ch = sum(in_channels) if isinstance(in_channels, list) else in_channels
+        for i in range(self.nb_up_blocks):
+            f = self.upsample_facs[i]
+            tot_upsample_fac = tot_upsample_fac*f
+            modules.append(UpRes(in_channels=last_out_ch, 
+                              out_channels=last_out_ch//f, 
+                              bilinear=self.bilinear_ups[i], 
+                              fact=f, 
+                              nb_convs=self.conv_per_up_blk[i],
+                              kernel_size=self.kernel_sz,
+                              res_con=self.res_con[i],
+                              res_con_interv=self.res_con_interv[i],
+                              skip_first_res_con=self.skip_first_res_con[i],
+                              recurrent=self.recurrent[i],
+                              recursion_steps=self.recursion_steps[i]))
+            last_out_ch = last_out_ch // f
+            
+        self.tot_upsample_fac = tot_upsample_fac
+        self.last_out_ch = last_out_ch 
+        return nn.ModuleList(modules)
+        
+        
     def compute_feats(self, x):
         for i, up in enumerate(self.ups):
             x = up(x)
@@ -622,30 +743,95 @@ class ResNetHead(DecBase):
     
     
     
-# class UNetHead(DecBase):
-#     def __init__(self, 
-#                  in_channels: int | Sequence[int], 
-#                  num_classses: int, 
-#                  cls_in_channels: int | None = None, 
-#                  in_index: int | Sequence[int] | None = None, 
-#                  input_transform: str | None = None, 
-#                  in_resize_factors: int | Sequence[int] | None = None, 
-#                  align_corners: bool = False, 
-#                  dropout_rat: float = 0, 
-#                  out_upsample_fac: int | None = None, 
-#                  bilinear: bool = True) -> None:
+class UNetHead(UpNetHeadBase):
+    def __init__(self, 
+                 in_channels: Sequence[int],
+                 num_classses: int, 
+                 in_index: Optional[Union[int,Sequence[int]]]=None,
+                 in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
+                 align_corners: bool=False,
+                 dropout_rat_cls_seg:float=0.,
+                 nb_up_blocks:int=2,
+                 upsample_facs: Union[int, Sequence[int]]=2,
+                 bilinear:Union[bool, Sequence[bool]]=True,
+                 conv_per_up_blk:Union[int,Sequence[int]]=2,
+                 res_con:Union[bool,Sequence[bool]]=True,
+                 res_con_interv:Optional[Union[int,Sequence[int]]]=1,
+                 skip_first_res_con:Union[bool,Sequence[bool]]=False,
+                 recurrent:Union[bool,Sequence[bool]]=False,
+                 recursion_steps:Union[int,Sequence[int]]=4,
+                 ) -> None:
         
-#         super().__init__(in_channels, 
-#                          num_classses, 
-#                          cls_in_channels, 
-#                          in_index, 
-#                          input_transform, 
-#                          in_resize_factors, 
-#                          align_corners, 
-#                          dropout_rat, 
-#                          out_upsample_fac, 
-#                          bilinear)
+        for in_ch in in_channels[1:]:
+            assert in_ch == in_channels[0], "All inputs must have the same nb of channels"
+        
+        super().__init__(in_channels,
+                         num_classses, 
+                         in_index,
+                         in_resize_factors,
+                         align_corners,
+                         dropout_rat_cls_seg,
+                         nb_up_blocks,
+                         upsample_facs,
+                         bilinear,
+                         conv_per_up_blk,
+                         res_con,
+                         res_con_interv,
+                         skip_first_res_con,
+                         recurrent,
+                         recursion_steps,
+                         inp_transform='multiple_select')
+        
+        self.unet_init_conv = NConv(in_channels = in_channels[0],
+                                    out_channels=in_channels[0],
+                                    mid_channels=in_channels[0],
+                                    kernel_sz=self.kernel_sz,
+                                    nb_convs=self.conv_per_up_blk[0],
+                                    # batch_norm=True,  # default True
+                                    # non_linearity=non_linearity,  # default ReLU
+                                    res_con=res_con,
+                                    res_con_interv=res_con_interv,
+                                    skip_first_res_con=skip_first_res_con,
+                                    recurrent=recurrent,
+                                    recursion_steps=recursion_steps)
+                
+    def _init_up_layers(self, in_channels, *args, **kwargs):
+        tot_upsample_fac = 1
+        last_out_ch = in_channels[0]
+        modules = []
+        
+        for i in range(self.nb_up_blocks):
+            f = self.upsample_facs[i]
+            tot_upsample_fac = tot_upsample_fac*f
+            modules.append(UpUNet(in_channels=last_out_ch, 
+                                  in_channels_cat= in_channels[i],
+                                  out_channels=last_out_ch//f, 
+                                  bilinear=self.bilinear_ups[i], 
+                                  fact=f, 
+                                  fact_cat_inp=f**(i+1),
+                                  nb_convs=self.conv_per_up_blk[i],
+                                  kernel_size=self.kernel_sz,
+                                  res_con=self.res_con[i],
+                                  res_con_interv=self.res_con_interv[i],
+                                  skip_first_res_con=self.skip_first_res_con[i],
+                                  recurrent=self.recurrent[i],
+                                  recursion_steps=self.recursion_steps[i]))
+            last_out_ch = last_out_ch // f
             
+        self.tot_upsample_fac = tot_upsample_fac
+        self.last_out_ch = last_out_ch 
+        return  nn.ModuleList(modules)
+        
+        
+    def compute_feats(self, x):
+        x_up = self.unet_init_conv(x[0])
+        x_up = self.ups[0](x_up, x[0])
+        
+        offset = 1
+        for i, up in enumerate(self.ups[offset:]):
+            x_up = up(x_up, x[i+offset])
+        return x_up
+    
         
         
 
