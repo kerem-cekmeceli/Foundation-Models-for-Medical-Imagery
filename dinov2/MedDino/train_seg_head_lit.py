@@ -44,7 +44,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = False
+train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -68,7 +68,8 @@ lr = 0.5e-4
 test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
 
 # Dataloader workers
-num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
+# num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
+num_workers_dataloader=3
 
 # Set the precision
 precision = 'highest' if cluster_paths else 'high'  # medium
