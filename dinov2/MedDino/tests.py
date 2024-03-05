@@ -320,72 +320,37 @@ from mmseg.apis.inference import LoadImage
                
 # #     return log_epoch
 
-# import h5py
-# filename = "../../DataFoundationModels/hdf5/brain/hcp1/resized/data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5"
-# filename = "../../DataFoundationModels/hdf5/brain/hcp1/original/data_T1_original_depth_256_from_0_to_20.hdf5"
+import h5py
+filename = "../../DataFoundationModels/hdf5/brain/hcp1/resized/data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5"
+filename = "../../DataFoundationModels/hdf5/brain/hcp1/original/data_T1_original_depth_256_from_0_to_20.hdf5"
 
-# with h5py.File(filename, "r") as f:
-#     # Print all root level object names (aka keys) 
-#     # these can be group or dataset names 
-#     print("Keys: %s" % f.keys())
-#     # get first object name/key; may or may NOT be a group
-#     a_group_key = list(f.keys())[0]
+with h5py.File(filename, "r") as f:
+    # Print all root level object names (aka keys) 
+    # these can be group or dataset names 
+    print("Keys: %s" % f.keys())
+    # get first object name/key; may or may NOT be a group
+    a_group_key = list(f.keys())[0]
 
-#     # get the object type for a_group_key: usually group or dataset
-#     print(type(f[a_group_key])) 
+    # get the object type for a_group_key: usually group or dataset
+    print(type(f[a_group_key])) 
 
-#     # If a_group_key is a group name, 
-#     # this gets the object names in the group and returns as a list
-#     data = list(f[a_group_key])
+    # If a_group_key is a group name, 
+    # this gets the object names in the group and returns as a list
+    data = list(f[a_group_key])
 
-#     # If a_group_key is a dataset name, 
-#     # this gets the dataset values and returns as a list
-#     data = list(f[a_group_key])
-#     # preferred methods to get dataset values:
-#     ds_obj = f[a_group_key]      # returns as a h5py dataset object
-#     ds_arr = f[a_group_key][()]  # returns as a numpy array
-#     print()
-
-n_blk = 4
-
-blks = ["blk"]*n_blk
-do_first = True
-do_last = True
-res_con_interv =2
+    # If a_group_key is a dataset name, 
+    # this gets the dataset values and returns as a list
+    data = list(f[a_group_key])
+    # preferred methods to get dataset values:
+    ds_obj = f[a_group_key]      # returns as a h5py dataset object
+    ds_arr = f[a_group_key][()]  # returns as a numpy array
+    print()
 
 
 
 
-def fwd_no_res_con_first():
-    for i, blk in enumerate(blks):
-        print(f'blk{i}')
-        
-        if (i+1)%(res_con_interv+1)==1:
-            print('saved residual')
-            
-        if (i+1)%(res_con_interv+1)==0:
-            print('added residual to oup')
-            
-            
-def fwd_with_res_con_first():
-	for i, blk in enumerate(blks):
-		if i%res_con_interv==0:
-			print('saved residual')
-				
-		# Forward conv blk
-		print(f'blk{i}')
-		
-		if (i+1)%res_con_interv == 0:
-			if i<len(blks)-1 or do_last:
-				print('added residual to oup')    
-	
 
-if not do_first:
-    fwd_no_res_con_first()
-else:
-     fwd_with_res_con_first()
 
-print()
 
 
 
