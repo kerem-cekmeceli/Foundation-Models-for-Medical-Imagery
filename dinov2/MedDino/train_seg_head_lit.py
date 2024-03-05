@@ -49,10 +49,10 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
-hdf5_data = False
+hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -63,7 +63,7 @@ warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
 batch_sz = 8  # [4, 8, 16, ...]
-lr = 1e-4  # 0.5e-4
+lr = 0.5e-4  # 0.5e-4
 weigh_loss_bg = False  # False is better
 
 # Test checkpoint
