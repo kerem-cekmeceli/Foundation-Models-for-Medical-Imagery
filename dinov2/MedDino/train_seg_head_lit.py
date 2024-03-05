@@ -44,27 +44,27 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = False
+train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
-hdf5_data = True
+hdf5_data = False
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
 nb_epochs = 100
-warmup_iters = 20
+warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
 batch_sz = 8  # [4, 8, 16, ...]
-lr = 0.5e-4
-weigh_loss_bg = False
+lr = 1e-4  # 0.5e-4
+weigh_loss_bg = False  # False is better
 
 # Test checkpoint
 test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
@@ -221,7 +221,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         nb_up_blocks=4,
                         upsample_facs=2,
                         bilinear=False,
-                        conv_per_up_blk=5, # 8
+                        conv_per_up_blk=5, # 5
                         res_con=True,
                         res_con_interv=None, # None = Largest possible (better)
                         skip_first_res_con=False, 
