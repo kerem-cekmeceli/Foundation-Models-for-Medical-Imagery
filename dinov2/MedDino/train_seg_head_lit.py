@@ -44,14 +44,14 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -63,6 +63,7 @@ warmup_iters = 20
 # Config the batch size and lr for training
 batch_sz = 8  # [4, 8, 16, ...]
 lr = 0.5e-4
+weigh_loss_bg = True
 
 # Test checkpoint
 test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
@@ -245,9 +246,12 @@ scheduler_cfg = dict(name='SequentialLR',
 # Loss Config
 epsilon = 1  # smoothing factor 
 k=1  # power
+weight = [0.1] + [1.]*(num_classses-1)
+weight = torch.Tensor(weight)
 
 # CE Loss
-loss_cfg_ce = dict(ignore_index=ignore_idx_loss if ignore_idx_loss is not None else -100)
+loss_cfg_ce = dict(ignore_index=ignore_idx_loss if ignore_idx_loss is not None else -100,
+                   weight=weight if weigh_loss_bg else None)
 
 # Dice Loss
 loss_cfg_dice = dict(prob_inputs=False, 
