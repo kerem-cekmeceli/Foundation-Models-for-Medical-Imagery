@@ -44,14 +44,14 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -63,7 +63,7 @@ warmup_iters = 20
 # Config the batch size and lr for training
 batch_sz = 8  # [4, 8, 16, ...]
 lr = 0.5e-4
-weigh_loss_bg = True
+weigh_loss_bg = False
 
 # Test checkpoint
 test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
