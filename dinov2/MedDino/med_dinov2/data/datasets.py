@@ -22,6 +22,7 @@ from pathlib import Path
 from mmseg.datasets.pipelines import Compose
 import mmcv
 from MedDino.med_dinov2.data.transforms import *
+import h5py
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -157,7 +158,86 @@ class SegmentationDataset(Dataset):
     
 
 #################################################################################################
+
+class SegmentationDatasetHDF5(Dataset):
+    def __init__(self, file_pth, num_classes, 
+                 augmentations=None,
+                 dtype=torch.float32,
+                 *args, **kwargs):
+        super(Dataset).__init__(*args, **kwargs)
+        
+        if isinstance(file_pth, Path):
+            file_pth = str(file_pth)
+        
+        self.file_pth = file_pth
+        self.num_classes = num_classes
+        self.dtype = dtype
+        
+        # Put the must have transforms
+        transforms = []
+        transforms.append(lambda data : put_in_res_dict(data[0], data[1]))
+        
+        # Put the optional augmentations
+        if augmentations is not None:
+            transforms.extend(augmentations)
+        
+        # Put the rest of the mandatory transforms
+        # conv the img keys to torch.Tensor with [HWC] -> [CHW]  |  mmseg/datasets/pipelines/transforms  
+        transforms.append(dict(type='ImageToTensor', keys=['img', 'gt_seg_map']))
+        
+        # Remove the dict and keep the tensor
+        transforms.append(rm_from_res_dict)
+        
+        # Compose the transforms
+        self.transforms = Compose(transforms)
+        
+        # Dataset
+        self.dataset = None
+        with h5py.File(self.file_pth, 'r') as f:
+            nb_vol, scan_depth = f['images'].shape[:2]
+            self.nb_vol = nb_vol
+            self.nb_slice_per_vol = scan_depth
+            self.nb_slice_tot = int(nb_vol*scan_depth)
+        
+
+    def __len__(self):
+        return self.nb_slice_tot
     
+    def _get_nb_vol_n_slice_idxs(self, idx):
+        vol_idx = idx//self.nb_slice_per_vol
+        slice_idx = idx%self.nb_slice_per_vol
+        assert vol_idx * self.nb_slice_per_vol + slice_idx == idx
+        
+        return vol_idx, slice_idx 
+
+    def __getitem__(self, idx):
+        
+        if self.dataset is None:
+            self.dataset = h5py.File(self.file_pth, 'r')
+            
+        vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
+        
+        image = self.dataset['images'][vol_idx, slice_idx].copy()
+        mask = self.dataset['labels'][vol_idx, slice_idx].copy().astype('uint8')
+        
+        if image.max()<=1 and image.min()>=0:
+            image = image*255.
+        
+        assert image.max()<=255 and image.min()>=0
+        
+        # Convert grayscale to RGB
+        if len(image.shape)<3:
+            image = np.stack([image, image, image], axis=-1)
+        
+        
+        [image, mask] = self.transforms([image, mask])
+        image = image.to(self.dtype) # C, H, W
+        mask = mask.squeeze(0).to(torch.int64) 
+                    
+        return image, mask
+
+#################################################################################################
+
 def color_map_from_imgs(fld_pth, file_ls,  device='cuda:0'):
     img_colors_all = None
     for img in file_ls:

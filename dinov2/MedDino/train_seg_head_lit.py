@@ -20,7 +20,7 @@ from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, g
 # from MedDino.med_dinov2.models.segmentor import Segmentor
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
-from MedDino.med_dinov2.data.datasets import SegmentationDataset
+from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5
 from torch.utils.data import DataLoader
 # from MedDino.med_dinov2.tools.main_fcts import train, test
 # from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
@@ -49,6 +49,7 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
+hdf5_data = True
 
 # Select the dec head
 dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
@@ -70,7 +71,7 @@ test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
 
 # Dataloader workers
 # num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
-num_workers_dataloader=3
+num_workers_dataloader=4
 
 # Set the precision
 precision = 'highest' if cluster_paths else 'high'  # medium
@@ -87,12 +88,19 @@ patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
 # Dataset parameters
 if dataset=='hcp1':
-    data_path_suffix = 'brain/hcp1'
+    if not hdf5_data:
+        data_path_suffix = 'brain/hcp1'
+    else:
+        data_path_suffix = 'brain/hcp'
     num_classses = 15
     ignore_idx_loss = None
     ignore_idx_metric = 0
+    
 elif dataset=='hcp2':
-    data_path_suffix = 'brain/hcp2'
+    if not hdf5_data:
+        data_path_suffix = 'brain/hcp2'
+    else:
+        data_path_suffix = 'brain/hcp'
     num_classses = 15
     ignore_idx_loss = None
     ignore_idx_metric = 0
@@ -102,22 +110,32 @@ elif dataset=='cardiac_acdc':
     num_classses = 2
     ignore_idx_loss = None
     ignore_idx_metric = 0
+    if hdf5_data:
+        ValueError('HDF5 path is not defined yet')      
+         
 elif dataset=='cardiac_rvsc':
     data_path_suffix = 'cardiac/rvsc'
     num_classses = 2
     ignore_idx_loss = None
     ignore_idx_metric = 0
+    if hdf5_data:
+        ValueError('HDF5 path is not defined yet')
     
 elif dataset=='prostate_nci':
     data_path_suffix = 'prostate/nci'
     num_classses = 3
     ignore_idx_loss = None
     ignore_idx_metric = 0
+    if hdf5_data:
+        ValueError('HDF5 path is not defined yet')
+        
 elif dataset=='prostate_usz':
     data_path_suffix = 'prostate/pirad_erc'
     num_classses = 3
     ignore_idx_loss = None
     ignore_idx_metric = 0
+    if hdf5_data:
+        ValueError('HDF5 path is not defined yet')
     
 else:
     ValueError(f'Dataset: {dataset} is not defined')
@@ -389,34 +407,51 @@ train_augmentations = train_augmentations + augmentations
 # Get the data loader
 if cluster_paths:
     data_root_pth = Path('/usr/bmicnas02/data-biwi-01/foundation_models/da_data') 
-else:            
+
+else:      
     data_root_pth = dino_main_pth.parent.parent / 'DataFoundationModels'
+    if hdf5_data:
+        data_root_pth = data_root_pth / 'hdf5'
     
 data_root_pth = data_root_pth / data_path_suffix
 
-train_fld = 'train-filtered' if 'hcp' in dataset else 'train'
+if not hdf5_data:
+    train_fld = 'train-filtered' if 'hcp' in dataset else 'train'
 
-train_dataset = SegmentationDataset(img_dir=data_root_pth/'images'/train_fld,
-                                    mask_dir=data_root_pth/'labels'/train_fld,
+    train_dataset = SegmentationDataset(img_dir=data_root_pth/'images'/train_fld,
+                                        mask_dir=data_root_pth/'labels'/train_fld,
+                                        num_classes=num_classses,
+                                        file_extension='.png',
+                                        mask_suffix='_labelTrainIds',
+                                        augmentations=train_augmentations,
+                                        )
+    val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
+                                    mask_dir=data_root_pth/'labels/val',
                                     num_classes=num_classses,
                                     file_extension='.png',
                                     mask_suffix='_labelTrainIds',
-                                    augmentations=train_augmentations,
+                                    augmentations=augmentations,
                                     )
-val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
-                                  mask_dir=data_root_pth/'labels/val',
-                                  num_classes=num_classses,
-                                  file_extension='.png',
-                                  mask_suffix='_labelTrainIds',
-                                  augmentations=augmentations,
-                                  )
-test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
-                                   mask_dir=data_root_pth/'labels/test',
-                                   num_classes=num_classses,
-                                   file_extension='.png',
-                                   mask_suffix='_labelTrainIds',
-                                   augmentations=augmentations,
-                                   )
+    test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
+                                    mask_dir=data_root_pth/'labels/test',
+                                    num_classes=num_classses,
+                                    file_extension='.png',
+                                    mask_suffix='_labelTrainIds',
+                                    augmentations=augmentations,
+                                    )
+    
+else:
+    i = 1 if dataset=='hcp1' else 2
+    train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T{i}_original_depth_256_from_0_to_20.hdf5', 
+                                            num_classes=num_classses, 
+                                            augmentations=train_augmentations)
+    val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T1_original_depth_256_from_20_to_25.hdf5', 
+                                            num_classes=num_classses, 
+                                            augmentations=augmentations)
+    test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T1_original_depth_256_from_50_to_70.hdf5', 
+                                            num_classes=num_classses, 
+                                            augmentations=augmentations)
+    
 persistent_workers=True
 pin_memory=True
 drop_last=True
