@@ -44,7 +44,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -52,7 +52,7 @@ dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_u
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -244,7 +244,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
                 params=dict(lr = lr,
-                            weight_decay = 0.5e-4,
+                            weight_decay = 1e-2,   # 0.5e-4
                             betas = (0.9, 0.999)))
 
 # LR scheduler config
