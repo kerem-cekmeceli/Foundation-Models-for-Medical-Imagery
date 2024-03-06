@@ -66,10 +66,8 @@ class Segmentor(nn.Module):
             self.decode_head = decode_head
     
         # Nb inputs from the decode head
-        if isinstance(self.decode_head, BaseDecodeHead):
+        if isinstance(self.decode_head, BaseDecodeHead) or isinstance(self.decode_head, DecBase):
             n_concat = len(self.decode_head.in_index)
-        elif isinstance(self.decode_head, DecBase):
-            n_concat = self.decode_head.nb_inputs
         else:
             raise Exception(f'Unknown decode head type: {type(decode_head)}')
         self.n_concat_bb = n_concat

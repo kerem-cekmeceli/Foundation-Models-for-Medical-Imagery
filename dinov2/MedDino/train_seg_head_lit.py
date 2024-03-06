@@ -52,7 +52,7 @@ dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_u
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -142,7 +142,7 @@ else:
 
 
 # Decoder config
-n_concat = 4 if dec_head_key != 'unet' else 5
+n_concat = 4 if dec_head_key != 'unet' else (5*2)
 # Linear classification of each patch + upsampling to pixel dim
 dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat, 
                              num_classses=num_classses,
@@ -221,13 +221,14 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         nb_up_blocks=4,
                         upsample_facs=2,
                         bilinear=False,
-                        conv_per_up_blk=5, # 5
+                        conv_per_up_blk=2, # 5
                         res_con=True,
                         res_con_interv=None, # None = Largest possible (better)
                         skip_first_res_con=False, 
                         recurrent=True,
                         recursion_steps=2, # 3
-                        resnet_cat_inp_upscaling=True)
+                        resnet_cat_inp_upscaling=True,
+                        input_group_cat_nb=2)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
@@ -244,7 +245,7 @@ dec_head_cfg = decs_dict[dec_head_key]
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
                 params=dict(lr = lr,
-                            weight_decay = 1e-2,   # 0.5e-4
+                            weight_decay = 0.5e-4,   # 0.5e-4  | 1e-2
                             betas = (0.9, 0.999)))
 
 # LR scheduler config

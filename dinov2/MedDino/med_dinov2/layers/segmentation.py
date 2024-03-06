@@ -18,7 +18,9 @@ class DecBase(nn.Module, ABC):
                  align_corners: bool=False,
                  dropout_rat:float=0.,
                  out_upsample_fac:Optional[int]=None,
-                 bilinear:bool=True) -> None:
+                 bilinear:bool=True,
+                 input_group_cat_nb:Optional[int]=None,
+                 resize_for_cat_if_req:bool=False) -> None:
         """_summary_
 
         Args:
@@ -39,8 +41,7 @@ class DecBase(nn.Module, ABC):
             dropout_rat (float, optional): dropout layer for training before cls layer. Defaults to 0..
         """
         super().__init__()
-        
-        self._init_inputs(in_channels, in_index, input_transform, in_resize_factors)
+        self._init_inputs(in_channels, in_index, input_transform, in_resize_factors, input_group_cat_nb, resize_for_cat_if_req)
         
         assert num_classses > 0
         self.num_classes=num_classses
@@ -76,7 +77,7 @@ class DecBase(nn.Module, ABC):
                 self.up = nn.ConvTranspose2d(num_classses , num_classses, kernel_size=out_upsample_fac, stride=out_upsample_fac)
         self.out_upsample_fac = out_upsample_fac
         
-    def _init_inputs(self, in_channels, in_index, input_transform, in_resize_factors):
+    def _init_inputs(self, in_channels, in_index, input_transform, in_resize_factors, input_group_cat_nb, resize_for_cat_if_req):
         """Check and initialize input transforms.
 
         The in_channels, in_index and input_transform must match.
@@ -86,15 +87,9 @@ class DecBase(nn.Module, ABC):
         """
         # Verify input transform
         if input_transform is not None:
-            assert input_transform in ['resize_concat', 'multiple_select']
+            assert input_transform in ['resize_concat', 'multiple_select', 'group_cat']
         self.input_transform = input_transform
-        
-        # Input channel dimensions
-        if isinstance(in_channels, int):
-            in_channels = [in_channels]
-        assert isinstance(in_channels, (list, tuple))
-        self.nb_inputs=len(in_channels)
-        
+            
         # Chosen channel indexes
         if in_index is None:
             in_index = [i for i in range(len(in_channels))]
@@ -104,6 +99,14 @@ class DecBase(nn.Module, ABC):
         assert isinstance(in_index, (list, tuple))
         assert max(in_index) < len(in_channels)
         self.in_index = in_index
+        self.nb_inputs=len(in_index)
+        
+        # Input channel dimensions
+        if isinstance(in_channels, int):
+            in_channels = [in_channels]
+        assert isinstance(in_channels, (list, tuple))
+        assert len(in_channels) == len(self.in_index)
+        in_channels = [in_channels[idx] for idx in self.in_index]
         
         # Input Resize factors
         if in_resize_factors is not None:
@@ -111,11 +114,34 @@ class DecBase(nn.Module, ABC):
                 in_resize_factors = [in_resize_factors]
             assert isinstance(in_resize_factors, (list, tuple))
             assert len(in_resize_factors) == len(in_channels)
+            in_resize_factors = [in_resize_factors[idx] for idx in self.in_index]
         self.in_resize_factors = in_resize_factors
-            
+        
+        # Assign the field
+        if input_transform == 'group_cat' or input_transform == 'group_cat':
+            self.resize_for_cat_if_req = resize_for_cat_if_req 
+        
         # Assign the number of input channels
         if input_transform == 'resize_concat':
             self.in_channels = sum(in_channels)
+            
+        elif self.input_transform == "group_cat":
+            assert input_group_cat_nb is not None, 'need to provide input_group_cat_nb'
+            assert input_group_cat_nb>0
+            assert self.nb_inputs%input_group_cat_nb==0
+            self.nb_inputs = self.nb_inputs//input_group_cat_nb
+            self.input_group_cat_nb=input_group_cat_nb
+            
+            in_channels_ = []
+            for i in range(self.nb_inputs):
+                ch_i = 0
+                for j in range(self.input_group_cat_nb):
+                    ch_i = ch_i + in_channels[j+i*self.input_group_cat_nb]
+                in_channels_.append(ch_i)
+            
+            self.in_channels = in_channels_
+            assert sum(in_channels) == sum(self.in_channels)
+        
         else:
             self.in_channels = in_channels
 
@@ -128,9 +154,6 @@ class DecBase(nn.Module, ABC):
         Returns:
             Tensor: The transformed inputs
         """
-        
-        # Verify the input length
-        assert self.nb_inputs == len(inputs), f'input len:{len(inputs)}, expected: {self.nb_inputs}'
         
         # accept lists (for cls token)
         input_list = []
@@ -160,16 +183,25 @@ class DecBase(nn.Module, ABC):
         
         # Input transform specific
         if self.input_transform == "resize_concat":
-            # Make all inputs the same shape aas the first one
-            upsampled_inputs = [
-                resize(input=x, size=inputs[0].shape[2:], mode="bilinear", align_corners=self.align_corners)
-                for x in inputs
-            ]
+            if self.resize_for_cat_if_req:
+                # Make all inputs the same shape aas the first one
+                upsampled_inputs = [
+                    resize(input=x, size=inputs[0].shape[2:], mode="bilinear", align_corners=self.align_corners)
+                    for x in inputs
+                ]
+            else:
+                upsampled_inputs = inputs
             inputs = torch.cat(upsampled_inputs, dim=1)
-        elif self.input_transform == "multiple_select":
-            inputs = [inputs[i] for i in self.in_index]
+        
+        elif self.input_transform == "group_cat":
+            
+            inputs_ = []
+            for i in range(self.nb_inputs):
+                inputs_.append(torch.cat(inputs[i*self.input_group_cat_nb:(i+1)*self.input_group_cat_nb], dim=1))  
+            inputs = inputs_
+                
         else:
-            inputs = inputs[self.in_index[0]]
+            pass
 
         return inputs
     
@@ -216,7 +248,8 @@ class ConvHeadLinear(DecBase):
                  align_corners: bool=False,
                  dropout_rat:float=0.,
                  out_upsample_fac: Optional[int]=None,
-                 bilinear:bool=True,) -> None:
+                 bilinear:bool=True,
+                 resize_for_cat_if_req:bool=False) -> None:
         super().__init__(in_channels=in_channels,
                          cls_in_channels=None,
                          num_classses=num_classses, 
@@ -226,7 +259,8 @@ class ConvHeadLinear(DecBase):
                          align_corners=align_corners,
                          dropout_rat=dropout_rat,
                          out_upsample_fac=out_upsample_fac,
-                         bilinear=bilinear)
+                         bilinear=bilinear,
+                         resize_for_cat_if_req=resize_for_cat_if_req)
         
         self.batch_norm = nn.SyncBatchNorm(self.in_channels)  
         
@@ -605,7 +639,7 @@ class UpUNet(nn.Module):
     
 class UpNetHeadBase(DecBase):
     def __init__(self, 
-                 in_channels: Union[int,Sequence[int]],
+                 in_channels: Sequence[int],
                  num_classses: int, 
                  in_index: Optional[Union[int,Sequence[int]]]=None,
                  in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
@@ -620,7 +654,9 @@ class UpNetHeadBase(DecBase):
                  skip_first_res_con:Union[bool,Sequence[bool]]=False,
                  recurrent:Union[bool,Sequence[bool]]=False,
                  recursion_steps:Union[int,Sequence[int]]=4,
-                 inp_transform:str='resize_concat') -> None:
+                 inp_transform:str='resize_concat',
+                 input_group_cat_nb:int=1,
+                 resize_for_cat_if_req:bool=False) -> None:
         
         # Number of up layers in the UNet architecture
         assert nb_up_blocks>0
@@ -629,6 +665,33 @@ class UpNetHeadBase(DecBase):
         # Upsampling ratio of each Up layer
         upsample_facs = self.get_attr_list(upsample_facs, cond=lambda a: a>0)
         self.upsample_facs = upsample_facs
+        
+        tot_upsample_fac=1.
+        last_out_ch = sum(in_channels[:input_group_cat_nb])
+        for i in range(self.nb_up_blocks):
+            f = self.upsample_facs[i]
+            tot_upsample_fac = tot_upsample_fac*f
+            last_out_ch = last_out_ch // f
+            
+        self.tot_upsample_fac = tot_upsample_fac
+    
+        assert last_out_ch >= num_classses, \
+            f"Too many ch size reduction, input to seg_cls: {last_out_ch}, but num class: {num_classses} "
+        self.last_out_ch = last_out_ch 
+        
+        super().__init__(in_channels=in_channels,
+                         cls_in_channels=last_out_ch,  # Assigned in "_init_up_layers"
+                         num_classses=num_classses, 
+                         in_index=in_index,
+                         input_transform=inp_transform,
+                         in_resize_factors=in_resize_factors,
+                         align_corners=align_corners,
+                         dropout_rat=dropout_rat_cls_seg,
+                         out_upsample_fac=None,  # Not used
+                         bilinear=True,  # Not used
+                         input_group_cat_nb=input_group_cat_nb,
+                         resize_for_cat_if_req=resize_for_cat_if_req)  
+        
         
         # If to use bilinear interp or transposed conv for each Up layer
         bilinear = self.get_attr_list(bilinear)
@@ -661,28 +724,12 @@ class UpNetHeadBase(DecBase):
         # Set kernel size to 3
         self.kernel_sz = 3
         
-        ups = self._init_up_layers(in_channels=in_channels)
-        assert self.last_out_ch >= num_classses, \
-            f"Too many ch size reduction, input to seg_cls: {self.last_out_ch}, but num class: {num_classses} "
-        
-        super().__init__(in_channels=in_channels,
-                         cls_in_channels=self.last_out_ch,  # Assigned in "_init_up_layers"
-                         num_classses=num_classses, 
-                         in_index=in_index,
-                         input_transform=inp_transform,
-                         in_resize_factors=in_resize_factors,
-                         align_corners=align_corners,
-                         dropout_rat=dropout_rat_cls_seg,
-                         out_upsample_fac=None,  # Not used
-                         bilinear=True)  # Not used
-        
-        self.ups = ups
+        self._init_up_layers()
     
     @abstractmethod            
-    def _init_up_layers(self, in_channels, *args, **kwargs):
+    def _init_up_layers(self):
         """
-            Assign the following fields: self.tot_upsample_fac:int, self.last_out_ch:int 
-            Returns ups:nn.ModuleList
+            Assign the following fields: ups:nn.ModuleList
         """
         pass
         
@@ -718,7 +765,7 @@ class ResNetHead(UpNetHeadBase):
                  skip_first_res_con:Union[bool,Sequence[bool]]=False,
                  recurrent:Union[bool,Sequence[bool]]=False,
                  recursion_steps:Union[int,Sequence[int]]=4,
-                 ) -> None:
+                 resize_for_cat_if_req:bool=False) -> None:
         
         super().__init__(in_channels,
                          num_classses, 
@@ -735,15 +782,14 @@ class ResNetHead(UpNetHeadBase):
                          skip_first_res_con,
                          recurrent,
                          recursion_steps,
-                         inp_transform='resize_concat')
+                         inp_transform='resize_concat',
+                         resize_for_cat_if_req=resize_for_cat_if_req)
                 
-    def _init_up_layers(self, in_channels, *args, **kwargs)->nn.ModuleList:
-        tot_upsample_fac = 1
+    def _init_up_layers(self):
         modules = []
-        last_out_ch = sum(in_channels) if isinstance(in_channels, list) else in_channels
+        last_out_ch = self.in_channels[0]
         for i in range(self.nb_up_blocks):
             f = self.upsample_facs[i]
-            tot_upsample_fac = tot_upsample_fac*f
             modules.append(UpRes(in_channels=last_out_ch, 
                               out_channels=last_out_ch//f, 
                               bilinear=self.bilinear_ups[i], 
@@ -757,9 +803,8 @@ class ResNetHead(UpNetHeadBase):
                               recursion_steps=self.recursion_steps[i]))
             last_out_ch = last_out_ch // f
             
-        self.tot_upsample_fac = tot_upsample_fac
-        self.last_out_ch = last_out_ch 
-        return nn.ModuleList(modules)
+        assert self.last_out_ch == last_out_ch 
+        self.ups = nn.ModuleList(modules)
         
         
     def compute_feats(self, x):
@@ -787,7 +832,8 @@ class UNetHead(UpNetHeadBase):
                  recurrent:Union[bool,Sequence[bool]]=False,
                  recursion_steps:Union[int,Sequence[int]]=4,
                  resnet_cat_inp_upscaling:Union[bool,Sequence[bool]]=True,
-                 ) -> None:
+                 input_group_cat_nb:int=1,
+                 resize_for_cat_if_req:bool=False) -> None:
         
         for in_ch in in_channels[1:]:
             assert in_ch == in_channels[0], "All inputs must have the same nb of channels"
@@ -809,31 +855,33 @@ class UNetHead(UpNetHeadBase):
                          skip_first_res_con,
                          recurrent,
                          recursion_steps,
-                         inp_transform='multiple_select')
+                         inp_transform='group_cat',
+                         input_group_cat_nb=input_group_cat_nb,
+                         resize_for_cat_if_req=resize_for_cat_if_req)
         
-        self.unet_init_conv = NConv(in_channels = in_channels[0],
-                                    out_channels=in_channels[0],
-                                    mid_channels=in_channels[0],
+        self.unet_init_conv = NConv(in_channels = self.in_channels[0],
+                                    out_channels=self.in_channels[0],
+                                    mid_channels=self.in_channels[0],
                                     kernel_sz=self.kernel_sz,
                                     nb_convs=self.conv_per_up_blk[0],
                                     # batch_norm=True,  # default True
                                     # non_linearity=non_linearity,  # default ReLU
-                                    res_con=res_con,
-                                    res_con_interv=res_con_interv,
-                                    skip_first_res_con=skip_first_res_con,
-                                    recurrent=recurrent,
-                                    recursion_steps=recursion_steps)
+                                    res_con=self.res_con[0],
+                                    res_con_interv=self.res_con_interv[0],
+                                    skip_first_res_con=self.skip_first_res_con[0],
+                                    recurrent=self.recurrent[0],
+                                    recursion_steps=self.recursion_steps[0])
+        
+        assert self.nb_inputs==len(self.ups)+1
                 
-    def _init_up_layers(self, in_channels, *args, **kwargs):
-        tot_upsample_fac = 1
-        last_out_ch = in_channels[0]
+    def _init_up_layers(self):
+        last_out_ch = self.in_channels[0]
         modules = []
         
         for i in range(self.nb_up_blocks):
             f = self.upsample_facs[i]
-            tot_upsample_fac = tot_upsample_fac*f
             modules.append(UpUNet(in_channels=last_out_ch, 
-                                  in_channels_cat= in_channels[i],
+                                  in_channels_cat= self.in_channels[i],
                                   out_channels=last_out_ch//f, 
                                   bilinear=self.bilinear_ups[i], 
                                   fact=f, 
@@ -848,9 +896,8 @@ class UNetHead(UpNetHeadBase):
                                   resnet_cat_inp_upscaling=self.resnet_cat_inp_upscaling[i]))
             last_out_ch = last_out_ch // f
             
-        self.tot_upsample_fac = tot_upsample_fac
-        self.last_out_ch = last_out_ch 
-        return  nn.ModuleList(modules)
+        assert self.last_out_ch == last_out_ch 
+        self.ups = nn.ModuleList(modules)
         
         
     def compute_feats(self, x):
