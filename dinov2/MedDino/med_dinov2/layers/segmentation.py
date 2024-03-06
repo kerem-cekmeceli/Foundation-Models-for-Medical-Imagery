@@ -118,7 +118,7 @@ class DecBase(nn.Module, ABC):
         self.in_resize_factors = in_resize_factors
         
         # Assign the field
-        if input_transform == 'group_cat' or input_transform == 'group_cat':
+        if input_transform == 'resize_concat' or input_transform == 'group_cat':
             self.resize_for_cat_if_req = resize_for_cat_if_req 
         
         # Assign the number of input channels
@@ -141,9 +141,12 @@ class DecBase(nn.Module, ABC):
             
             self.in_channels = in_channels_
             assert sum(in_channels) == sum(self.in_channels)
-        
-        else:
+            
+        elif self.input_transform == "multiple_select":
             self.in_channels = in_channels
+            
+        else:
+            self.in_channels = in_channels[0]
 
     
     def _transform_inputs(self, 
@@ -667,7 +670,7 @@ class UpNetHeadBase(DecBase):
         self.upsample_facs = upsample_facs
         
         tot_upsample_fac=1.
-        last_out_ch = sum(in_channels[:input_group_cat_nb])
+        last_out_ch = sum(in_channels) if inp_transform=='resize_concat' else sum(in_channels[:input_group_cat_nb])
         for i in range(self.nb_up_blocks):
             f = self.upsample_facs[i]
             tot_upsample_fac = tot_upsample_fac*f
@@ -787,7 +790,7 @@ class ResNetHead(UpNetHeadBase):
                 
     def _init_up_layers(self):
         modules = []
-        last_out_ch = self.in_channels[0]
+        last_out_ch = self.in_channels
         for i in range(self.nb_up_blocks):
             f = self.upsample_facs[i]
             modules.append(UpRes(in_channels=last_out_ch, 
