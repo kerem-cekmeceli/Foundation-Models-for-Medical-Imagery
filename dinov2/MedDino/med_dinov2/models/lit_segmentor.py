@@ -16,6 +16,7 @@ from torchvision.transforms.functional import to_pil_image
 import torch.nn.functional as F
 import math
 from torchvision.utils import make_grid
+from lightning.pytorch.utilities import rank_zero_only
 
 class LitBaseModule(L.LightningModule):
     def __init__(self,
@@ -133,7 +134,10 @@ class LitSegmentor(LitBaseModule):
                  val_metrics_over_vol=True,
                  first_n_batch_to_seg_log=0, # 0 means no logging
                  minibatch_log_idxs=None,
-                seg_val_intv=20) -> None:
+                seg_val_intv=20,
+                sync_dist_train=True,
+                sync_dist_val=True,
+                sync_dist_test=True) -> None:
         super().__init__(loss_config=loss_config,
                          optimizer_config=optimizer_config,
                          scheduler_config=schedulers_config,
@@ -142,6 +146,10 @@ class LitSegmentor(LitBaseModule):
         self.val_metrics_over_vol = val_metrics_over_vol
         assert first_n_batch_to_seg_log>=0
         self.first_n_batch_to_seg_log = first_n_batch_to_seg_log
+        
+        self.sync_dist_train = sync_dist_train
+        self.sync_dist_val = sync_dist_val
+        self.sync_dist_test = sync_dist_test
         
         self.model = Segmentor(backbone=backbone,
                                decode_head=decode_head,
@@ -186,7 +194,7 @@ class LitSegmentor(LitBaseModule):
             f"Train loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}, batch_idx={batch_idx}"
                         
         # Log the loss
-        self.log('loss', loss, on_epoch=True, on_step=False)
+        self.log('loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
         
         # Log the metrics
         y_pred_det = y_pred.detach()
@@ -194,7 +202,7 @@ class LitSegmentor(LitBaseModule):
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred_det, y_batch_det)
             for k, v in metric_dict.items():
-                self.log(metric_n+k, v, on_epoch=True, on_step=False)
+                self.log(metric_n+k, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
                 
         return loss
     
@@ -233,8 +241,12 @@ class LitSegmentor(LitBaseModule):
                                 caption=caption)
         return log_img
     
+    @rank_zero_only                 
+    def log_seg(self, batch_idx, x_batch, y_batch, y_pred, cap_prefix=''):
+        self.logger.experiment.log({f'{cap_prefix}_seg_batch{batch_idx+1}': \
+                [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
+    
     def validation_step(self, val_batch, batch_idx):
-        sync_dist=False
         x_batch, y_batch = val_batch
         
         assert (x_batch.isnan()==False).all(), \
@@ -252,24 +264,25 @@ class LitSegmentor(LitBaseModule):
         assert (loss.isnan()==False).all(), \
             f"Validation loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}, batch_idx={batch_idx}"
         
-        self.log('val_loss', loss, on_epoch=True, on_step=False, sync_dist=sync_dist)
+        self.log('val_loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
                 
         # Compute the metrics 
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred, y_batch)
             for k, v in metric_dict.items():
-                self.log('val_'+metric_n+k, v, on_epoch=True, on_step=False, sync_dist=sync_dist)
+                self.log('val_'+metric_n+k, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
                 
             if  self.val_metrics_over_vol:
                 metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
                 for k, v in metric_dict_vol.items():
-                    self.log('val_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=sync_dist)
+                    self.log('val_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
         # save the segmentation result
         if batch_idx < self.first_n_batch_to_seg_log:
             if (self.current_epoch+1)%self.seg_val_intv==0:
-                self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
-                    [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)  
+                self.log_seg(self, batch_idx, x_batch, y_batch, y_pred, 'val')
+                # self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
+                #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)  
     
     def on_train_epoch_start(self) -> None:
         super().on_train_epoch_start()
@@ -290,7 +303,7 @@ class LitSegmentor(LitBaseModule):
         return super().lr_scheduler_step(scheduler, metric)
     
     def test_step(self, batch, batch_idx):   
-        sync_dist=False
+        sync_dist=True
         x_batch, y_batch = batch
              
         # Forward pass
@@ -304,24 +317,26 @@ class LitSegmentor(LitBaseModule):
         
         # save the segmentation result
         if batch_idx < self.first_n_batch_to_seg_log:
-            self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
-                [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
+            self.log_seg(self, batch_idx, x_batch, y_batch, y_pred, 'test')
+            # self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
+            #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
 
         # Log the test loss        
-        self.log('test_loss', loss, on_epoch=True, on_step=False, sync_dist=sync_dist)
+        self.log('test_loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
         
         # Compute the metrics 
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred, y_batch)
             for k, v in metric_dict.items():
-                self.log('test_'+metric_n+k, v, on_epoch=True, on_step=False, sync_dist=sync_dist)
+                self.log('test_'+metric_n+k, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                 
             if  self.val_metrics_over_vol:
                 metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
                 for k, v in metric_dict_vol.items():
-                    self.log('test_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=sync_dist)
-        
-    def on_fit_start(self) -> None:
+                    self.log('test_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+                    
+    @rank_zero_only   
+    def wnadb_conf(self):
         wandb.define_metric('loss', summary="min")
         wandb.define_metric('val_loss', summary="min")
         wandb.define_metric('test_loss', summary="min")
@@ -336,7 +351,9 @@ class LitSegmentor(LitBaseModule):
                 wandb.define_metric(metric_name+'_vol', summary="max")
                 wandb.define_metric('val_'+metric_name+'_vol', summary="max")
                 wandb.define_metric('test_'+metric_name+'_vol', summary="max")
-                
-        return super().on_fit_start()
+     
+    def on_train_start(self) -> None:
+        self.wnadb_conf()
+        return super().on_train_start()
                 
                 

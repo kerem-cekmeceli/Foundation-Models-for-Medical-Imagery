@@ -384,7 +384,10 @@ segmentor_cfg = dict(backbone=dino_bb_cfg,
                      val_metrics_over_vol=True, # Also report metrics over vol
                      first_n_batch_to_seg_log=first_n_batch_to_seg_log,
                      minibatch_log_idxs=log_idxs,
-                     seg_val_intv=seg_res_log_itv)
+                     seg_val_intv=seg_res_log_itv,
+                     sync_dist_train=gpus>1,
+                     sync_dist_val=gpus>1,
+                     sync_dist_test=gpus>1)
 
 model = LitSegmentor(**segmentor_cfg)
 
