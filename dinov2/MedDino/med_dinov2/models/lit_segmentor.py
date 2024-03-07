@@ -246,7 +246,9 @@ class LitSegmentor(LitBaseModule):
         y_pred = self.model(x_batch)
         assert (y_pred.isnan()==False).all(), \
             f"Validation y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}, batch_idx={batch_idx}"
+            
         loss = self.loss_fn(y_pred, y_batch)
+        
         assert (loss.isnan()==False).all(), \
             f"Validation loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}, batch_idx={batch_idx}"
         

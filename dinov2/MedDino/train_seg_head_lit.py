@@ -20,7 +20,7 @@ from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, g
 # from MedDino.med_dinov2.models.segmentor import Segmentor
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
-from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5
+from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5, VolDistributedSampler
 from torch.utils.data import DataLoader
 # from MedDino.med_dinov2.tools.main_fcts import train, test
 # from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
@@ -37,14 +37,20 @@ import os
 from lightning.pytorch.loggers import WandbLogger
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch import seed_everything
 
 
 cluster_paths = True
 save_checkpoints = True
 log_the_run = True
 
+gpus=torch.cuda.device_count()
+strategy='ddp' if gpus>1 else 'auto'
+
+seed = 42
+
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -52,7 +58,7 @@ dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_u
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -71,13 +77,17 @@ test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
 
 # Dataloader workers
 # num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
-num_workers_dataloader=4
+num_workers_dataloader=3
 
 # Set the precision
 precision = 'highest' if cluster_paths else 'high'  # medium
 torch.set_float32_matmul_precision(precision)
 
+
 ########################################################################################################################
+
+# Set seeds for numpy, torch and python.random
+seed_everything(seed, workers=True)
 
 # Backbone config
 backbone_name = get_bb_name(backbone_sz)
@@ -93,6 +103,7 @@ if dataset=='hcp1':
     else:
         data_path_suffix = 'brain/hcp'
     num_classses = 15
+    vol_depth = 256
     ignore_idx_loss = None
     ignore_idx_metric = 0
     
@@ -102,12 +113,14 @@ elif dataset=='hcp2':
     else:
         data_path_suffix = 'brain/hcp'
     num_classses = 15
+    vol_depth = 256
     ignore_idx_loss = None
     ignore_idx_metric = 0
     
 elif dataset=='cardiac_acdc':
     data_path_suffix = 'cardiac/acdc'
     num_classses = 2
+    vol_depth = 256 #@TODO VERIFY
     ignore_idx_loss = None
     ignore_idx_metric = 0
     if hdf5_data:
@@ -116,6 +129,7 @@ elif dataset=='cardiac_acdc':
 elif dataset=='cardiac_rvsc':
     data_path_suffix = 'cardiac/rvsc'
     num_classses = 2
+    vol_depth = 256 #@TODO VERIFY
     ignore_idx_loss = None
     ignore_idx_metric = 0
     if hdf5_data:
@@ -124,6 +138,7 @@ elif dataset=='cardiac_rvsc':
 elif dataset=='prostate_nci':
     data_path_suffix = 'prostate/nci'
     num_classses = 3
+    vol_depth = 256 #@TODO VERIFY
     ignore_idx_loss = None
     ignore_idx_metric = 0
     if hdf5_data:
@@ -132,6 +147,7 @@ elif dataset=='prostate_nci':
 elif dataset=='prostate_usz':
     data_path_suffix = 'prostate/pirad_erc'
     num_classses = 3
+    vol_depth = 256 #@TODO VERIFY
     ignore_idx_loss = None
     ignore_idx_metric = 0
     if hdf5_data:
@@ -312,15 +328,14 @@ loss_cfg = loss_cfgs_dict[loss_cfg_key]
 epsilon = 1  # smoothing factor 
 k=1  # power
 
-SLICE_PER_PATIENT = 256
-assert SLICE_PER_PATIENT % batch_sz == 0, \
-    f'batch size must be a multiple of slice/patient but got {batch_sz} and {SLICE_PER_PATIENT}'
+assert vol_depth % batch_sz == 0, \
+    f'batch size must be a multiple of slice/patient but got {batch_sz} and {vol_depth}'
 
 miou_cfg=dict(prob_inputs=False, # Decoder does not return probas explicitly
               soft=False,
               bg_ch_to_rm=ignore_idx_metric,  # bg channel to be removed 
               reduction='mean',
-              vol_batch_sz=SLICE_PER_PATIENT,
+              vol_batch_sz=vol_depth,
               epsilon=epsilon)
 
 dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
@@ -329,7 +344,7 @@ dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
              reduction='mean',
              k=k, 
              epsilon=epsilon,
-             vol_batch_sz=SLICE_PER_PATIENT)
+             vol_batch_sz=vol_depth)
 
 metric_cfgs=[dict(name='mIoU', params=miou_cfg), 
              dict(name='dice', params=dice_cfg)]
@@ -340,7 +355,7 @@ seg_res_log_itv = max(nb_epochs//5, 1)   # Log seg reult every N epochs
 seg_res_nb_patient = 1  # Process minibatches for N number of patients
 seg_log_per_batch = 4  # Log N samples from each minibatch
 assert seg_log_per_batch<=batch_sz
-first_n_batch_to_seg_log = math.ceil(SLICE_PER_PATIENT/batch_sz*seg_res_nb_patient)
+first_n_batch_to_seg_log = math.ceil(vol_depth/batch_sz*seg_res_nb_patient)
 
 sp = seg_log_per_batch+1
 multp = batch_sz//sp
@@ -452,7 +467,19 @@ else:
     test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T1_original_depth_256_from_50_to_70.hdf5', 
                                             num_classes=num_classses, 
                                             augmentations=augmentations)
+
+
+if gpus > 1:
+    vol_sampler_val = VolDistributedSampler(dataset=val_dataset, num_replicas=gpus, shuffle=False,
+                                            drop_last=False, seed=seed,)
     
+    vol_sampler_test = VolDistributedSampler(dataset=test_dataset, num_replicas=gpus, shuffle=False,
+                                             drop_last=False, seed=seed,)
+else:
+    vol_sampler_val = None
+    vol_sampler_test = None
+                                            
+                                             
 persistent_workers=True
 pin_memory=True
 drop_last=True
@@ -465,11 +492,12 @@ test_dataloader_cfg = dict(batch_size=batch_sz, shuffle=False, pin_memory=pin_me
                            persistent_workers=persistent_workers, drop_last=drop_last)
 
 train_dataloader = DataLoader(dataset=train_dataset, **train_dataloader_cfg)
-val_dataloader = DataLoader(dataset=val_dataset, **val_dataloader_cfg)
-test_dataloader = DataLoader(dataset=test_dataset,**test_dataloader_cfg)
+val_dataloader = DataLoader(dataset=val_dataset, sampler=vol_sampler_val, **val_dataloader_cfg)
+test_dataloader = DataLoader(dataset=test_dataset, sampler=vol_sampler_test, **test_dataloader_cfg)
 
 # Trainer config (loggable components)
-trainer_cfg = dict(max_epochs=nb_epochs, log_every_n_steps=100, num_sanity_val_steps=0,
+trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strategy=strategy,
+                   max_epochs=nb_epochs, log_every_n_steps=100, num_sanity_val_steps=0,
                    enable_checkpointing=True, 
                    gradient_clip_val=0, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
                    accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
@@ -501,7 +529,9 @@ wnadb_config = dict(backbone_name=backbone_name,
                     train_dataloader_cfg=train_dataloader_cfg,
                     val_dataloader_cfg=val_dataloader_cfg,
                     test_dataloader_cfg=test_dataloader_cfg,
-                    trainer_cfg=trainer_cfg)
+                    trainer_cfg=trainer_cfg,
+                    nb_gpus=gpus,
+                    strategy=strategy)
 
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
