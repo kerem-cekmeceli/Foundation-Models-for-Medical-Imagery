@@ -470,11 +470,11 @@ else:
 
 
 if gpus > 1:
-    vol_sampler_val = VolDistributedSampler(dataset=val_dataset, num_replicas=gpus, shuffle=False,
-                                            drop_last=False, seed=seed,)
+    vol_sampler_val = VolDistributedSampler(dataset=val_dataset, num_replicas=gpus, vol_depth=vol_depth,
+                                            shuffle=False, drop_last=False, seed=seed,)
     
-    vol_sampler_test = VolDistributedSampler(dataset=test_dataset, num_replicas=gpus, shuffle=False,
-                                             drop_last=False, seed=seed,)
+    vol_sampler_test = VolDistributedSampler(dataset=test_dataset, num_replicas=gpus, vol_depth=vol_depth,
+                                             shuffle=False, drop_last=False, seed=seed,)
 else:
     vol_sampler_val = None
     vol_sampler_test = None
