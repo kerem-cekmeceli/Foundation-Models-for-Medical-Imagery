@@ -20,7 +20,7 @@ from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, g
 # from MedDino.med_dinov2.models.segmentor import Segmentor
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
-from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5, VolDistributedSampler
+from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5, VolDataModule
 from torch.utils.data import DataLoader
 # from MedDino.med_dinov2.tools.main_fcts import train, test
 # from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
@@ -468,16 +468,6 @@ else:
                                             num_classes=num_classses, 
                                             augmentations=augmentations)
 
-
-if gpus > 1:
-    vol_sampler_val = VolDistributedSampler(dataset=val_dataset, num_replicas=gpus, vol_depth=vol_depth,
-                                            shuffle=False, drop_last=False, seed=seed,)
-    
-    vol_sampler_test = VolDistributedSampler(dataset=test_dataset, num_replicas=gpus, vol_depth=vol_depth,
-                                             shuffle=False, drop_last=False, seed=seed,)
-else:
-    vol_sampler_val = None
-    vol_sampler_test = None
                                             
                                              
 persistent_workers=True
@@ -486,14 +476,20 @@ drop_last=True
 
 train_dataloader_cfg = dict(batch_size=batch_sz, shuffle=True, pin_memory=pin_memory, num_workers=num_workers_dataloader,
                             persistent_workers=persistent_workers, drop_last=drop_last)
-val_dataloader_cfg = dict(batch_size=batch_sz, shuffle=False, pin_memory=pin_memory, num_workers=num_workers_dataloader,
-                          persistent_workers=persistent_workers, drop_last=drop_last)
-test_dataloader_cfg = dict(batch_size=batch_sz, shuffle=False, pin_memory=pin_memory, num_workers=num_workers_dataloader,
-                           persistent_workers=persistent_workers, drop_last=drop_last)
+val_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+                          persistent_workers=persistent_workers, drop_last=drop_last, 
+                          shuffle=False if gpus==1 else None)
+test_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+                           persistent_workers=persistent_workers, drop_last=drop_last, 
+                           shuffle=False if gpus==1 else None)
 
-train_dataloader = DataLoader(dataset=train_dataset, **train_dataloader_cfg)
-val_dataloader = DataLoader(dataset=val_dataset, sampler=vol_sampler_val, **val_dataloader_cfg)
-test_dataloader = DataLoader(dataset=test_dataset, sampler=vol_sampler_test, **test_dataloader_cfg)
+# train_dataloader = DataLoader(dataset=train_dataset, **train_dataloader_cfg)
+# val_dataloader = DataLoader(dataset=val_dataset,  **val_dataloader_cfg)
+# test_dataloader = DataLoader(dataset=test_dataset, **test_dataloader_cfg)
+
+data_module = VolDataModule(train_dataset=train_dataset, val_dataset=val_dataset, test_dataset=test_dataset, 
+                            train_dataloader_cfg=train_dataloader_cfg, val_dataloader_cfg=val_dataloader_cfg, test_dataloader_cfg=test_dataloader_cfg,
+                            batch_size=batch_sz, vol_depth=vol_depth, num_gpus=gpus)
 
 # Trainer config (loggable components)
 trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strategy=strategy,
@@ -565,10 +561,10 @@ checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n
 trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)
 
 # Train the model
-trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 # Load the best checkpoint (highest val_dice)
-logs = trainer.test(model=model, dataloaders=test_dataloader, ckpt_path=checkpointers[test_checkpoint_key].best_model_path)
+logs = trainer.test(model=model,  ckpt_path=checkpointers[test_checkpoint_key].best_model_path)  # dataloaders=test_dataloader,
 
 print('Done !')
 #finish logging

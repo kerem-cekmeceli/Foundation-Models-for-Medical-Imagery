@@ -23,6 +23,8 @@ from mmseg.datasets.pipelines import Compose
 import mmcv
 from MedDino.med_dinov2.data.transforms import *
 import h5py
+import lightning as L
+
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -307,7 +309,48 @@ class VolDistributedSampler(DistributedSampler):
         assert len(indices) == self.num_samples
 
         return iter(indices)
+
+
+class VolDataModule(L.LightningDataModule):
+    def __init__(self, train_dataset, val_dataset, test_dataset, 
+                 train_dataloader_cfg, val_dataloader_cfg, test_dataloader_cfg,
+                 batch_size, vol_depth, num_gpus):
+        super().__init__()
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.test_dataset = test_dataset
         
+        self.train_dataloader_cfg = train_dataloader_cfg
+        self.val_dataloader_cfg = val_dataloader_cfg
+        self.test_dataloader_cfg = test_dataloader_cfg
+        
+        self.batch_size = batch_size
+        self.vol_depth = vol_depth
+        self.num_gpus = num_gpus
+
+    def train_dataloader(self):
+        # Use default behavior for training dataset
+        return DataLoader(dataset=self.train_dataset, **self.train_dataloader_cfg)
+
+    def val_dataloader(self):
+        if self.num_gpus>1:
+            # Use custom sampler for validation dataset
+            sampler = VolDistributedSampler(dataset=self.val_dataset, num_replicas=self.num_gpus, 
+                                            vol_depth=self.vol_depth, shuffle=False, drop_last=False,)
+        else:
+            sampler=None
+            
+        return DataLoader(self.val_dataset, sampler=sampler, **self.val_dataloader_cfg)   
+    
+    def test_dataloader(self):
+        if self.num_gpus>1:
+            # Use custom sampler for validation dataset
+            sampler = VolDistributedSampler(dataset=self.test_dataset, num_replicas=self.num_gpus, 
+                                            vol_depth=self.vol_depth, shuffle=False, drop_last=False,)
+        else:
+            sampler=None
+            
+        return DataLoader(self.test_dataset, sampler=sampler, **self.test_dataloader_cfg)        
         
 
 #################################################################################################
