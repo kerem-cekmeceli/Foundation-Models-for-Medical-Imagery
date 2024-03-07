@@ -68,7 +68,7 @@ nb_epochs = 100
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
-batch_sz = 8//gpus  # [4, 8, 16, ...]
+batch_sz = 8#//gpus  # [4, 8, 16, ...]
 lr = 0.5e-4  # 0.5e-4
 weigh_loss_bg = False  # False is better
 
