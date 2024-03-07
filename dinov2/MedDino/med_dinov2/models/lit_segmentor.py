@@ -280,7 +280,7 @@ class LitSegmentor(LitBaseModule):
         # save the segmentation result
         if batch_idx < self.first_n_batch_to_seg_log:
             if (self.current_epoch+1)%self.seg_val_intv==0:
-                self.log_seg(self, batch_idx, x_batch, y_batch, y_pred, 'val')
+                self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'val')
                 # self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
                 #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)  
     
@@ -317,7 +317,7 @@ class LitSegmentor(LitBaseModule):
         
         # save the segmentation result
         if batch_idx < self.first_n_batch_to_seg_log:
-            self.log_seg(self, batch_idx, x_batch, y_batch, y_pred, 'test')
+            self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'test')
             # self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
             #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
 
