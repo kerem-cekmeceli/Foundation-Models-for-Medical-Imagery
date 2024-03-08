@@ -50,15 +50,15 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-train_backbone = False
-backbone_sz = "small" # in ("small", "base", "large" or "giant")
+train_backbone = True
+backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -158,7 +158,7 @@ else:
 
 
 # Decoder config
-n_concat = 5 if dec_head_key != 'unet' else (5*2)
+n_concat = 5 if dec_head_key != 'unet' else 5
 # Linear classification of each patch + upsampling to pixel dim
 dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat, 
                              num_classses=num_classses,
@@ -244,7 +244,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         recurrent=True,
                         recursion_steps=2, # 3
                         resnet_cat_inp_upscaling=True,
-                        input_group_cat_nb=2)
+                        input_group_cat_nb=1)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
