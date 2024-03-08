@@ -58,7 +58,7 @@ dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_u
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -243,7 +243,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         skip_first_res_con=False, 
                         recurrent=True,
                         recursion_steps=2, # 3
-                        resnet_cat_inp_upscaling=True,
+                        resnet_cat_inp_upscaling=False,
                         input_group_cat_nb=1)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
