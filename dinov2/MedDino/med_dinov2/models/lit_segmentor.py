@@ -303,7 +303,6 @@ class LitSegmentor(LitBaseModule):
         return super().lr_scheduler_step(scheduler, metric)
     
     def test_step(self, batch, batch_idx):   
-        sync_dist=True
         x_batch, y_batch = batch
              
         # Forward pass

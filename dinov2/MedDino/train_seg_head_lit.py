@@ -51,20 +51,20 @@ seed = 42
 
 # Set the BB
 train_backbone = False
-backbone_sz = "base" # in ("small", "base", "large" or "giant")
+backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 100
+nb_epochs = 2
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
@@ -567,10 +567,12 @@ checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n
 trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)
 
 # Train the model
+# model is saved only on the main process when using distributed training
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 # Load the best checkpoint (highest val_dice)
-logs = trainer.test(model=model, datamodule=data_module, ckpt_path=checkpointers[test_checkpoint_key].best_model_path)  # dataloaders=test_dataloader,
+model = LitSegmentor.load_from_checkpoint(checkpointers[test_checkpoint_key].best_model_path)
+logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
 
 print('Done !')
 #finish logging
