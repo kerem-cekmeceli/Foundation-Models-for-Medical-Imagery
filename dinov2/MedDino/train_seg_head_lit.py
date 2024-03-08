@@ -158,7 +158,7 @@ else:
 
 
 # Decoder config
-n_concat = 3 if dec_head_key != 'unet' else 5
+n_concat = 2 if dec_head_key != 'unet' else 5
 # Linear classification of each patch + upsampling to pixel dim
 dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat, 
                              num_classses=num_classses,
@@ -508,6 +508,7 @@ loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
 dec_head_name = model.model.decode_head.__class__.__name__
 bb_train_str_short = 'bbT' if segmentor_cfg['train_backbone'] else 'NbbT'
 run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
+data_type = 'hdf5' if hdf5_data else 'png'
 
 wnadb_config = dict(backbone_name=backbone_name,
                     backbone_last_n_concat=n_concat,
@@ -530,7 +531,8 @@ wnadb_config = dict(backbone_name=backbone_name,
                     test_dataloader_cfg=test_dataloader_cfg,
                     trainer_cfg=trainer_cfg,
                     nb_gpus=gpus,
-                    strategy=strategy)
+                    strategy=strategy,
+                    data_type=data_type)
 
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
@@ -539,6 +541,7 @@ bb_train_str = 'train_bb_YES' if segmentor_cfg['train_backbone'] else 'train_bb_
 log_mode = 'online' if log_the_run else 'disabled'
 tags = [dataset, loss_name, bb_train_str, dec_head_name]
 tags.extend(backbone_name.split('_'))
+tags.append(data_type)
 
 logger = WandbLogger(project='FoundationModels_MedDino',
                      group=backbone_name,
