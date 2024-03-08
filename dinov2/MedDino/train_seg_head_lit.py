@@ -50,7 +50,7 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -243,7 +243,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         skip_first_res_con=False, 
                         recurrent=True,
                         recursion_steps=2, # 3
-                        resnet_cat_inp_upscaling=False,
+                        resnet_cat_inp_upscaling=True,
                         input_group_cat_nb=1)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
