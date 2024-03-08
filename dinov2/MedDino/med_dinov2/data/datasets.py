@@ -305,7 +305,10 @@ class VolDistributedSampler(DistributedSampler):
         assert len(indices) == self.total_size
 
         # subsample
-        indices = indices[self.rank:self.total_size:self.num_replicas]
+        # indices = indices[self.rank:self.total_size:self.num_replicas]
+        start_idx = self.rank*self.num_samples
+        end_idx = start_idx + self.num_samples
+        indices = indices[start_idx:end_idx:1]
         assert len(indices) == self.num_samples
 
         return iter(indices)

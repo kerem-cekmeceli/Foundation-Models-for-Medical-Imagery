@@ -40,9 +40,9 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
 
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = True
-log_the_run = True
+log_the_run = False
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -50,25 +50,25 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-train_backbone = True
-backbone_sz = "base" # in ("small", "base", "large" or "giant")
+train_backbone = False
+backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 100
+nb_epochs = 2
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
-batch_sz = 8#//gpus  # [4, 8, 16, ...]
+batch_sz = 8//gpus  # [4, 8, 16, ...]
 lr = 0.5e-4  # 0.5e-4
 weigh_loss_bg = False  # False is better
 
@@ -567,7 +567,7 @@ trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **tra
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 # Load the best checkpoint (highest val_dice)
-logs = trainer.test(model=model,  ckpt_path=checkpointers[test_checkpoint_key].best_model_path)  # dataloaders=test_dataloader,
+logs = trainer.test(model=model, datamodule=data_module, ckpt_path=checkpointers[test_checkpoint_key].best_model_path)  # dataloaders=test_dataloader,
 
 print('Done !')
 #finish logging
