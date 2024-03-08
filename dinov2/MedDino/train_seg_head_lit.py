@@ -64,7 +64,7 @@ dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 2
+nb_epochs = 1
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
@@ -571,7 +571,7 @@ trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **tra
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 # Load the best checkpoint (highest val_dice)
-model = LitSegmentor.load_from_checkpoint(checkpointers[test_checkpoint_key].best_model_path)
+model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path)
 logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
 
 print('Done !')
