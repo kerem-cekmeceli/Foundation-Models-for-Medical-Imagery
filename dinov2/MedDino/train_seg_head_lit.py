@@ -54,8 +54,8 @@ train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'prostate_nci' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
-hdf5_data = False
+dataset = 'hcp2' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
+hdf5_data = True
 
 # Select the dec head
 dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
@@ -68,7 +68,6 @@ nb_epochs = 100
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
-batch_sz = 8//gpus  # [4, 8, 16, ...]
 lr = 0.5e-4  # 0.5e-4
 weigh_loss_bg = False  # False is better
 
@@ -98,20 +97,56 @@ patch_sz, embed_dim = get_backone_patch_embed_sizes(backbone_name)
 
 # Dataset parameters
 if dataset=='hcp1':
+    batch_sz = 8//gpus  # [4, 8, 16, ...]
     if not hdf5_data:
         data_path_suffix = 'brain/hcp1'
     else:
         data_path_suffix = 'brain/hcp'
+        hdf5_train_name = 'data_T1_original_depth_256_from_0_to_20.hdf5'
+        hdf5_val_name = 'data_T1_original_depth_256_from_20_to_25.hdf5'
+        hdf5_test_name = 'data_T1_original_depth_256_from_50_to_70.hdf5'
     num_classses = 15
     vol_depth = 256
     ignore_idx_loss = None
     ignore_idx_metric = 0
     
 elif dataset=='hcp2':
+    batch_sz = 8//gpus  # [4, 8, 16, ...]
     if not hdf5_data:
         data_path_suffix = 'brain/hcp2'
     else:
         data_path_suffix = 'brain/hcp'
+        hdf5_train_name = 'data_T2_original_depth_256_from_0_to_20.hdf5'
+        hdf5_val_name = 'data_T2_original_depth_256_from_20_to_25.hdf5'
+        hdf5_test_name = 'data_T2_original_depth_256_from_50_to_70.hdf5'
+    num_classses = 15
+    vol_depth = 256
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
+    
+elif dataset=='abide_caltech':
+    batch_sz = 8//gpus  # [4, 8, 16, ...]
+    if not hdf5_data:
+        data_path_suffix = 'brain/abide_caltech'
+    else:
+        data_path_suffix = 'brain/abide/caltech'
+        hdf5_train_name = 'data_T1_original_depth_256_from_0_to_10.hdf5'
+        hdf5_val_name = 'data_T1_original_depth_256_from_10_to_15.hdf5'
+        hdf5_test_name = 'data_T1_original_depth_256_from_16_to_36.hdf5'
+    num_classses = 15
+    vol_depth = 256
+    ignore_idx_loss = None
+    ignore_idx_metric = 0
+    
+elif dataset=='abide_stanford':
+    batch_sz = 8//gpus  # [4, 8, 16, ...]
+    if not hdf5_data:
+        data_path_suffix = 'brain/abide_stanford'
+    else:
+        data_path_suffix = 'brain/abide/stanford'
+        hdf5_train_name = 'data_T1_original_depth_256_from_0_to_10.hdf5'
+        hdf5_val_name = 'data_T1_original_depth_256_from_10_to_15.hdf5'
+        hdf5_test_name = 'data_T1_original_depth_256_from_16_to_36.hdf5'
     num_classses = 15
     vol_depth = 256
     ignore_idx_loss = None
@@ -136,6 +171,7 @@ elif dataset=='cardiac_rvsc':
         ValueError('HDF5 path is not defined yet')
     
 elif dataset=='prostate_nci':
+    batch_sz = 10//gpus  # [4, 8, 16, ...]
     data_path_suffix = 'prostate/nci'
     num_classses = 3
     vol_depth = 20  #@TODO VERIFY
@@ -145,6 +181,7 @@ elif dataset=='prostate_nci':
         ValueError('HDF5 path is not defined yet')
         
 elif dataset=='prostate_usz':
+    batch_sz = 10//gpus  # [4, 8, 16, ...]
     data_path_suffix = 'prostate/pirad_erc'
     num_classses = 3
     vol_depth = 21 #@TODO VERIFY
@@ -471,14 +508,13 @@ if not hdf5_data:
                                     )
     
 else:
-    i = 1 if dataset=='hcp1' else 2
-    train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T{i}_original_depth_256_from_0_to_20.hdf5', 
+    train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                             num_classes=num_classses, 
                                             augmentations=train_augmentations)
-    val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T1_original_depth_256_from_20_to_25.hdf5', 
+    val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
                                             num_classes=num_classses, 
                                             augmentations=augmentations)
-    test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/f'data_T1_original_depth_256_from_50_to_70.hdf5', 
+    test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_test_name, 
                                             num_classes=num_classses, 
                                             augmentations=augmentations)
 
