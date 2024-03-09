@@ -54,8 +54,8 @@ train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp2' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
-hdf5_data = True
+dataset = 'prostate_nci' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
+hdf5_data = False
 
 # Select the dec head
 dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
@@ -138,7 +138,7 @@ elif dataset=='cardiac_rvsc':
 elif dataset=='prostate_nci':
     data_path_suffix = 'prostate/nci'
     num_classses = 3
-    vol_depth = 256 #@TODO VERIFY
+    vol_depth = 20  #@TODO VERIFY
     ignore_idx_loss = None
     ignore_idx_metric = 0
     if hdf5_data:
@@ -147,7 +147,7 @@ elif dataset=='prostate_nci':
 elif dataset=='prostate_usz':
     data_path_suffix = 'prostate/pirad_erc'
     num_classses = 3
-    vol_depth = 256 #@TODO VERIFY
+    vol_depth = 21 #@TODO VERIFY
     ignore_idx_loss = None
     ignore_idx_metric = 0
     if hdf5_data:
