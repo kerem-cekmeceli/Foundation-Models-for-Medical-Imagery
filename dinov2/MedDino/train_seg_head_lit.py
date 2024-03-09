@@ -40,9 +40,9 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
 
 
-cluster_paths = False
-save_checkpoints = False
-log_the_run = False
+cluster_paths = True
+save_checkpoints = True
+log_the_run = True
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -50,7 +50,7 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-train_backbone = False
+train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -58,7 +58,7 @@ dataset = 'hcp2' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_u
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -230,7 +230,7 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
 
 # https://arxiv.org/abs/1505.04597 (unet papaer)
 n_concat=5
-input_group_cat_nb = 1
+input_group_cat_nb = 2
 n_concat *= input_group_cat_nb
 dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         num_classses=num_classses,
@@ -239,7 +239,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         # align_corners=False,
                         dropout_rat_cls_seg=0.1,
                         nb_up_blocks=4,
-                        upsample_facs_ch=2 if embed_dim <=384 else 3,
+                        upsample_facs_ch=2,
                         upsample_facs_wh=2,
                         bilinear=False,
                         conv_per_up_blk=2, # 5
