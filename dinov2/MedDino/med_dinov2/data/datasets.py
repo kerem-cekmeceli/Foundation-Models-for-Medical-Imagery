@@ -232,8 +232,8 @@ class SegmentationDatasetHDF5(Dataset):
         if len(image.shape)<3:
             image = np.stack([image, image, image], axis=-1)
             
-        assert len(mask.shape) == 4
-        assert len(image.shape) == 5
+        assert len(mask.shape) == 4, f'mask shape = {mask.shape}'
+        assert len(image.shape) == 5, f'image shape = {image.shape}'
         
         
         [image, mask] = self.transforms([image, mask])
