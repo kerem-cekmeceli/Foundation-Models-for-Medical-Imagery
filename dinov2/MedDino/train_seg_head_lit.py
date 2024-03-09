@@ -58,7 +58,7 @@ dataset = 'prostate_nci' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, pr
 hdf5_data = False
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
