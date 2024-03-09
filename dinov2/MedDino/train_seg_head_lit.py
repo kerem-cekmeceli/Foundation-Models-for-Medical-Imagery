@@ -230,7 +230,7 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
 
 # https://arxiv.org/abs/1505.04597 (unet papaer)
 n_concat=5
-input_group_cat_nb = 2
+input_group_cat_nb = 3
 n_concat *= input_group_cat_nb
 dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         num_classses=num_classses,
