@@ -226,10 +226,14 @@ class SegmentationDatasetHDF5(Dataset):
             image = image*255.
         
         assert image.max()<=255 and image.min()>=0
+        assert mask.max()<=self.num_classes
         
         # Convert grayscale to RGB
         if len(image.shape)<3:
             image = np.stack([image, image, image], axis=-1)
+            
+        assert len(mask.shape) == 4
+        assert len(image.shape) == 5
         
         
         [image, mask] = self.transforms([image, mask])

@@ -324,6 +324,8 @@ import h5py
 filename = "../../DataFoundationModels/hdf5/brain/hcp1/resized/data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5"
 filename = "../../DataFoundationModels/hdf5/brain/hcp1/original/data_T1_original_depth_256_from_0_to_20.hdf5"
 
+
+filename = 'data_T1_original_depth_132_from_0_to_10.hdf5'
 with h5py.File(filename, "r") as f:
     # Print all root level object names (aka keys) 
     # these can be group or dataset names 

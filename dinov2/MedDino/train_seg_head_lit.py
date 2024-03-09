@@ -139,16 +139,16 @@ elif dataset=='abide_caltech':
     ignore_idx_metric = 0
     
 elif dataset=='abide_stanford':
-    batch_sz = 8//gpus  # [4, 8, 16, ...]
+    batch_sz = 6//gpus  # [4, 8, 16, ...]
     if not hdf5_data:
         data_path_suffix = 'brain/abide_stanford'
     else:
         data_path_suffix = 'brain/abide/stanford'
-        hdf5_train_name = 'data_T1_original_depth_256_from_0_to_10.hdf5'
-        hdf5_val_name = 'data_T1_original_depth_256_from_10_to_15.hdf5'
-        hdf5_test_name = 'data_T1_original_depth_256_from_16_to_36.hdf5'
+        hdf5_train_name = 'data_T1_original_depth_132_from_0_to_10.hdf5'
+        hdf5_val_name = 'data_T1_original_depth_132_from_10_to_15.hdf5'
+        hdf5_test_name = 'data_T1_original_depth_132_from_16_to_36.hdf5'
     num_classses = 15
-    vol_depth = 256
+    vol_depth = 132
     ignore_idx_loss = None
     ignore_idx_metric = 0
     
