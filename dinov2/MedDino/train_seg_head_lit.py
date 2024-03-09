@@ -51,14 +51,14 @@ seed = 42
 
 # Set the BB
 train_backbone = False
-backbone_sz = "small" # in ("small", "base", "large" or "giant")
+backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -218,7 +218,8 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         # align_corners=False,
                         dropout_rat_cls_seg=0.1,
                         nb_up_blocks=4,
-                        upsample_facs=2,
+                        upsample_facs_ch=2*round(embed_dim/384),
+                        upsample_facs_wh=2,
                         bilinear=False,
                         conv_per_up_blk=2,
                         res_con=True,
@@ -235,7 +236,8 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         # align_corners=False,
                         dropout_rat_cls_seg=0.1,
                         nb_up_blocks=4,
-                        upsample_facs=2,
+                        upsample_facs_ch=2*round(embed_dim/384),
+                        upsample_facs_wh=2,
                         bilinear=False,
                         conv_per_up_blk=2, # 5
                         res_con=True,
@@ -244,7 +246,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         recurrent=True,
                         recursion_steps=2, # 3
                         resnet_cat_inp_upscaling=True,
-                        input_group_cat_nb=1)
+                        input_group_cat_nb=2)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),

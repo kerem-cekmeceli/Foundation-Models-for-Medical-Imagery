@@ -496,17 +496,18 @@ class NConv(nn.Module):
         return x
         
             
-class UpRes(nn.Module):
+class UpBlkRes(nn.Module):
     """Upscaling by f, channel depth reduction by f then n times conv"""
 
     def __init__(self, 
                  in_channels, 
-                 out_channels, 
+                 out_channels=None, 
                  bilinear=False, 
                  res_con=True,
                  res_con_interv=1,
                  skip_first_res_con=False,
-                 fact=2, 
+                 fact_wh=2,
+                 fact_ch=2, 
                  nb_convs=2,
                  kernel_size=3,
                  batch_norm=True,
@@ -514,10 +515,15 @@ class UpRes(nn.Module):
                  recurrent:bool=False,
                  recursion_steps:int=4,):
         super().__init__()
-        assert fact>1 and isinstance(fact, int)
+        assert fact_wh>1 and isinstance(fact_wh, int)
+        assert fact_ch>1 and isinstance(fact_ch, int)
         assert nb_convs > 1
         
-        self.fact=fact
+        self.fact_wh=fact_wh
+        self.fact_ch=fact_ch
+        
+        if out_channels is None:
+            out_channels = in_channels//fact_ch
         
         # If to use residual connections 
         self.res_con=res_con
@@ -526,14 +532,14 @@ class UpRes(nn.Module):
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(scale_factor=fact_wh, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),)
+            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact_ch, kernel_size=fact_wh, stride=fact_wh),)
                                     #nn.ReLU())
             
-        self.conv_xn = NConv(in_channels = in_channels if bilinear else in_channels//fact,
+        self.conv_xn = NConv(in_channels = in_channels if bilinear else in_channels//fact_ch,
                                 out_channels=out_channels,
-                                mid_channels=in_channels//fact,
+                                mid_channels=in_channels//fact_ch,
                                 kernel_sz=kernel_size,
                                 nb_convs=nb_convs,
                                 batch_norm=batch_norm,
@@ -548,16 +554,17 @@ class UpRes(nn.Module):
         return self.conv_xn(self.up(x))
     
 
-class UpUNet(nn.Module):
+class UpBlkUNet(nn.Module):
     def __init__(self, 
                  in_channels, 
                  in_channels_cat,
-                 out_channels, 
+                 out_channels=None, 
                  bilinear=False, 
                  res_con=True,
                  res_con_interv=1,
                  skip_first_res_con=False,
-                 fact=2, 
+                 fact_wh=2,
+                 fact_ch=2, 
                  fact_cat_inp=2,
                  nb_convs=2,
                  kernel_size=3,
@@ -567,11 +574,17 @@ class UpUNet(nn.Module):
                  recursion_steps:int=4,
                  resnet_cat_inp_upscaling:bool=True):
         super().__init__()
-        assert fact>1 and isinstance(fact, int)
-        assert fact_cat_inp>1 and isinstance(fact, int)
+        assert fact_wh>1 and isinstance(fact_wh, int)
+        assert fact_ch>1 and isinstance(fact_ch, int)
+        
+        assert fact_cat_inp>1 and isinstance(fact_cat_inp, int)
         assert nb_convs > 1
         
-        self.fact=fact
+        if out_channels is None:
+            out_channels = in_channels//fact_ch
+        
+        self.fact_wh=fact_wh
+        self.fact_ch=fact_ch
         self.fact_cat_inp=fact_cat_inp
         
         assert in_channels // fact_cat_inp >= 1
@@ -583,27 +596,28 @@ class UpUNet(nn.Module):
 
         # if bilinear, use the normal convolutions to reduce the number of channels
         if bilinear:
-            self.up = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+            self.up = nn.Upsample(scale_factor=fact_wh, mode='bilinear', align_corners=True)
             if not resnet_cat_inp_upscaling:
-                self.up_cat = nn.Upsample(scale_factor=fact, mode='bilinear', align_corners=True)
+                self.up_cat = nn.Upsample(scale_factor=fact_wh, mode='bilinear', align_corners=True)
         else:
-            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels // fact, kernel_size=fact, stride=fact),)
+            self.up = nn.Sequential(nn.ConvTranspose2d(in_channels , in_channels//fact_ch, kernel_size=fact_wh, stride=fact_wh),)
                                     #nn.ReLU())
             if not resnet_cat_inp_upscaling:
-                self.up_cat = nn.Sequential(nn.ConvTranspose2d(in_channels_cat , in_channels // fact, kernel_size=fact_cat_inp, stride=fact_cat_inp),)
+                self.up_cat = nn.Sequential(nn.ConvTranspose2d(in_channels_cat , in_channels//fact_ch, kernel_size=fact_cat_inp, stride=fact_cat_inp),)
                                         #nn.ReLU())
         if resnet_cat_inp_upscaling:
-            nb_ups = math.log(fact_cat_inp) / math.log(fact)
+            nb_ups = math.log(fact_cat_inp) / math.log(fact_ch)
             assert nb_ups == int(nb_ups)
             nb_ups = int(nb_ups)
             
-            inp_ups = [UpRes(in_channels=in_channels_cat // (fact**i), 
-                            out_channels=in_channels_cat // fact // (fact**i), 
+            inp_ups = [UpBlkRes(in_channels=in_channels_cat // (fact_ch**i), 
+                            # out_channels=in_channels_cat // fact_ch // (fact_ch**i), # Default behavior
                             bilinear=bilinear, 
                             res_con=res_con,
                             res_con_interv=res_con_interv,
                             skip_first_res_con=skip_first_res_con,
-                            fact=fact, 
+                            fact_wh=fact_wh, 
+                            fact_ch=fact_ch,
                             nb_convs=nb_convs,
                             kernel_size=kernel_size,
                             batch_norm=kernel_size,
@@ -611,13 +625,13 @@ class UpUNet(nn.Module):
                             recurrent=recurrent,
                             recursion_steps=recursion_steps,) for i in range(nb_ups)]
             
-            assert in_channels_cat // fact // (fact**(nb_ups - 1)) == in_channels // fact
+            assert in_channels_cat // fact_ch // (fact_ch**(nb_ups - 1)) == in_channels // fact_ch
             self.up_cat = nn.Sequential(*inp_ups)
        
             
-        self.conv_xn = NConv(in_channels = 2*in_channels if bilinear else 2*in_channels//fact,
+        self.conv_xn = NConv(in_channels = 2*in_channels if bilinear else 2*in_channels//fact_ch,
                                 out_channels=out_channels,
-                                mid_channels=in_channels//fact,
+                                mid_channels=in_channels//fact_ch,
                                 kernel_sz=kernel_size,
                                 nb_convs=nb_convs,
                                 batch_norm=batch_norm,
@@ -649,7 +663,8 @@ class UpNetHeadBase(DecBase):
                  align_corners: bool=False,
                  dropout_rat_cls_seg:float=0.,
                  nb_up_blocks:int=2,
-                 upsample_facs: Union[int, Sequence[int]]=2,
+                 upsample_facs_ch: Union[int, Sequence[int]]=2,
+                 upsample_facs_wh: Union[int, Sequence[int]]=2,
                  bilinear:Union[bool, Sequence[bool]]=True,
                  conv_per_up_blk:Union[int,Sequence[int]]=2,
                  res_con:Union[bool,Sequence[bool]]=True,
@@ -666,17 +681,24 @@ class UpNetHeadBase(DecBase):
         self.nb_up_blocks = nb_up_blocks
         
         # Upsampling ratio of each Up layer
-        upsample_facs = self.get_attr_list(upsample_facs, cond=lambda a: a>0)
-        self.upsample_facs = upsample_facs
+        upsample_facs_ch = self.get_attr_list(upsample_facs_ch, cond=lambda a: a>0)
+        self.upsample_facs_ch = upsample_facs_ch
         
-        tot_upsample_fac=1.
+        upsample_facs_wh = self.get_attr_list(upsample_facs_wh, cond=lambda a: a>0)
+        self.upsample_facs_wh = upsample_facs_wh
+        
+        tot_upsample_fac_ch=1.
+        tot_upsample_fac_wh=1.
         last_out_ch = sum(in_channels) if inp_transform=='resize_concat' else sum(in_channels[:input_group_cat_nb])
         for i in range(self.nb_up_blocks):
-            f = self.upsample_facs[i]
-            tot_upsample_fac = tot_upsample_fac*f
-            last_out_ch = last_out_ch // f
+            f_ch = self.upsample_facs_ch[i]
+            f_wh = self.upsample_facs_wh[i]
+            tot_upsample_fac_ch = tot_upsample_fac_ch*f_ch
+            tot_upsample_fac_wh = tot_upsample_fac_wh*f_wh
+            last_out_ch = last_out_ch // f_ch
             
-        self.tot_upsample_fac = tot_upsample_fac
+        self.tot_upsample_fac_ch = tot_upsample_fac_ch
+        self.tot_upsample_fac_wh = tot_upsample_fac_wh
     
         assert last_out_ch >= num_classses, \
             f"Too many ch size reduction, input to seg_cls: {last_out_ch}, but num class: {num_classses} "
@@ -760,7 +782,8 @@ class ResNetHead(UpNetHeadBase):
                  align_corners: bool=False,
                  dropout_rat_cls_seg:float=0.,
                  nb_up_blocks:int=2,
-                 upsample_facs: Union[int, Sequence[int]]=2,
+                 upsample_facs_ch: Union[int, Sequence[int]]=2,
+                 upsample_facs_wh: Union[int, Sequence[int]]=2,
                  bilinear:Union[bool, Sequence[bool]]=True,
                  conv_per_up_blk:Union[int,Sequence[int]]=2,
                  res_con:Union[bool,Sequence[bool]]=True,
@@ -777,7 +800,8 @@ class ResNetHead(UpNetHeadBase):
                          align_corners,
                          dropout_rat_cls_seg,
                          nb_up_blocks,
-                         upsample_facs,
+                         upsample_facs_ch,
+                         upsample_facs_wh,
                          bilinear,
                          conv_per_up_blk,
                          res_con,
@@ -792,11 +816,13 @@ class ResNetHead(UpNetHeadBase):
         modules = []
         last_out_ch = self.in_channels
         for i in range(self.nb_up_blocks):
-            f = self.upsample_facs[i]
-            modules.append(UpRes(in_channels=last_out_ch, 
-                              out_channels=last_out_ch//f, 
+            f_ch = self.upsample_facs_ch[i]
+            f_wh = self.upsample_facs_wh[i]
+            modules.append(UpBlkRes(in_channels=last_out_ch, 
+                            #   out_channels=last_out_ch//f,     # Default behavior
                               bilinear=self.bilinear_ups[i], 
-                              fact=f, 
+                              fact_ch=f_ch, 
+                              fact_wh=f_wh, 
                               nb_convs=self.conv_per_up_blk[i],
                               kernel_size=self.kernel_sz,
                               res_con=self.res_con[i],
@@ -804,7 +830,7 @@ class ResNetHead(UpNetHeadBase):
                               skip_first_res_con=self.skip_first_res_con[i],
                               recurrent=self.recurrent[i],
                               recursion_steps=self.recursion_steps[i]))
-            last_out_ch = last_out_ch // f
+            last_out_ch = last_out_ch // f_ch
             
         assert self.last_out_ch == last_out_ch 
         self.ups = nn.ModuleList(modules)
@@ -826,7 +852,8 @@ class UNetHead(UpNetHeadBase):
                  align_corners: bool=False,
                  dropout_rat_cls_seg:float=0.,
                  nb_up_blocks:int=2,
-                 upsample_facs: Union[int, Sequence[int]]=2,
+                 upsample_facs_ch: Union[int, Sequence[int]]=2,
+                 upsample_facs_wh: Union[int, Sequence[int]]=2,
                  bilinear:Union[bool, Sequence[bool]]=True,
                  conv_per_up_blk:Union[int,Sequence[int]]=2,
                  res_con:Union[bool,Sequence[bool]]=True,
@@ -850,7 +877,8 @@ class UNetHead(UpNetHeadBase):
                          align_corners,
                          dropout_rat_cls_seg,
                          nb_up_blocks,
-                         upsample_facs,
+                         upsample_facs_ch,
+                         upsample_facs_wh,
                          bilinear,
                          conv_per_up_blk,
                          res_con,
@@ -882,13 +910,15 @@ class UNetHead(UpNetHeadBase):
         modules = []
         
         for i in range(self.nb_up_blocks):
-            f = self.upsample_facs[i]
-            modules.append(UpUNet(in_channels=last_out_ch, 
+            f_ch = self.upsample_facs_ch[i]
+            f_wh = self.upsample_facs_wh[i]
+            modules.append(UpBlkUNet(in_channels=last_out_ch, 
                                   in_channels_cat= self.in_channels[i],
-                                  out_channels=last_out_ch//f, 
+                                #   out_channels=last_out_ch//f,   # Default behavior
                                   bilinear=self.bilinear_ups[i], 
-                                  fact=f, 
-                                  fact_cat_inp=f**(i+1),
+                                  fact_ch=f_ch, 
+                                  fact_wh=f_wh, 
+                                  fact_cat_inp=f_ch**(i+1),
                                   nb_convs=self.conv_per_up_blk[i],
                                   kernel_size=self.kernel_sz,
                                   res_con=self.res_con[i],
@@ -897,7 +927,7 @@ class UNetHead(UpNetHeadBase):
                                   recurrent=self.recurrent[i],
                                   recursion_steps=self.recursion_steps[i],
                                   resnet_cat_inp_upscaling=self.resnet_cat_inp_upscaling[i]))
-            last_out_ch = last_out_ch // f
+            last_out_ch = last_out_ch // f_ch
             
         assert self.last_out_ch == last_out_ch 
         self.ups = nn.ModuleList(modules)
