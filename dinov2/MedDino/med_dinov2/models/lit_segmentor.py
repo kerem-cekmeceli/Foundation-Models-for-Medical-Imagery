@@ -132,7 +132,7 @@ class LitSegmentor(LitBaseModule):
                  reshape_dec_oup=False, 
                  align_corners=False,
                  val_metrics_over_vol=True,
-                 first_n_batch_to_seg_log=0, # 0 means no logging
+                 seg_log_batch_idxs=None, # 0 means no logging
                  minibatch_log_idxs=None,
                 seg_val_intv=20,
                 sync_dist_train=True,
@@ -144,8 +144,9 @@ class LitSegmentor(LitBaseModule):
                          metric_configs=metric_configs)
         
         self.val_metrics_over_vol = val_metrics_over_vol
-        assert first_n_batch_to_seg_log>=0
-        self.first_n_batch_to_seg_log = first_n_batch_to_seg_log
+        if seg_log_batch_idxs is None:
+            seg_log_batch_idxs = []
+        self.seg_log_batch_idxs = seg_log_batch_idxs
         
         self.sync_dist_train = sync_dist_train
         self.sync_dist_val = sync_dist_val
@@ -157,7 +158,7 @@ class LitSegmentor(LitBaseModule):
                                reshape_dec_oup=reshape_dec_oup,
                                align_corners=align_corners)
         
-        if first_n_batch_to_seg_log > 0:
+        if len(seg_log_batch_idxs) == 0:
             assert len(minibatch_log_idxs)>0
         self.minibatch_log_idxs = [] if minibatch_log_idxs is None else minibatch_log_idxs
         
@@ -206,17 +207,17 @@ class LitSegmentor(LitBaseModule):
                 
         return loss
     
-    def get_segmentations(self, x_batch, y_batch, y_pred):
+    def get_segmentations(self, x_batch, y_batch, y_pred, batch_idx):
         imgs = []
         masks_pred = []
         masks_gt = []
-        caption = f'Epoch={self.current_epoch}, Samples: '
+        caption = f'Epoch={self.current_epoch}, Batch:{batch_idx} Samples: '
         for idx in self.minibatch_log_idxs:
             # Note: We can also log a single channel (grayscale) instead of RGB since they are all the same 
             imgs.append(x_batch[idx]) 
             masks_pred.append(y_pred[idx].argmax(dim=0, keepdim=True))
             masks_gt.append(y_batch[idx].unsqueeze(0))
-            caption += f'{idx+1}, '
+            caption += f'{idx}, '
         
         # Concat the seg results for the samples from the same batch
         nb_rows = 2 
@@ -243,8 +244,9 @@ class LitSegmentor(LitBaseModule):
     
     @rank_zero_only                 
     def log_seg(self, batch_idx, x_batch, y_batch, y_pred, cap_prefix=''):
-        self.logger.experiment.log({f'{cap_prefix}_seg_batch{batch_idx+1}': \
-                [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
+        batch_pos = self.seg_log_batch_idxs.index(batch_idx)
+        self.logger.experiment.log({f'{cap_prefix}_seg_batch{batch_pos}': \
+                [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred, batch_idx=batch_idx)],}, commit=False)
     
     def validation_step(self, val_batch, batch_idx):
         x_batch, y_batch = val_batch
@@ -278,7 +280,7 @@ class LitSegmentor(LitBaseModule):
                     self.log('val_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
         # save the segmentation result
-        if batch_idx < self.first_n_batch_to_seg_log:
+        if batch_idx in self.seg_log_batch_idxs:
             if (self.current_epoch+1)%self.seg_val_intv==0:
                 self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'val')
                 # self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
@@ -315,7 +317,7 @@ class LitSegmentor(LitBaseModule):
         loss = self.loss_fn(y_pred, y_batch)
         
         # save the segmentation result
-        if batch_idx < self.first_n_batch_to_seg_log:
+        if batch_idx in self.seg_log_batch_idxs:
             self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'test')
             # self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
             #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)

@@ -158,7 +158,7 @@ else:
 
 
 # Decoder config
-n_concat = 2 if dec_head_key != 'unet' else 5
+n_concat = 4
 # Linear classification of each patch + upsampling to pixel dim
 dec_head_cfg_conv_lin = dict(in_channels=[embed_dim]*n_concat, 
                              num_classses=num_classses,
@@ -229,6 +229,9 @@ dec_head_cfg_resnet = dict(in_channels=[embed_dim]*n_concat,
                         recursion_steps=2)
 
 # https://arxiv.org/abs/1505.04597 (unet papaer)
+n_concat=5
+input_group_cat_nb = 2
+n_concat *= input_group_cat_nb
 dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         num_classses=num_classses,
                         # in_index=None,
@@ -246,7 +249,7 @@ dec_head_cfg_unet = dict(in_channels=[embed_dim]*n_concat,
                         recurrent=True,
                         recursion_steps=2, # 3
                         resnet_cat_inp_upscaling=True,
-                        input_group_cat_nb=2)
+                        input_group_cat_nb=input_group_cat_nb)
 
 decs_dict = dict(lin=dict(name='ConvHeadLinear', params=dec_head_cfg_conv_lin),
                  fcn=dict(name='FCNHead', params=dec_head_cfg_fcn),
@@ -356,9 +359,10 @@ metric_cfgs=[dict(name='mIoU', params=miou_cfg),
 seg_res_log_itv = max(nb_epochs//5, 1)   # Log seg reult every N epochs
 seg_res_nb_patient = 1  # Process minibatches for N number of patients
 seg_log_per_batch = 4  # Log N samples from each minibatch
+seg_log_nb_batches = 16
 assert seg_log_per_batch<=batch_sz
-first_n_batch_to_seg_log = math.ceil(vol_depth/batch_sz*seg_res_nb_patient)
 
+# Which samles in the minibatch to log
 sp = seg_log_per_batch+1
 multp = batch_sz//sp
 # maximal separation from each other and from edges (from edges is prioritized)
@@ -373,6 +377,11 @@ else:
                             1)
 log_idxs = log_idxs.tolist()
 
+# batch indexes to log
+step = max(vol_depth//batch_sz//seg_log_nb_batches, 1)
+seg_log_batch_idxs = torch.arange(0+step-1, min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_patient), step).tolist()
+assert len(seg_log_batch_idxs)==seg_log_nb_batches
+
 # Init the segmentor model
 segmentor_cfg = dict(backbone=dino_bb_cfg,
                      decode_head=dec_head_cfg,
@@ -384,7 +393,7 @@ segmentor_cfg = dict(backbone=dino_bb_cfg,
                      reshape_dec_oup=True,
                      align_corners=False,
                      val_metrics_over_vol=True, # Also report metrics over vol
-                     first_n_batch_to_seg_log=first_n_batch_to_seg_log,
+                     seg_log_batch_idxs=seg_log_batch_idxs,
                      minibatch_log_idxs=log_idxs,
                      seg_val_intv=seg_res_log_itv,
                      sync_dist_train=gpus>1,
