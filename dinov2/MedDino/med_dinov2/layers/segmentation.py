@@ -587,7 +587,7 @@ class UpBlkUNet(nn.Module):
         self.fact_ch=fact_ch
         self.fact_cat_inp=fact_cat_inp
         
-        assert in_channels // fact_cat_inp >= 1
+        assert in_channels // fact_cat_inp >= 1, f'in_channels:{in_channels}, fact_cat_inp:{fact_cat_inp}'
         
         # If to use residual connections 
         self.res_con=res_con
