@@ -234,7 +234,7 @@ class SegmentationDatasetHDF5(Dataset):
             
         assert len(mask.shape) == 2, f'mask shape = {mask.shape}'
         assert len(image.shape) == 3, f'image shape = {image.shape}'
-        
+        assert image.shape[:2] == mask.shape, f'image shape={image.shape}, maks shape = {mask.shape}'
         
         [image, mask] = self.transforms([image, mask])
         image = image.to(self.dtype) # C, H, W
