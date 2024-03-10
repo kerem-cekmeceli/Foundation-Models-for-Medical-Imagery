@@ -50,21 +50,21 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'abide_stanford' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
+dataset = 'hcp1' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 100
+nb_epochs = 2
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
@@ -596,13 +596,13 @@ logger = WandbLogger(project='FoundationModels_MedDino',
                      dir=wandb_log_path,
                      name=run_name,
                      mode=log_mode,
-                     settings=wandb.Settings(_service_wait=30),  # Can increase timeout
+                     settings=wandb.Settings(_service_wait=300),  # Can increase timeout
                      tags=tags)
 
 # log gradients, parameter histogram and model topology
 logger.watch(model, log="all")
 
-n_best = 2 if save_checkpoints else 0
+n_best = 1 if save_checkpoints else 0
 models_pth = dino_main_pth / f'Checkpoints/MedDino/{model.model.decode_head.__class__.__name__}'
 models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
@@ -618,7 +618,7 @@ trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **tra
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 # Load the best checkpoint (highest val_dice)
-model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path)
+model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **segmentor_cfg)
 logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
 
 print('Done !')
