@@ -58,7 +58,7 @@ dataset = 'abide_stanford' # 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, 
 hdf5_data = True
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
