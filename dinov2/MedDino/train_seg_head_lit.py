@@ -529,7 +529,7 @@ train_dataloader_cfg = dict(batch_size=batch_sz, shuffle=True, pin_memory=pin_me
 val_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
                           persistent_workers=persistent_workers, drop_last=drop_last, 
                           shuffle=False if gpus==1 else None)
-test_dataloader_cfg = dict(batch_size=batch_sz*gpus, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+test_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
                            persistent_workers=persistent_workers, drop_last=drop_last, 
                            shuffle=False)  # if gpus==1 else None
 
@@ -547,6 +547,11 @@ trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strateg
                    enable_checkpointing=True, 
                    gradient_clip_val=0, gradient_clip_algorithm='norm',  # Gradient clipping by norm/value
                    accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
+
+
+# Trainer cfg for testing
+trainer_cfg_test = dict(accelerator='gpu', devices=1, 
+                        log_every_n_steps=100, num_sanity_val_steps=0,) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
 
 
 # Init the logger (wandb)
@@ -619,6 +624,7 @@ trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloa
 
 torch.distributed.destroy_process_group()
 if trainer.global_rank == 0:
+    trainer = L.Trainer(logger=logger, **trainer_cfg_test)
     # Load the best checkpoint (highest val_dice)
     model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **segmentor_cfg)
     logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
