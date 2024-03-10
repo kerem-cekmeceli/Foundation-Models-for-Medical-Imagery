@@ -219,7 +219,7 @@ class SegmentationDatasetHDF5(Dataset):
             
         vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
         
-        image = self.dataset['images'][vol_idx, slice_idx].copy()
+        image = self.dataset['images'][vol_idx, slice_idx].copy().astype('float32')
         mask = self.dataset['labels'][vol_idx, slice_idx].copy().astype('uint8')
         
         if image.max()<=1 and image.min()>=0:
