@@ -137,7 +137,8 @@ class LitSegmentor(LitBaseModule):
                 seg_val_intv=20,
                 sync_dist_train=True,
                 sync_dist_val=True,
-                sync_dist_test=True) -> None:
+                sync_dist_test=True,
+                test_dataset_name='') -> None:
         super().__init__(loss_config=loss_config,
                          optimizer_config=optimizer_config,
                          scheduler_config=schedulers_config,
@@ -151,6 +152,8 @@ class LitSegmentor(LitBaseModule):
         self.sync_dist_train = sync_dist_train
         self.sync_dist_val = sync_dist_val
         self.sync_dist_test = sync_dist_test
+        
+        self.test_dataset_name =test_dataset_name
         
         self.model = Segmentor(backbone=backbone,
                                decode_head=decode_head,
@@ -318,23 +321,23 @@ class LitSegmentor(LitBaseModule):
         
         # save the segmentation result
         if batch_idx in self.seg_log_batch_idxs:
-            self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'test')
+            self.log_seg(batch_idx, x_batch, y_batch, y_pred, f'test_{self.test_dataset_name}')
             # self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
             #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
 
         # Log the test loss        
-        self.log('test_loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+        self.log(f'test_loss_{self.test_dataset_name}', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
         
         # Compute the metrics 
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred, y_batch)
             for k, v in metric_dict.items():
-                self.log('test_'+metric_n+k, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+                self.log(f'test_{self.test_dataset_name}_{metric_n}{k}', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                 
             if  self.val_metrics_over_vol:
                 metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
                 for k, v in metric_dict_vol.items():
-                    self.log('test_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+                    self.log(f'test_{self.test_dataset_name}_{metric_n}{k}_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                     
     @rank_zero_only   
     def wnadb_conf(self):
