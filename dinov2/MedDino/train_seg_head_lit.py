@@ -622,12 +622,14 @@ trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **tra
 # model is saved only on the main process when using distributed training
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
+
 torch.distributed.destroy_process_group()
 if trainer.global_rank == 0:
-    trainer = L.Trainer(logger=logger, **trainer_cfg_test)
+    trainer_testing = L.Trainer(logger=logger, **trainer_cfg_test)
     # Load the best checkpoint (highest val_dice)
     model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **segmentor_cfg)
-    logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
+    # trainer_testing.validate(model=model, datamodule=data_module)
+    trainer_testing.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
 
 print('Done !')
 #finish logging

@@ -352,7 +352,8 @@ class LitSegmentor(LitBaseModule):
                 wandb.define_metric(metric_name+'_vol', summary="max")
                 wandb.define_metric('val_'+metric_name+'_vol', summary="max")
                 wandb.define_metric('test_'+metric_name+'_vol', summary="max")
-     
+                
+                
     def on_train_start(self) -> None:
         self.wnadb_conf()
         return super().on_train_start()
