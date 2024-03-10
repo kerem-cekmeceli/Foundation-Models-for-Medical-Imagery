@@ -529,9 +529,9 @@ train_dataloader_cfg = dict(batch_size=batch_sz, shuffle=True, pin_memory=pin_me
 val_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
                           persistent_workers=persistent_workers, drop_last=drop_last, 
                           shuffle=False if gpus==1 else None)
-test_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
+test_dataloader_cfg = dict(batch_size=batch_sz*gpus, pin_memory=pin_memory, num_workers=num_workers_dataloader,
                            persistent_workers=persistent_workers, drop_last=drop_last, 
-                           shuffle=False if gpus==1 else None)
+                           shuffle=False)  # if gpus==1 else None
 
 # train_dataloader = DataLoader(dataset=train_dataset, **train_dataloader_cfg)
 # val_dataloader = DataLoader(dataset=val_dataset,  **val_dataloader_cfg)
@@ -539,7 +539,7 @@ test_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_worke
 
 data_module = VolDataModule(train_dataset=train_dataset, val_dataset=val_dataset, test_dataset=test_dataset, 
                             train_dataloader_cfg=train_dataloader_cfg, val_dataloader_cfg=val_dataloader_cfg, test_dataloader_cfg=test_dataloader_cfg,
-                            batch_size=batch_sz, vol_depth=vol_depth, num_gpus=gpus)
+                            vol_depth=vol_depth, num_gpus=gpus)
 
 # Trainer config (loggable components)
 trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strategy=strategy,
@@ -617,9 +617,11 @@ trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **tra
 # model is saved only on the main process when using distributed training
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
-# Load the best checkpoint (highest val_dice)
-model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **segmentor_cfg)
-logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
+torch.distributed.destroy_process_group()
+if trainer.global_rank == 0:
+    # Load the best checkpoint (highest val_dice)
+    model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **segmentor_cfg)
+    logs = trainer.test(model=model, datamodule=data_module)  # dataloaders=test_dataloader,
 
 print('Done !')
 #finish logging
