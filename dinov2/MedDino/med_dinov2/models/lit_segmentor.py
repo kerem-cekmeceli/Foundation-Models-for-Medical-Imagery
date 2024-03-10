@@ -288,7 +288,7 @@ class LitSegmentor(LitBaseModule):
     
     def on_train_epoch_start(self) -> None:
         super().on_train_epoch_start()
-        self.log('epoch', self.current_epoch, on_epoch=True, on_step=False)
+        self.log('epoch', self.current_epoch, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
         
     # def on_train_epoch_end(self) -> None:
     #     return super().on_train_epoch_end()
@@ -298,10 +298,10 @@ class LitSegmentor(LitBaseModule):
         return super().backward(loss, *args, **kwargs)
     
     def optimizer_step(self, epoch: int, batch_idx: int, optimizer, optimizer_closure=None) -> None:
-        self.log('lr', optimizer.param_groups[0]["lr"], on_epoch=True, on_step=False)
+        self.log('lr', optimizer.param_groups[0]["lr"], on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
         return super().optimizer_step(epoch, batch_idx, optimizer, optimizer_closure)
     
-    def lr_scheduler_step(self, scheduler: Any , metric) -> None:
+    def lr_scheduler_step(self, scheduler: Any , metric=None) -> None:
         return super().lr_scheduler_step(scheduler, metric)
     
     def test_step(self, batch, batch_idx):   
