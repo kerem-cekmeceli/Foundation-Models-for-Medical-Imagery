@@ -12,7 +12,8 @@ class mIoULoss(mIoU):
                  prob_inputs=False, 
                  bg_ch_to_rm=None,
                  reduction='mean',
-                 epsilon=1e-6):
+                 epsilon=1e-6,
+                 weight=None):
         assert reduction in ['mean , sum']
         super().__init__(prob_inputs=prob_inputs, 
                          soft=True,  # loss => must be differentiable => soft
@@ -20,7 +21,8 @@ class mIoULoss(mIoU):
                          reduction=reduction,
                          ret_per_class_scores=False,
                          vol_batch_sz=None,
-                         epsilon=epsilon)
+                         epsilon=epsilon,
+                         weight=weight)
     
     def forward(self, inputs, target_oneHot):
         return 1 - super().forward(inputs, target_oneHot)
@@ -33,7 +35,8 @@ class DiceLoss(DiceScore):
                  bg_ch_to_rm=None,
                  reduction='mean',
                  k=1, 
-                 epsilon=1e-6,):
+                 epsilon=1e-6,
+                 weight=None):
         assert reduction in ['mean', 'sum']
         super().__init__(prob_inputs=prob_inputs, 
                          soft=True,  # loss => must be differentiable => soft
@@ -42,7 +45,8 @@ class DiceLoss(DiceScore):
                          ret_per_class_scores=False,
                          vol_batch_sz=None,
                          k=k,
-                         epsilon=epsilon)
+                         epsilon=epsilon,
+                         weight=weight)
     
     def forward(self, inputs, target_oneHot):
         return 1 - super().forward(inputs, target_oneHot)
@@ -54,7 +58,8 @@ class FocalLoss(nn.Module):
                  bg_ch_to_rm=None,
                  reduction='mean',
                  gamma=2,
-                 alpha=None):
+                 weight=None,
+                 ):
         assert reduction in ['mean', 'sum']
         
         super().__init__()
@@ -67,9 +72,9 @@ class FocalLoss(nn.Module):
         assert gamma > 0
         self.gamma = gamma
         
-        if isinstance(alpha, list):
-            alpha = torch.Tensor(alpha)
-        self.alpha = alpha        
+        if isinstance(weight, list):
+            weight = torch.Tensor(weight)
+        self.weight = weight        
 
     def forward(self, mask_pred, mask_gt):
         """mask_pred is log probas with BG removed if necessary"""
@@ -77,7 +82,7 @@ class FocalLoss(nn.Module):
         
         ce_loss_weighted = F.nll_loss(input=mask_pred, 
                                       target=mask_gt.argmax(dim=1), 
-                                      weight=self.alpha, reduction='none',
+                                      weight=self.weight, reduction='none',
                                       ignore_index=self.bg_ch_to_rm) # [N, H, W]
         
         pt = torch.exp(-1*F.nll_loss(input=mask_pred, target=mask_gt.argmax(dim=1), 

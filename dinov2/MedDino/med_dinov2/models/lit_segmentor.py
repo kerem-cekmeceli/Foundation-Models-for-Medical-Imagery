@@ -167,6 +167,15 @@ class LitSegmentor(LitBaseModule):
         
         # nb epoch interval to log the seg result
         self.seg_val_intv = max(seg_val_intv, 1)
+
+    @property
+    def test_dataset_name(self):
+        return self.test_dataset_name
+    
+    @test_dataset_name.setter
+    def test_dataset_name(self, val):
+        self.wnadb_conf_testing(dataset=val)
+        self.test_dataset_name = val
         
         
     def forward(self, x):
@@ -283,7 +292,7 @@ class LitSegmentor(LitBaseModule):
                     self.log('val_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
         # save the segmentation result
-        if batch_idx in self.seg_log_batch_idxs:
+        if batch_idx in self.seg_log_batch_idxs and self.test_dataset_name!='':
             if (self.current_epoch+1)%self.seg_val_intv==0:
                 self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'val')
                 # self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
@@ -343,18 +352,29 @@ class LitSegmentor(LitBaseModule):
     def wnadb_conf(self):
         wandb.define_metric('loss', summary="min")
         wandb.define_metric('val_loss', summary="min")
-        wandb.define_metric('test_loss', summary="min")
+        # wandb.define_metric('test_loss', summary="min")
         
         for metric_name in self.metrics.keys():
             assert 'dice' in metric_name or 'mIoU' in metric_name, "Unknown metric"
             wandb.define_metric(metric_name, summary="max")
             wandb.define_metric('val_'+metric_name, summary="max")
-            wandb.define_metric('test_'+metric_name, summary="max")
+            # wandb.define_metric('test_'+metric_name, summary="max")
             
             if self.val_metrics_over_vol:
                 wandb.define_metric(metric_name+'_vol', summary="max")
                 wandb.define_metric('val_'+metric_name+'_vol', summary="max")
-                wandb.define_metric('test_'+metric_name+'_vol', summary="max")
+                # wandb.define_metric('test_'+metric_name+'_vol', summary="max")
+    
+    @rank_zero_only             
+    def wnadb_conf_testing(self, dataset):
+        wandb.define_metric(f'test_{dataset}_loss', summary="min")
+        
+        for metric_name in self.metrics.keys():
+            assert 'dice' in metric_name or 'mIoU' in metric_name, "Unknown metric"
+            wandb.define_metric(f'test_{dataset}_'+metric_name, summary="max")
+            
+            if self.val_metrics_over_vol:
+                wandb.define_metric(f'test_{dataset}_'+metric_name+'_vol', summary="max")
                 
                 
     def on_train_start(self) -> None:

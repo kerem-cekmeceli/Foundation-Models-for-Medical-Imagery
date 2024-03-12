@@ -319,9 +319,11 @@ class VolDistributedSampler(DistributedSampler):
 
 
 class VolDataModule(L.LightningDataModule):
-    def __init__(self, train_dataset, val_dataset, test_dataset, 
-                 train_dataloader_cfg, val_dataloader_cfg, test_dataloader_cfg,
-                 vol_depth, num_gpus):
+    def __init__(self, train_dataset, train_dataloader_cfg,
+                 vol_depth, num_gpus,
+                 val_dataset=None, test_dataset=None, 
+                 val_dataloader_cfg=None, test_dataloader_cfg=None,
+                 ):
         super().__init__()
         self.train_dataset = train_dataset
         self.val_dataset = val_dataset
@@ -349,15 +351,16 @@ class VolDataModule(L.LightningDataModule):
         return DataLoader(self.val_dataset, sampler=sampler, **self.val_dataloader_cfg)   
     
     def test_dataloader(self):
-        # if self.num_gpus>1:
-        #     # Use custom sampler for validation dataset
-        #     sampler = VolDistributedSampler(dataset=self.test_dataset, num_replicas=self.num_gpus, 
-        #                                     vol_depth=self.vol_depth, shuffle=False, drop_last=False,)
-        # else:
-        #     sampler=None
+        if self.num_gpus>1:
+            # Use custom sampler for validation dataset
+            sampler = VolDistributedSampler(dataset=self.test_dataset, num_replicas=self.num_gpus, 
+                                            vol_depth=self.vol_depth, shuffle=False, drop_last=False,)
+        else:
+            sampler=None
             
-        sampler=None    
-        return DataLoader(self.test_dataset, sampler=sampler, **self.test_dataloader_cfg)        
+        return DataLoader(self.test_dataset, sampler=sampler, **self.val_dataloader_cfg)   
+  
+  
         
 
 #################################################################################################

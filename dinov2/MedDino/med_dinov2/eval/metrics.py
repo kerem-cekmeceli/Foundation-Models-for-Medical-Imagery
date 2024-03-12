@@ -14,10 +14,13 @@ class ScoreBase(nn.Module, ABC):
                  reduction='mean',
                  ret_per_class_scores=True,
                  vol_batch_sz=None,
-                 log_probas=False):
+                 log_probas=False,
+                 weight=None):
         super(ScoreBase, self).__init__()
         
- 
+        if weight is not None:
+            weight = torch.Tensor(weight)
+        self.weight = weight
         self.prob_inputs=prob_inputs
         self.soft=soft
         
@@ -111,6 +114,14 @@ class ScoreBase(nn.Module, ABC):
         """mask_pred and mask_gt : [N, C, ...] in [0, 1]"""
         pass
     
+    def _apply_weight(self, scores_per_class):
+        # Apply the weights per class
+        if self.weight is not None:
+            assert scores_per_class.size(-1)==self.weight.size(-1), \
+                f"Nb of classes in the weight tensor do not match the data, expected {scores_per_class.size(-1)}, got {self.weight.size(-1)}"
+            scores_per_class = scores_per_class * self.weight.unsqueeze(0)
+        return scores_per_class
+    
     
     def get_res_dict(self, inputs, target_oneHot, depth_idx=None):
         # Verify and prep inputs
@@ -119,6 +130,8 @@ class ScoreBase(nn.Module, ABC):
         # Calc score ever 2D
         if depth_idx is None:
             scores = self._compute_score(mask_pred, mask_gt)
+            # Apply the weight
+            scores = self._apply_weight(scores)
             return self._put_in_res_dict(scores)
         
         # Calc score over 3D 
@@ -144,6 +157,8 @@ class ScoreBase(nn.Module, ABC):
                     # Compute the scores over the complete volume
                     scores = self._compute_score(torch.cat(self.slices_mask_pred, dim=-3).unsqueeze(0), \
                                                  torch.cat(self.slices_mask_gt, dim=-3).unsqueeze(0))  # [1, C, D, H, W]
+                    # Apply the weight
+                    scores = self._apply_weight(scores)
                     self.slices_mask_pred.clear()
                     self.slices_mask_gt.clear()
                     return self._put_in_res_dict(scores)
@@ -156,6 +171,9 @@ class ScoreBase(nn.Module, ABC):
         
         # Compute the scores
         scores = self._compute_score(mask_pred, mask_gt)  # scores: [N, C] or [N]
+        
+        # Apply the weight
+        scores = self._apply_weight(scores)
         
         # Apply the selcted reduction
         score_red = self._score_reduction(scores)
@@ -170,13 +188,15 @@ class mIoU(ScoreBase):
                  reduction='mean',
                  ret_per_class_scores=True,
                  vol_batch_sz=None,
-                 epsilon=1e-6):
+                 epsilon=1e-6,
+                 weight=None):
         super(mIoU, self).__init__(prob_inputs=prob_inputs, 
                                    soft=soft,  # score => not differentiable => can be hard
                                    bg_ch_to_rm=bg_ch_to_rm,
                                    reduction=reduction,
                                    ret_per_class_scores=ret_per_class_scores,
-                                   vol_batch_sz=vol_batch_sz)  
+                                   vol_batch_sz=vol_batch_sz,
+                                   weight=weight)  
         
         assert epsilon>0, f'Epsilon must be positive, got: {epsilon}'
         self.epsilon=epsilon
@@ -198,7 +218,7 @@ class mIoU(ScoreBase):
         
         # Score per batch and classes
         iou = (inter+self.epsilon)/(union+self.epsilon)  # N x C
-
+        
         return iou
      
 
@@ -211,14 +231,15 @@ class DiceScore(ScoreBase):
                  k=1, 
                  epsilon=1e-6,
                  vol_batch_sz=None,
-                 ret_per_class_scores=True) -> None:
+                 ret_per_class_scores=True,
+                 weight=None) -> None:
         super().__init__(prob_inputs=prob_inputs, 
                          soft=soft,  # score => not differentiable => can be hard
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
                          ret_per_class_scores=ret_per_class_scores,
                          vol_batch_sz=vol_batch_sz,
-                         )
+                         weight=weight)
         assert epsilon>0, f'Epsilon must be positive, got: {epsilon}'
         self.epsilon=epsilon
         assert k>0, f'k must be positive, got: {k}'
