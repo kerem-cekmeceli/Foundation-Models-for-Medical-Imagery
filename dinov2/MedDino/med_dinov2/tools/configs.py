@@ -6,9 +6,7 @@ from MedDino.med_dinov2.eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5
 
-def get_data_attrs(name:str, num_gpu:int, use_hdf5=True):
-    assert num_gpu>0
-    
+def get_data_attrs(name:str, use_hdf5=True):
     attrs = {}
     
     # Dataset parameters
@@ -162,8 +160,9 @@ def get_data_attrs(name:str, num_gpu:int, use_hdf5=True):
     return attrs
 
 def get_batch_sz(data_attrs, num_gpu):
-    dataset_name = data_attrs['name']
+    assert num_gpu>0
     
+    dataset_name = data_attrs['name']
     
     if dataset_name=='hcp1':
         batch_sz = 8
@@ -194,7 +193,7 @@ def get_batch_sz(data_attrs, num_gpu):
     
     batch_sz = batch_sz // num_gpu     
     
-    vol_depth = dataset_name['vol_depth']
+    vol_depth = data_attrs['vol_depth']
     assert vol_depth % batch_sz == 0,\
         f'batch size must be a multiple of slice/patient but got {batch_sz} and {vol_depth}'
        

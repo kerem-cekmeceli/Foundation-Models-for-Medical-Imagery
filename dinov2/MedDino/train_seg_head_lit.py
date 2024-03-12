@@ -42,9 +42,9 @@ from lightning.pytorch import seed_everything
 from MedDino.med_dinov2.tools.configs import *
 
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = True
-log_the_run = True
+log_the_run = False
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -59,7 +59,7 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 dataset = 'hcp1' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
-test_datasets = ['hcp1', 'hcp2', 'abide_caltech']
+test_datasets = ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else [dataset]
 
 # Select the dec head
 dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
@@ -68,7 +68,7 @@ dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 100
+nb_epochs = 2
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
@@ -98,7 +98,7 @@ bb_checkpoint_path = dino_main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_p
 dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 
 # Data attributes
-dataset_attrs = get_data_attrs(name=dataset)
+dataset_attrs = get_data_attrs(name=dataset, use_hdf5=hdf5_data)
 batch_sz = get_batch_sz(dataset_attrs, gpus)
 
 # Decoder config
@@ -303,11 +303,11 @@ if trainer.global_rank == 0:
         print(f'Testing for dataset: {dataset_name_testing} {i+1}/{len(test_datasets)}')
         
         # Set the test_dataset name
-        model.test_dataset_name = dataset_name_testing
+        model._test_dataset_name = dataset_name_testing
         
         # Get attributes and the batch size for the given dataset
-        dataset_attrs = get_data_attrs(name=dataset_name_testing)
-        batch_sz = get_batch_sz(dataset_attrs, 1)
+        dataset_attrs = get_data_attrs(name=dataset_name_testing, use_hdf5=hdf5_data)
+        batch_sz = get_batch_sz(dataset_attrs, num_gpu=gpus)  # use the same batch size as ddp to ensure it will fit in the memory
         
         # Dataloader config for val and test on singl GPU
         test_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
@@ -330,10 +330,9 @@ if trainer.global_rank == 0:
         # Test on single GPU
         trainer_testing.test(model=model, dataloaders=test_dataloader) 
         
-        # Finish logging
-        wandb.finish()
+    # Finish logging
+    wandb.finish()
         
-
 print('***END***')
 
 

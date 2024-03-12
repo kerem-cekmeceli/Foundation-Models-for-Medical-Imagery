@@ -153,7 +153,7 @@ class LitSegmentor(LitBaseModule):
         self.sync_dist_val = sync_dist_val
         self.sync_dist_test = sync_dist_test
         
-        self.test_dataset_name =test_dataset_name
+        self._test_dataset_name =test_dataset_name
         
         self.model = Segmentor(backbone=backbone,
                                decode_head=decode_head,
@@ -170,12 +170,11 @@ class LitSegmentor(LitBaseModule):
 
     @property
     def test_dataset_name(self):
-        return self.test_dataset_name
+        return self._test_dataset_name
     
     @test_dataset_name.setter
     def test_dataset_name(self, val):
-        self.wnadb_conf_testing(dataset=val)
-        self.test_dataset_name = val
+        self._test_dataset_name = val
         
         
     def forward(self, x):
@@ -292,7 +291,7 @@ class LitSegmentor(LitBaseModule):
                     self.log('val_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
         # save the segmentation result
-        if batch_idx in self.seg_log_batch_idxs and self.test_dataset_name!='':
+        if batch_idx in self.seg_log_batch_idxs and self._test_dataset_name!='':
             if (self.current_epoch+1)%self.seg_val_intv==0:
                 self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'val')
                 # self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
@@ -330,26 +329,26 @@ class LitSegmentor(LitBaseModule):
         
         # save the segmentation result
         if batch_idx in self.seg_log_batch_idxs:
-            self.log_seg(batch_idx, x_batch, y_batch, y_pred, f'test_{self.test_dataset_name}')
+            self.log_seg(batch_idx, x_batch, y_batch, y_pred, f'test_{self._test_dataset_name}')
             # self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
             #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
 
         # Log the test loss        
-        self.log(f'test_loss_{self.test_dataset_name}', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+        self.log(f'test_loss_{self._test_dataset_name}', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
         
         # Compute the metrics 
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred, y_batch)
             for k, v in metric_dict.items():
-                self.log(f'test_{self.test_dataset_name}_{metric_n}{k}', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+                self.log(f'test_{self._test_dataset_name}_{metric_n}{k}', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                 
             if  self.val_metrics_over_vol:
                 metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
                 for k, v in metric_dict_vol.items():
-                    self.log(f'test_{self.test_dataset_name}_{metric_n}{k}_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+                    self.log(f'test_{self._test_dataset_name}_{metric_n}{k}_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                     
     @rank_zero_only   
-    def wnadb_conf(self):
+    def wnadb_conf_metrics(self):
         wandb.define_metric('loss', summary="min")
         wandb.define_metric('val_loss', summary="min")
         # wandb.define_metric('test_loss', summary="min")
@@ -366,19 +365,32 @@ class LitSegmentor(LitBaseModule):
                 # wandb.define_metric('test_'+metric_name+'_vol', summary="max")
     
     @rank_zero_only             
-    def wnadb_conf_testing(self, dataset):
-        wandb.define_metric(f'test_{dataset}_loss', summary="min")
+    def wnadb_conf_metrics_multi_dataset(self, target):
+        assert target in ['val', 'test']
+        
+        dataset = self._test_dataset_name
+        wandb.define_metric(f'{target}_{dataset}_loss', summary="min")
         
         for metric_name in self.metrics.keys():
             assert 'dice' in metric_name or 'mIoU' in metric_name, "Unknown metric"
-            wandb.define_metric(f'test_{dataset}_'+metric_name, summary="max")
+            wandb.define_metric(f'{target}_{dataset}_'+metric_name, summary="max")
             
             if self.val_metrics_over_vol:
-                wandb.define_metric(f'test_{dataset}_'+metric_name+'_vol', summary="max")
+                wandb.define_metric(f'{target}_{dataset}_'+metric_name+'_vol', summary="max")
                 
                 
     def on_train_start(self) -> None:
-        self.wnadb_conf()
+        self.wnadb_conf_metrics()
         return super().on_train_start()
+    
+    def on_validation_start(self) -> None:
+        if self._test_dataset_name != '':
+            self.wnadb_conf_metrics_multi_dataset(target='val')
+        return super().on_validation_start()
+    
+    def on_test_start(self) -> None:
+        if self._test_dataset_name != '':
+            self.wnadb_conf_metrics_multi_dataset(target='test')
+        return super().on_test_start()
                 
                 
