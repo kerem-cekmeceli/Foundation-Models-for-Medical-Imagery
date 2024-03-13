@@ -344,6 +344,8 @@ else:
 
 pth = main_pth + sub_path + filename
 
+pth = main_pth + 'brain/abide/stanford/'+'data_T1_original_depth_132_from_10_to_15.hdf5'
+
 train_idx = 120
 val_idx = 40
 test_idx = 40
