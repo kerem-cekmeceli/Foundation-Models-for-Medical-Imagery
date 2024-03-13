@@ -1,54 +1,54 @@
-import sys
-import pathlib
+# import sys
+# import pathlib
  
-dino_main_pth = pathlib.Path(__file__).parent.parent
-orig_dino_pth = dino_main_pth / 'OrigDino'
-sys.path.insert(1, dino_main_pth.as_posix())
-sys.path.insert(2, orig_dino_pth.as_posix())
+# dino_main_pth = pathlib.Path(__file__).parent.parent
+# orig_dino_pth = dino_main_pth / 'OrigDino'
+# sys.path.insert(1, dino_main_pth.as_posix())
+# sys.path.insert(2, orig_dino_pth.as_posix())
 
-import torch
-from mmseg.apis import init_segmentor, inference_segmentor, show_result_pyplot
-from mmcv.runner import load_checkpoint
-import cv2
-import numpy as np
-from matplotlib import pyplot as plt
+# import torch
+# from mmseg.apis import init_segmentor, inference_segmentor, show_result_pyplot
+# from mmcv.runner import load_checkpoint
+# import cv2
+# import numpy as np
+# from matplotlib import pyplot as plt
 
-from prep_model import get_bb_name, get_dino_backbone,\
-        get_seg_head_config, get_seg_model, prep_img_tensor, \
-        conv_to_numpy_img, get_pca_res, plot_batch_im
-from OrigDino.dinov2.eval.segmentation import models
+# from prep_model import get_bb_name, get_dino_backbone,\
+#         get_seg_head_config, get_seg_model, prep_img_tensor, \
+#         conv_to_numpy_img, get_pca_res, plot_batch_im
+# from OrigDino.dinov2.eval.segmentation import models
 
-from mmseg.datasets.pipelines import Compose
-
-from MedDino.med_dinov2.data.transforms import ElasticTransformation
-import mmcv
-import h5py
-
-
-# import os
-# import math
-# import itertools
-# import urllib
-# from functools import partial
-# from pathlib import Path
-from PIL import Image
-from mmseg.apis.inference import LoadImage
-# from torchvision import transforms      
-# import torch.nn.functional as F
-# import mmcv
-# from mmseg.models import build_backbone
-# from mmseg.apis.inference import LoadImage
-# from mmcv.parallel import collate, scatter
 # from mmseg.datasets.pipelines import Compose
 
+# from MedDino.med_dinov2.data.transforms import ElasticTransformation
+# import mmcv
+# import h5py
 
-# seg_log_per_batch = 3
-# batch_sz = 21
 
-# sp = seg_log_per_batch+1
-# log_idxs = torch.arange(batch_sz//sp, 
-#                         batch_sz//sp*sp, 
-#                         batch_sz//sp)
+# # import os
+# # import math
+# # import itertools
+# # import urllib
+# # from functools import partial
+# # from pathlib import Path
+# from PIL import Image
+# from mmseg.apis.inference import LoadImage
+# # from torchvision import transforms      
+# # import torch.nn.functional as F
+# # import mmcv
+# # from mmseg.models import build_backbone
+# # from mmseg.apis.inference import LoadImage
+# # from mmcv.parallel import collate, scatter
+# # from mmseg.datasets.pipelines import Compose
+
+
+# # seg_log_per_batch = 3
+# # batch_sz = 21
+
+# # sp = seg_log_per_batch+1
+# # log_idxs = torch.arange(batch_sz//sp, 
+# #                         batch_sz//sp*sp, 
+# #                         batch_sz//sp)
 
 # print(log_idxs)
 
@@ -321,17 +321,32 @@ from mmseg.apis.inference import LoadImage
 # #     return log_epoch
 
 import h5py
-main_pth = "../../DataFoundationModels/hdf5/"
-# main_pth = "/usr/bmicnas02/data-biwi-01/foundation_models/da_data"
 
-sub_path = "brain/hcp/"
-filename = "data_T1_original_depth_256_from_0_to_20.hdf5"
+dataset = 'nci' # 'nci' , 'acdc'
+cluster = True
+
+if cluster:
+    main_pth = "/usr/bmicnas02/data-biwi-01/foundation_models/da_data/"
+else:
+    main_pth = "../../DataFoundationModels/hdf5/"
+
+#"brain/hcp/"
+#  "data_T1_original_depth_256_from_0_to_20.hdf5"
+if dataset=='nci':
+    sub_path = "nci/"  
+    filename = 'data_2d_size_256_256_res_0.625_0.625_cv_fold_1.hdf5'
+
+elif dataset=='acdc':
+    sub_path = "acdc/"  
+    filename = 'data_2D_size_256_256_res_1.33_1.33_cv_fold_1.hdf5'
+else:
+    ValueError('unknown dataset')
 
 pth = main_pth + sub_path + filename
 
-train_idx = 10
-val_idx = 2
-test_idx = 8
+train_idx = 120
+val_idx = 40
+test_idx = 40
 
 with h5py.File(pth, "r") as f:
 
@@ -344,34 +359,38 @@ with h5py.File(pth, "r") as f:
     
     assert train_idx + val_idx + test_idx == img_shape[0] == lab_shape[0]
     
+    print("Reading train files")
     train_img = f['images'][:train_idx]
     train_lab = f['labels'][:train_idx]
     
+    print("Reading val files")
     val_img = f['images'][train_idx:val_idx+train_idx]
     val_lab = f['labels'][train_idx:val_idx+train_idx]
     
+    print("Reading test files")
     test_img = f['images'][val_idx+train_idx:]
     test_lab = f['labels'][val_idx+train_idx:]
     
-
+print("Writing train files")
 hf_train = h5py.File(main_pth+sub_path+'train.hdf5', 'w')
 hf_train.create_dataset('images', data=train_img)
 hf_train.create_dataset('labels', data=train_lab)
 hf_train.close()
 
-
+print("Writing val files")
 hf_val = h5py.File(main_pth+sub_path+'val.hdf5', 'w')
 hf_val.create_dataset('images', data=val_img)
 hf_val.create_dataset('labels', data=val_lab)
 hf_val.close()
 
+print("Writing test files")
 hf_test = h5py.File(main_pth+sub_path+'test.hdf5', 'w')
 hf_test.create_dataset('images', data=test_img)
 hf_test.create_dataset('labels', data=test_lab)
 hf_test.close()
 
 
-print("Files are created")
+print("Done !")
 
 
 
