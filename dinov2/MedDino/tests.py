@@ -321,180 +321,71 @@ from mmseg.apis.inference import LoadImage
 # #     return log_epoch
 
 import h5py
-filename = "../../DataFoundationModels/hdf5/brain/hcp1/resized/data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5"
-filename = "../../DataFoundationModels/hdf5/brain/hcp1/original/data_T1_original_depth_256_from_0_to_20.hdf5"
+main_pth = "../../DataFoundationModels/hdf5/"
+# main_pth = "/usr/bmicnas02/data-biwi-01/foundation_models/da_data"
 
+sub_path = "brain/hcp/"
+filename = "data_T1_original_depth_256_from_0_to_20.hdf5"
 
-filename = 'data_T1_original_depth_132_from_0_to_10.hdf5'
-with h5py.File(filename, "r") as f:
-    # Print all root level object names (aka keys) 
-    # these can be group or dataset names 
+pth = main_pth + sub_path + filename
+
+train_idx = 10
+val_idx = 2
+test_idx = 8
+
+with h5py.File(pth, "r") as f:
+
     print("Keys: %s" % f.keys())
-    # get first object name/key; may or may NOT be a group
-    a_group_key = list(f.keys())[0]
+    
+    img_shape = f["images"].shape
+    lab_shape = f["labels"].shape
+    print(f'Images shape: {img_shape}')
+    print(f'Labels shape: {lab_shape}')
+    
+    assert train_idx + val_idx + test_idx == img_shape[0] == lab_shape[0]
+    
+    train_img = f['images'][:train_idx]
+    train_lab = f['labels'][:train_idx]
+    
+    val_img = f['images'][train_idx:val_idx+train_idx]
+    val_lab = f['labels'][train_idx:val_idx+train_idx]
+    
+    test_img = f['images'][val_idx+train_idx:]
+    test_lab = f['labels'][val_idx+train_idx:]
+    
 
-    # get the object type for a_group_key: usually group or dataset
-    print(type(f[a_group_key])) 
-
-    # If a_group_key is a group name, 
-    # this gets the object names in the group and returns as a list
-    data = list(f[a_group_key])
-
-    # If a_group_key is a dataset name, 
-    # this gets the dataset values and returns as a list
-    data = list(f[a_group_key])
-    # preferred methods to get dataset values:
-    ds_obj = f[a_group_key]      # returns as a h5py dataset object
-    ds_arr = f[a_group_key][()]  # returns as a numpy array
-    print()
-
-
-
-import math
-from typing import TypeVar, Optional, Iterator
-
-import torch
-from . import Sampler, Dataset
-import torch.distributed as dist
-
-__all__ = ["DistributedSampler", ]
-
-T_co = TypeVar('T_co', covariant=True)
+hf_train = h5py.File(main_pth+sub_path+'train.hdf5', 'w')
+hf_train.create_dataset('images', data=train_img)
+hf_train.create_dataset('labels', data=train_lab)
+hf_train.close()
 
 
+hf_val = h5py.File(main_pth+sub_path+'val.hdf5', 'w')
+hf_val.create_dataset('images', data=val_img)
+hf_val.create_dataset('labels', data=val_lab)
+hf_val.close()
 
-class DistributedSampler(Sampler[T_co]):
-    r"""Sampler that restricts data loading to a subset of the dataset.
+hf_test = h5py.File(main_pth+sub_path+'test.hdf5', 'w')
+hf_test.create_dataset('images', data=test_img)
+hf_test.create_dataset('labels', data=test_lab)
+hf_test.close()
 
-    It is especially useful in conjunction with
-    :class:`torch.nn.parallel.DistributedDataParallel`. In such a case, each
-    process can pass a :class:`~torch.utils.data.DistributedSampler` instance as a
-    :class:`~torch.utils.data.DataLoader` sampler, and load a subset of the
-    original dataset that is exclusive to it.
 
-    .. note::
-        Dataset is assumed to be of constant size and that any instance of it always
-        returns the same elements in the same order.
-
-    Args:
-        dataset: Dataset used for sampling.
-        num_replicas (int, optional): Number of processes participating in
-            distributed training. By default, :attr:`world_size` is retrieved from the
-            current distributed group.
-        rank (int, optional): Rank of the current process within :attr:`num_replicas`.
-            By default, :attr:`rank` is retrieved from the current distributed
-            group.
-        shuffle (bool, optional): If ``True`` (default), sampler will shuffle the
-            indices.
-        seed (int, optional): random seed used to shuffle the sampler if
-            :attr:`shuffle=True`. This number should be identical across all
-            processes in the distributed group. Default: ``0``.
-        drop_last (bool, optional): if ``True``, then the sampler will drop the
-            tail of the data to make it evenly divisible across the number of
-            replicas. If ``False``, the sampler will add extra indices to make
-            the data evenly divisible across the replicas. Default: ``False``.
-
-    .. warning::
-        In distributed mode, calling the :meth:`set_epoch` method at
-        the beginning of each epoch **before** creating the :class:`DataLoader` iterator
-        is necessary to make shuffling work properly across multiple epochs. Otherwise,
-        the same ordering will be always used.
-
-    Example::
-
-        >>> # xdoctest: +SKIP
-        >>> sampler = DistributedSampler(dataset) if is_distributed else None
-        >>> loader = DataLoader(dataset, shuffle=(sampler is None),
-        ...                     sampler=sampler)
-        >>> for epoch in range(start_epoch, n_epochs):
-        ...     if is_distributed:
-        ...         sampler.set_epoch(epoch)
-        ...     train(loader)
-    """
-
-    def __init__(self, dataset: Dataset, num_replicas: Optional[int] = None,
-                 rank: Optional[int] = None, shuffle: bool = True,
-                 seed: int = 0, drop_last: bool = False) -> None:
-        if num_replicas is None:
-            if not dist.is_available():
-                raise RuntimeError("Requires distributed package to be available")
-            num_replicas = dist.get_world_size()
-        if rank is None:
-            if not dist.is_available():
-                raise RuntimeError("Requires distributed package to be available")
-            rank = dist.get_rank()
-        if rank >= num_replicas or rank < 0:
-            raise ValueError(
-                f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]")
-        self.dataset = dataset
-        self.num_replicas = num_replicas
-        self.rank = rank
-        self.epoch = 0
-        self.drop_last = drop_last
-        # If the dataset length is evenly divisible by # of replicas, then there
-        # is no need to drop any data, since the dataset will be split equally.
-        if self.drop_last and len(self.dataset) % self.num_replicas != 0:  # type: ignore[arg-type]
-            # Split to nearest available length that is evenly divisible.
-            # This is to ensure each rank receives the same amount of data when
-            # using this Sampler.
-            self.num_samples = math.ceil(
-                (len(self.dataset) - self.num_replicas) / self.num_replicas  # type: ignore[arg-type]
-            )
-        else:
-            self.num_samples = math.ceil(len(self.dataset) / self.num_replicas)  # type: ignore[arg-type]
-        self.total_size = self.num_samples * self.num_replicas
-        self.shuffle = shuffle
-        self.seed = seed
-
-    def __iter__(self) -> Iterator[T_co]:
-        if self.shuffle:
-            # deterministically shuffle based on epoch and seed
-            g = torch.Generator()
-            g.manual_seed(self.seed + self.epoch)
-            indices = torch.randperm(len(self.dataset), generator=g).tolist()  # type: ignore[arg-type]
-        else:
-            indices = list(range(len(self.dataset)))  # type: ignore[arg-type]
-
-        if not self.drop_last:
-            # add extra samples to make it evenly divisible
-            padding_size = self.total_size - len(indices)
-            if padding_size <= len(indices):
-                indices += indices[:padding_size]
-            else:
-                indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
-        else:
-            # remove tail of data to make it evenly divisible.
-            indices = indices[:self.total_size]
-        assert len(indices) == self.total_size
-
-        # subsample
-        indices = indices[self.rank:self.total_size:self.num_replicas]
-        assert len(indices) == self.num_samples
-
-        return iter(indices)
-
-    def __len__(self) -> int:
-        return self.num_samples
-
-    def set_epoch(self, epoch: int) -> None:
-        r"""
-        Set the epoch for this sampler.
-
-        When :attr:`shuffle=True`, this ensures all replicas
-        use a different random ordering for each epoch. Otherwise, the next iteration of this
-        sampler will yield the same ordering.
-
-        Args:
-            epoch (int): Epoch number.
-        """
-        self.epoch = epoch
+print("Files are created")
 
 
 
+# pth = main_pth+sub_path+'test.hdf5'
 
+# with h5py.File(pth, "r") as f:
 
+#     print("Keys: %s" % f.keys())
+    
+#     img_shape = f["images"].shape
+#     lab_shape = f["labels"].shape
+#     print(f'Images shape: {img_shape}')
+#     print(f'Labels shape: {lab_shape}')
+    
 
-
-
-
-
+    
+# print()
