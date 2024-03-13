@@ -53,7 +53,7 @@ seed = 42
 
 # Set the BB
 train_backbone = True
-backbone_sz = "large" # in ("small", "base", "large" or "giant")
+backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
 dataset = 'hcp1' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
@@ -62,7 +62,7 @@ hdf5_data = True
 test_datasets = ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else [dataset]
 
 # Select the dec head
-dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet'
+dec_head_key = 'segformer'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'

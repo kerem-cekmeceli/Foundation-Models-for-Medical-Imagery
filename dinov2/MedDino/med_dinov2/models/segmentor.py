@@ -7,7 +7,7 @@ from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
 from MedDino.prep_model import get_dino_backbone
 from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
-from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead
+from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from typing import Union, Optional, Sequence, Callable, Any
 
@@ -41,22 +41,25 @@ class Segmentor(nn.Module):
             dec_head_name = decode_head['name']
             dec_head_params = decode_head['params']
             
-            if dec_head_name == 'ConvHeadLinear':
+            if dec_head_name == ConvHeadLinear.__name__:
                 self.decode_head = ConvHeadLinear(**dec_head_params)
                 
-            elif dec_head_name == 'FCNHead':
+            elif dec_head_name == FCNHead.__name__:
                 self.decode_head = FCNHead(**dec_head_params)
                 
-            elif dec_head_name == 'PSPHead':
+            elif dec_head_name == PSPHead.__name__:
                 self.decode_head = PSPHead(**dec_head_params)
                 
-            elif dec_head_name == 'DAHead':
+            elif dec_head_name == DAHead.__name__:
                 self.decode_head = DAHead(**dec_head_params)
                 
-            elif dec_head_name == 'ResNetHead':
+            elif dec_head_name == SegformerHead.__name__:
+                self.decode_head = SegformerHead(**dec_head_params)
+                
+            elif dec_head_name == ResNetHead.__name__:
                 self.decode_head = ResNetHead(**dec_head_params)
                 
-            elif dec_head_name == 'UNetHead':
+            elif dec_head_name == UNetHead.__name__:
                 self.decode_head = UNetHead(**dec_head_params)
                 
             else:

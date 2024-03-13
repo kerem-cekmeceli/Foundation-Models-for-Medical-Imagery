@@ -1,6 +1,6 @@
 from prep_model import get_backone_patch_embed_sizes
 from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
-from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead
+from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from MedDino.med_dinov2.eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
@@ -264,6 +264,23 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
                             input_transform='resize_concat',
                             init_cfg=dict(
                                 type='Normal', std=0.01, override=dict(name='conv_seg')))
+        
+    elif dec_name == 'segformer':
+        class_name = SegformerHead.__name__
+        n_in_ch = 4
+        # https://arxiv.org/abs/2105.15203
+        dec_head_cfg = dict(interpolate_mode='bilinear',
+                            in_channels=[embed_dim]*n_in_ch,  # input channels
+                            channels=embed_dim,  # Conv channels
+                            num_classes=num_classses,  # output channels
+                            dropout_ratio=0.1,
+                            conv_cfg=dict(type='Conv2d'), # None = conv2d
+                            norm_cfg=dict(type='BN'),
+                            act_cfg=dict(type='ReLU'),
+                            in_index=[i for i in range(n_in_ch)],
+                            init_cfg=dict(
+                                type='Normal', std=0.01, override=dict(name='conv_seg')))
+        
     elif dec_name == 'resnet':
         class_name = ResNetHead.__name__
         n_in_ch = 4
