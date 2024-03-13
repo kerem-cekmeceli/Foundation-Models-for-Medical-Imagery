@@ -10,6 +10,8 @@ __pycache__/
 *.pth
 *.ckpt
 
+wandb/
+
 # Distribution / packaging
 .Python
 build/
