@@ -277,18 +277,21 @@ class LitSegmentor(LitBaseModule):
         assert (loss.isnan()==False).all(), \
             f"Validation loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}, batch_idx={batch_idx}"
         
-        self.log('val_loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
+        loss_key = 'val_loss' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_loss'
+        self.log(loss_key, loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
                 
         # Compute the metrics 
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred, y_batch)
             for k, v in metric_dict.items():
-                self.log('val_'+metric_n+k, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
+                metric_key = f'val_{metric_n}{k}' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_{metric_n}{k}'
+                self.log(metric_key, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
                 
             if  self.val_metrics_over_vol:
                 metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
                 for k, v in metric_dict_vol.items():
-                    self.log('val_'+metric_n+k+'_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
+                    metric_key = f'val_{metric_n}{k}_vol' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_{metric_n}{k}_vol'
+                    self.log(metric_key, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
         # save the segmentation result
         if batch_idx in self.seg_log_batch_idxs and self._test_dataset_name!='':
@@ -334,7 +337,7 @@ class LitSegmentor(LitBaseModule):
             #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
 
         # Log the test loss        
-        self.log(f'test_loss_{self._test_dataset_name}', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+        self.log(f'test_{self._test_dataset_name}_loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
         
         # Compute the metrics 
         for metric_n, metric in self.metrics.items():
@@ -356,12 +359,12 @@ class LitSegmentor(LitBaseModule):
         for metric_name in self.metrics.keys():
             assert 'dice' in metric_name or 'mIoU' in metric_name, "Unknown metric"
             wandb.define_metric(metric_name, summary="max")
-            wandb.define_metric('val_'+metric_name, summary="max")
+            wandb.define_metric(f'val_{metric_name}', summary="max")
             # wandb.define_metric('test_'+metric_name, summary="max")
             
             if self.val_metrics_over_vol:
                 wandb.define_metric(metric_name+'_vol', summary="max")
-                wandb.define_metric('val_'+metric_name+'_vol', summary="max")
+                wandb.define_metric(f'val_{metric_name}_vol', summary="max")
                 # wandb.define_metric('test_'+metric_name+'_vol', summary="max")
     
     @rank_zero_only             
@@ -373,10 +376,10 @@ class LitSegmentor(LitBaseModule):
         
         for metric_name in self.metrics.keys():
             assert 'dice' in metric_name or 'mIoU' in metric_name, "Unknown metric"
-            wandb.define_metric(f'{target}_{dataset}_'+metric_name, summary="max")
+            wandb.define_metric(f'{target}_{dataset}_{metric_name}', summary="max")
             
             if self.val_metrics_over_vol:
-                wandb.define_metric(f'{target}_{dataset}_'+metric_name+'_vol', summary="max")
+                wandb.define_metric(f'{target}_{dataset}_{metric_name}_vol', summary="max")
                 
                 
     def on_train_start(self) -> None:

@@ -283,7 +283,8 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
                                 res_con_interv=None, # None = Largest possible (better)
                                 skip_first_res_con=False, 
                                 recurrent=True,
-                                recursion_steps=2)
+                                recursion_steps=2,
+                                in_channels_red=384*n_in_ch)
     elif dec_name == 'unet':
         class_name = UNetHead.__name__
         n_in_ch=5
@@ -307,7 +308,8 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
                                 recurrent=True,
                                 recursion_steps=2, # 3
                                 resnet_cat_inp_upscaling=True,
-                                input_group_cat_nb=input_group_cat_nb)
+                                input_group_cat_nb=input_group_cat_nb,
+                                in_channels_red=576)  # 576  |  384*input_group_cat_nb
         
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
