@@ -267,7 +267,7 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
         
     elif dec_name == 'segformer':
         class_name = SegformerHead.__name__
-        n_in_ch = 4
+        n_in_ch = 12
         # https://arxiv.org/abs/2105.15203
         dec_head_cfg = dict(interpolate_mode='bilinear',
                             in_channels=[embed_dim]*n_in_ch,  # input channels
