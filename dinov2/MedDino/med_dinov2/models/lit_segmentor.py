@@ -155,7 +155,7 @@ class LitSegmentor(LitBaseModule):
         
         self._test_dataset_name =test_dataset_name
         
-        self.model = Segmentor(backbone=backbone,
+        self.segmentor = Segmentor(backbone=backbone,
                                decode_head=decode_head,
                                train_backbone=train_backbone,
                                reshape_dec_oup=reshape_dec_oup,
@@ -178,7 +178,7 @@ class LitSegmentor(LitBaseModule):
         
         
     def forward(self, x):
-        return self.model(x)
+        return self.segmentor(x)
     
     
     def configure_optimizers(self):
@@ -198,7 +198,7 @@ class LitSegmentor(LitBaseModule):
             f"Train y_batch nan ratio={torch.count_nonzero(y_batch.isnan()==True)/torch.numel(y_batch)}, batch_idx={batch_idx}"
         
         # Forward pass
-        y_pred = self.model(x_batch)
+        y_pred = self.segmentor(x_batch)
         assert (y_pred.isnan()==False).all(),\
             f"Train y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}, batch_idx={batch_idx}"
         loss = self.loss_fn(y_pred, y_batch)
@@ -268,7 +268,7 @@ class LitSegmentor(LitBaseModule):
             f"Validation y_batch nan ratio={torch.count_nonzero(y_batch.isnan()==True)/torch.numel(y_batch)}, batch_idx={batch_idx}"
         
         # Forward pass
-        y_pred = self.model(x_batch)
+        y_pred = self.segmentor(x_batch)
         assert (y_pred.isnan()==False).all(), \
             f"Validation y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}, batch_idx={batch_idx}"
             
@@ -322,7 +322,7 @@ class LitSegmentor(LitBaseModule):
         x_batch, y_batch = batch
              
         # Forward pass
-        y_pred = self.model(x_batch)
+        y_pred = self.segmentor(x_batch)
         
         # Hard decision
         n_classes = y_pred.shape[1]

@@ -102,7 +102,7 @@ def get_bb_name(backbone_sz, ret_arch=False):
     else:
         return backbone_name
 
-def get_dino_backbone(backbone_name, backbone_cp=None, eval=True):
+def get_dino_backbone(backbone_name, backbone_cp=None):
     if isinstance(backbone_cp, Path):
         backbone_cp = str(backbone_cp)
         
@@ -140,10 +140,6 @@ def get_dino_backbone(backbone_name, backbone_cp=None, eval=True):
     else:
         print("Downloading the checkpoint from github")
         backbone_model = torch.hub.load(repo_or_dir="facebookresearch/dinov2", model=backbone_name)
-
-    backbone_model.cuda()
-    if eval:
-        backbone_model.eval()  # Eval mode -> no training (no dropouts etc.)
     
     return backbone_model
 

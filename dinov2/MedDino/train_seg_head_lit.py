@@ -42,9 +42,9 @@ from lightning.pytorch import seed_everything
 from MedDino.med_dinov2.tools.configs import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -52,7 +52,7 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-train_backbone = True
+train_backbone = False
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
@@ -62,7 +62,7 @@ hdf5_data = True
 test_datasets = ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else [dataset]
 
 # Select the dec head
-dec_head_key = 'segformer'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -89,13 +89,12 @@ torch.set_float32_matmul_precision(precision)
 
 ########################################################################################################################
 
+
 # Set seeds for numpy, torch and python.random
 seed_everything(seed, workers=True)
 
 # Backbone config
 backbone_name = get_bb_name(backbone_sz)
-bb_checkpoint_path = dino_main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
-dino_bb_cfg = dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path)
 
 # Data attributes
 dataset_attrs = get_data_attrs(name=dataset, use_hdf5=hdf5_data)
@@ -103,6 +102,17 @@ batch_sz = get_batch_sz(dataset_attrs, gpus)
 
 # Decoder config
 dec_head_cfg, n_in_ch = get_dec_cfg(dec_name=dec_head_key, bb_name=backbone_name, dataset_attrs=dataset_attrs)
+
+
+# BAckbione continues
+bb_checkpoint_path = dino_main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
+
+dino_bb_cfg = dict(name='DinoBackBone',
+                   params=dict(n_out=n_in_ch,
+                               last_out_first=True,
+                               bb_model=None,
+                               cfg=dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path),
+                               train=train_backbone))
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
@@ -163,7 +173,7 @@ model = LitSegmentor(**segmentor_cfg)
 summary(model)
 
 # Get augmentations
-train_augmentations, augmentations = get_augmentations(patch_sz=model.model.backbone.patch_size)
+train_augmentations, augmentations = get_augmentations(patch_sz=model.segmentor.backbone.get_input_sz_multiple())
 
 # Get the data loader
 if cluster_paths:
@@ -205,7 +215,7 @@ trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strateg
 # Init the logger (wandb)
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
                 f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
-dec_head_name = model.model.decode_head.__class__.__name__
+dec_head_name = model.segmentor.decode_head.__class__.__name__
 bb_train_str_short = 'bbT' if segmentor_cfg['train_backbone'] else 'NbbT'
 run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
 data_type = 'hdf5' if hdf5_data else 'png'
@@ -256,7 +266,7 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 logger.watch(model, log="all")
 
 n_best = 1 if save_checkpoints else 0
-models_pth = dino_main_pth / f'Checkpoints/MedDino/{model.model.decode_head.__class__.__name__}'
+models_pth = dino_main_pth / f'Checkpoints/MedDino/{model.segmentor.decode_head.__class__.__name__}'
 models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
 checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),

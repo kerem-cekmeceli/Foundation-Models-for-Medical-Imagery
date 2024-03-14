@@ -175,7 +175,7 @@ class DecBase(nn.Module, ABC):
 
     
     def _transform_inputs(self, 
-                          inputs : list[torch.Tensor]):
+                          inputs : Union[Sequence[torch.Tensor], torch.Tensor]):
         """Transform inputs for decoder.
         Args:
             inputs (list[Tensor]): List of multi-level img features.
@@ -184,14 +184,18 @@ class DecBase(nn.Module, ABC):
         """
         
         # accept lists (for cls token)
-        input_list = []
-        for x in inputs:
-            if isinstance(x, list):
-                input_list.extend(x)
-            else:
-                input_list.append(x)
-        inputs = input_list
-        
+        if isinstance(inputs, Sequence):
+            input_list = []
+            for x in inputs:
+                if isinstance(x, list):
+                    input_list.extend(x)
+                else:
+                    input_list.append(x)
+                inputs = input_list
+        else:
+            inputs = [inputs]
+            
+
         # an image descriptor can be a local descriptor with resolution 1x1
         for i, x in enumerate(inputs):
             if len(x.shape) == 2:

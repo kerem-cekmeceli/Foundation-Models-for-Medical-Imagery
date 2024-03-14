@@ -198,6 +198,10 @@ def get_batch_sz(data_attrs, num_gpu):
         f'batch size must be a multiple of slice/patient but got {batch_sz} and {vol_depth}'
        
     return batch_sz
+
+
+def get_bb_cfg(bb_name):
+    pass
     
 
 
@@ -267,7 +271,7 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
         
     elif dec_name == 'segformer':
         class_name = SegformerHead.__name__
-        n_in_ch = 12
+        n_in_ch = 4
         # https://arxiv.org/abs/2105.15203
         dec_head_cfg = dict(interpolate_mode='bilinear',
                             in_channels=[embed_dim]*n_in_ch,  # input channels
