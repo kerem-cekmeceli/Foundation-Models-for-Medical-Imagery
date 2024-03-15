@@ -116,6 +116,7 @@ class DinoBackBone(BackBoneBase):
         super().__init__(bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
         
         assert n_out > 1, f'n_out should be at least 1, but got: {n_out}'
+        assert n_out <= self.backbone.n_blocks, f'Requested n_out={n_out}, but only available {self.backbone.n_blocks}'
         self.n_out = n_out
         self.last_out_first = last_out_first
         

@@ -9,7 +9,7 @@ from MedDino.prep_model import get_dino_backbone
 from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 # from OrigDino.dinov2.models.vision_transformer import DinoVisionTransformer
-from MedDino.med_dinov2.layers.backbone import BackBoneBase, DinoBackBone
+from MedDino.med_dinov2.layers.backbone_wrapper import BackBoneBase, DinoBackBone
 from typing import Union, Optional, Sequence, Callable, Any
 
 
