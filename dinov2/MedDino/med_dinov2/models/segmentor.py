@@ -1,20 +1,22 @@
 
-import torch
+# import torch
 import torch.nn as nn
 
-from mmseg.models.decode_heads.decode_head import BaseDecodeHead
-from MedDino.med_dinov2.layers.segmentation import DecBase
+# from mmseg.models.decode_heads.decode_head import BaseDecodeHead
+# from MedDino.med_dinov2.layers.segmentation import DecBase
 from mmseg.ops import resize
-from MedDino.prep_model import get_dino_backbone
-from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
-from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
+# from MedDino.prep_model import get_dino_backbone
+# from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
+# from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 # from OrigDino.dinov2.models.vision_transformer import DinoVisionTransformer
-from MedDino.med_dinov2.layers.backbone_wrapper import BackBoneBase, DinoBackBone
+from MedDino.med_dinov2.layers.decode_head_wrapper import implemented_dec_heads, DecHeadBase, ConvHeadLinear,\
+    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead
+from MedDino.med_dinov2.layers.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBackBone
 from typing import Union, Optional, Sequence, Callable, Any
 
 
 class Segmentor(nn.Module):
-    def __init__(self, backbone, decode_head, train_backbone=False, 
+    def __init__(self, backbone, decode_head,
                  reshape_dec_oup=False, align_corners=False, \
                  ) -> None:
 
@@ -25,19 +27,15 @@ class Segmentor(nn.Module):
             bb_name = backbone['name']
             bb_params = backbone['params']
             
-            if bb_name == DinoBackBone.__name__:
-                self.backbone = DinoBackBone(**bb_params)
-            
-            else:
+            if bb_name not in implemented_backbones:
                 ValueError(f"Backbone {bb_name} is not supported from config.")
-                
+            
+            self.backbone = globals()[bb_name](**bb_params)
+            
         else:
             assert isinstance(backbone, BackBoneBase)
             # Model is given
             self.backbone = backbone
-        
-        assert isinstance(train_backbone, bool)    
-        self.backbone.train_backbone = train_backbone
             
             
         if isinstance(decode_head, dict):
@@ -45,39 +43,16 @@ class Segmentor(nn.Module):
             dec_head_name = decode_head['name']
             dec_head_params = decode_head['params']
             
-            if dec_head_name == ConvHeadLinear.__name__:
-                self.decode_head = ConvHeadLinear(**dec_head_params)
-                
-            elif dec_head_name == FCNHead.__name__:
-                self.decode_head = FCNHead(**dec_head_params)
-                
-            elif dec_head_name == PSPHead.__name__:
-                self.decode_head = PSPHead(**dec_head_params)
-                
-            elif dec_head_name == DAHead.__name__:
-                self.decode_head = DAHead(**dec_head_params)
-                
-            elif dec_head_name == SegformerHead.__name__:
-                self.decode_head = SegformerHead(**dec_head_params)
-                
-            elif dec_head_name == ResNetHead.__name__:
-                self.decode_head = ResNetHead(**dec_head_params)
-                
-            elif dec_head_name == UNetHead.__name__:
-                self.decode_head = UNetHead(**dec_head_params)
-                
-            else:
+            if dec_head_name not in implemented_dec_heads:
                 ValueError(f"Decode head {dec_head_name} is not supported from config.")
+            
+            self.decode_head = globals()[dec_head_name](**dict(backbone=self.backbone,
+                                                               cfg=dec_head_params))
+            
         else:
+            assert isinstance(decode_head, DecHeadBase)
             # Model is given
             self.decode_head = decode_head
-    
-        # Nb inputs from the decode head
-        if isinstance(self.decode_head, BaseDecodeHead) or isinstance(self.decode_head, DecBase):
-            n_concat = len(self.decode_head.in_index)
-        else:
-            raise Exception(f'Unknown decode head type: {type(decode_head)}')
-        # self.n_concat_bb = n_concat
         
         
          # params for the reshaping of the dec out
@@ -98,9 +73,6 @@ class Segmentor(nn.Module):
     def forward(self, x):
         feats = self.backbone(x)
         out = self.decode_head(feats)
-        
-        if self.decode_head.__class__.__name__ == 'DAHead':
-            out = out[0]
         
         if self.reshape_dec_oup:
             out = self.reshape_dec_out(out, x.shape[-2:])

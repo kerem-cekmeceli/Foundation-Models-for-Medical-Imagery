@@ -320,81 +320,83 @@
                
 # #     return log_epoch
 
-import h5py
+#######################################################################################################################
 
-dataset = 'nci' # 'nci' , 'acdc'
-cluster = True
+# import h5py
 
-if cluster:
-    main_pth = "/usr/bmicnas02/data-biwi-01/foundation_models/da_data/"
-else:
-    main_pth = "../../DataFoundationModels/hdf5/"
+# dataset = 'nci' # 'nci' , 'acdc'
+# cluster = True
 
-#"brain/hcp/"
-#  "data_T1_original_depth_256_from_0_to_20.hdf5"
-if dataset=='nci':
-    sub_path = "nci/"  
-    filename = 'data_2d_size_256_256_res_0.625_0.625_cv_fold_1.hdf5'
+# if cluster:
+#     main_pth = "/usr/bmicnas02/data-biwi-01/foundation_models/da_data/"
+# else:
+#     main_pth = "../../DataFoundationModels/hdf5/"
 
-elif dataset=='acdc':
-    sub_path = "acdc/"  
-    filename = 'data_2D_size_256_256_res_1.33_1.33_cv_fold_1.hdf5'
-else:
-    ValueError('unknown dataset')
+# #"brain/hcp/"
+# #  "data_T1_original_depth_256_from_0_to_20.hdf5"
+# if dataset=='nci':
+#     sub_path = "nci/"  
+#     filename = 'data_2d_size_256_256_res_0.625_0.625_cv_fold_1.hdf5'
 
-pth = main_pth + sub_path + filename
+# elif dataset=='acdc':
+#     sub_path = "acdc/"  
+#     filename = 'data_2D_size_256_256_res_1.33_1.33_cv_fold_1.hdf5'
+# else:
+#     ValueError('unknown dataset')
 
-pth = main_pth + 'brain/abide/stanford/'+'data_T1_original_depth_132_from_10_to_15.hdf5'
+# pth = main_pth + sub_path + filename
 
-train_idx = 120
-val_idx = 40
-test_idx = 40
+# pth = main_pth + 'brain/abide/stanford/'+'data_T1_original_depth_132_from_10_to_15.hdf5'
 
-with h5py.File(pth, "r") as f:
+# train_idx = 120
+# val_idx = 40
+# test_idx = 40
 
-    print("Keys: %s" % f.keys())
+# with h5py.File(pth, "r") as f:
+
+#     print("Keys: %s" % f.keys())
     
-    img_shape = f["images"].shape
-    lab_shape = f["labels"].shape
-    print(f'Images shape: {img_shape}')
-    print(f'Labels shape: {lab_shape}')
+#     img_shape = f["images"].shape
+#     lab_shape = f["labels"].shape
+#     print(f'Images shape: {img_shape}')
+#     print(f'Labels shape: {lab_shape}')
     
-    assert train_idx + val_idx + test_idx == img_shape[0] == lab_shape[0]
+#     assert train_idx + val_idx + test_idx == img_shape[0] == lab_shape[0]
     
-    print("Reading train files")
-    train_img = f['images'][:train_idx]
-    train_lab = f['labels'][:train_idx]
+#     print("Reading train files")
+#     train_img = f['images'][:train_idx]
+#     train_lab = f['labels'][:train_idx]
     
-    print("Reading val files")
-    val_img = f['images'][train_idx:val_idx+train_idx]
-    val_lab = f['labels'][train_idx:val_idx+train_idx]
+#     print("Reading val files")
+#     val_img = f['images'][train_idx:val_idx+train_idx]
+#     val_lab = f['labels'][train_idx:val_idx+train_idx]
     
-    print("Reading test files")
-    test_img = f['images'][val_idx+train_idx:]
-    test_lab = f['labels'][val_idx+train_idx:]
+#     print("Reading test files")
+#     test_img = f['images'][val_idx+train_idx:]
+#     test_lab = f['labels'][val_idx+train_idx:]
     
-print("Writing train files")
-hf_train = h5py.File(main_pth+sub_path+'train.hdf5', 'w')
-hf_train.create_dataset('images', data=train_img)
-hf_train.create_dataset('labels', data=train_lab)
-hf_train.close()
+# print("Writing train files")
+# hf_train = h5py.File(main_pth+sub_path+'train.hdf5', 'w')
+# hf_train.create_dataset('images', data=train_img)
+# hf_train.create_dataset('labels', data=train_lab)
+# hf_train.close()
 
-print("Writing val files")
-hf_val = h5py.File(main_pth+sub_path+'val.hdf5', 'w')
-hf_val.create_dataset('images', data=val_img)
-hf_val.create_dataset('labels', data=val_lab)
-hf_val.close()
+# print("Writing val files")
+# hf_val = h5py.File(main_pth+sub_path+'val.hdf5', 'w')
+# hf_val.create_dataset('images', data=val_img)
+# hf_val.create_dataset('labels', data=val_lab)
+# hf_val.close()
 
-print("Writing test files")
-hf_test = h5py.File(main_pth+sub_path+'test.hdf5', 'w')
-hf_test.create_dataset('images', data=test_img)
-hf_test.create_dataset('labels', data=test_lab)
-hf_test.close()
-
-
-print("Done !")
+# print("Writing test files")
+# hf_test = h5py.File(main_pth+sub_path+'test.hdf5', 'w')
+# hf_test.create_dataset('images', data=test_img)
+# hf_test.create_dataset('labels', data=test_lab)
+# hf_test.close()
 
 
+# print("Done !")
+
+#######################################################################################################################
 
 # pth = main_pth+sub_path+'test.hdf5'
 
@@ -410,3 +412,17 @@ print("Done !")
 
     
 # print()
+
+import sys
+from pathlib import Path
+ 
+dino_main_pth = Path(__file__).parent.parent
+orig_dino_pth = dino_main_pth / 'OrigDino'
+sys.path.insert(1, dino_main_pth.as_posix())
+sys.path.insert(2, orig_dino_pth.as_posix())
+
+from MedDino.med_dinov2.layers.decode_head_wrapper import *
+
+a = ConvHeadLinear()
+
+print()

@@ -3,7 +3,7 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 from mmseg.ops import resize
 from typing import Sequence, Union, Optional
-from torch import functional as F
+# from torch import functional as F
 import math
 from copy import deepcopy
 

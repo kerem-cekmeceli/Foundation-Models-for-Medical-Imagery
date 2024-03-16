@@ -1,10 +1,12 @@
-from prep_model import get_backone_patch_embed_sizes
+# from prep_model import get_backone_patch_embed_sizes
 from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from MedDino.med_dinov2.eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5
+from prep_model import get_bb_name
+from MedDino.med_dinov2.layers.backbone_wrapper import DinoBackBone
 
 def get_data_attrs(name:str, use_hdf5=True):
     attrs = {}
@@ -200,49 +202,67 @@ def get_batch_sz(data_attrs, num_gpu):
     return batch_sz
 
 
-def get_bb_cfg(bb_name):
-    pass
+def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth):
+    if bb_name == 'dino':
+        if dec_name=='unet':
+            n_out = 5*2
+        else:
+            n_out = 4
+            
+        last_out_first = True
+        
+        assert bb_size in ["small", "base", "large", "giant"]
+        backbone_name = get_bb_name(bb_size)
+        bb_checkpoint_path = main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
+        
+        name = DinoBackBone.__name__
+        params = dict(nb_outs=n_out,
+                      name=backbone_name,
+                      last_out_first=last_out_first,
+                      bb_model=None,
+                      cfg=dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path),
+                      train=train_bb)
+        
+    else:
+        ValueError(f'Undefined backbone: {bb_name}')
+        
+    return dict(name=name, params=params)
+        
     
 
 
-def get_dec_cfg(dec_name, bb_name, dataset_attrs):
-    patch_sz, embed_dim = get_backone_patch_embed_sizes(bb_name)
+def get_dec_cfg(dec_name, dataset_attrs):
     num_classses = dataset_attrs['num_classses']
     
     if dec_name == 'lin':
         class_name = ConvHeadLinear.__name__
         n_in_ch = 4
         # Linear classification of each patch + upsampling to pixel dim
-        dec_head_cfg = dict(in_channels=[embed_dim]*n_in_ch, 
-                                    num_classses=num_classses,
-                                    out_upsample_fac=patch_sz,
-                                    bilinear=True)
+        dec_head_cfg = dict(num_classses=num_classses,
+                            bilinear=True,
+                            dropout_rat=0.1,)
     elif dec_name == 'fcn':
         class_name = FCNHead.__name__
         n_in_ch = 4
         # https://arxiv.org/abs/1411.4038
         dec_head_cfg = dict(num_convs=3,
-                                kernel_size=3,
-                                concat_input=True,
-                                dilation=1,
-                                in_channels=[embed_dim]*n_in_ch,  # input channels
-                                channels=embed_dim,  # Conv channels
-                                num_classes=num_classses,  # output channels
-                                dropout_ratio=0.1,
-                                conv_cfg=dict(type='Conv2d'), # None = conv2d
-                                norm_cfg=dict(type='BN'),
-                                act_cfg=dict(type='ReLU'),
-                                in_index=[i for i in range(n_in_ch)],
-                                input_transform='resize_concat',
-                                init_cfg=dict(
-                                    type='Normal', std=0.01, override=dict(name='conv_seg')))
+                            kernel_size=3,
+                            concat_input=True,
+                            dilation=1,
+                            num_classes=num_classses,  # output channels
+                            dropout_ratio=0.1,
+                            conv_cfg=dict(type='Conv2d'), # None = conv2d
+                            norm_cfg=dict(type='BN'),
+                            act_cfg=dict(type='ReLU'),
+                            # in_index=[i for i in range(n_in_ch)],
+                            input_transform='resize_concat',
+                            init_cfg=dict(
+                                type='Normal', std=0.01, override=dict(name='conv_seg')))
     elif dec_name == 'psp':
         class_name = PSPHead.__name__
         n_in_ch = 4
         # https://arxiv.org/abs/1612.01105
         dec_head_cfg = dict(pool_scales=(1, 2, 3, 6),
-                                in_channels=[embed_dim]*n_in_ch,  # input channels
-                                channels=embed_dim,  # Conv channels
                                 num_classes=num_classses,  # output channels
                                 dropout_ratio=0.1,
                                 conv_cfg=dict(type='Conv2d'), # None = conv2d
@@ -256,10 +276,7 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
         class_name = DAHead.__name__
         n_in_ch = 4
         # https://arxiv.org/abs/1809.02983
-        dec_head_cfg = dict(pam_channels=embed_dim,
-                            in_channels=[embed_dim]*n_in_ch,  # input channels
-                            channels=embed_dim,  # Conv channels
-                            num_classes=num_classses,  # output channels
+        dec_head_cfg = dict(num_classes=num_classses,  # output channels
                             dropout_ratio=0.1,
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
@@ -274,8 +291,6 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
         n_in_ch = 4
         # https://arxiv.org/abs/2105.15203
         dec_head_cfg = dict(interpolate_mode='bilinear',
-                            in_channels=[embed_dim]*n_in_ch,  # input channels
-                            channels=embed_dim,  # Conv channels
                             num_classes=num_classses,  # output channels
                             dropout_ratio=0.1,
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
@@ -289,48 +304,46 @@ def get_dec_cfg(dec_name, bb_name, dataset_attrs):
         class_name = ResNetHead.__name__
         n_in_ch = 4
         # ResNet-like with recurrent convs
-        dec_head_cfg = dict(in_channels=[embed_dim]*n_in_ch,
-                                num_classses=num_classses,
-                                # in_index=None,
-                                # in_resize_factors=None,
-                                # align_corners=False,
-                                dropout_rat_cls_seg=0.1,
-                                nb_up_blocks=4,
-                                upsample_facs_ch=2,
-                                upsample_facs_wh=2,
-                                bilinear=False,
-                                conv_per_up_blk=2,
-                                res_con=True,
-                                res_con_interv=None, # None = Largest possible (better)
-                                skip_first_res_con=False, 
-                                recurrent=True,
-                                recursion_steps=2,
-                                in_channels_red=384*n_in_ch)
+        dec_head_cfg = dict(num_classses=num_classses,
+                            # in_index=None,
+                            # in_resize_factors=None,
+                            # align_corners=False,
+                            dropout_rat_cls_seg=0.1,
+                            nb_up_blocks=4,
+                            upsample_facs_ch=2,
+                            upsample_facs_wh=2,
+                            bilinear=False,
+                            conv_per_up_blk=2,
+                            res_con=True,
+                            res_con_interv=None, # None = Largest possible (better)
+                            skip_first_res_con=False, 
+                            recurrent=True,
+                            recursion_steps=2,
+                            in_channels_red=384*n_in_ch)
     elif dec_name == 'unet':
         class_name = UNetHead.__name__
         n_in_ch=5
         # https://arxiv.org/abs/1505.04597 (unet papaer)
         input_group_cat_nb = 2
         n_in_ch *= input_group_cat_nb
-        dec_head_cfg = dict(in_channels=[embed_dim]*n_in_ch,
-                                num_classses=num_classses,
-                                # in_index=None,
-                                # in_resize_factors=None,
-                                # align_corners=False,
-                                dropout_rat_cls_seg=0.1,
-                                nb_up_blocks=4,
-                                upsample_facs_ch=2,
-                                upsample_facs_wh=2,
-                                bilinear=False,
-                                conv_per_up_blk=2, # 5
-                                res_con=True,
-                                res_con_interv=None, # None = Largest possible (better)
-                                skip_first_res_con=False, 
-                                recurrent=True,
-                                recursion_steps=2, # 3
-                                resnet_cat_inp_upscaling=True,
-                                input_group_cat_nb=input_group_cat_nb,
-                                in_channels_red=576)  # 576  |  384*input_group_cat_nb
+        dec_head_cfg = dict(num_classses=num_classses,
+                            # in_index=None,
+                            # in_resize_factors=None,
+                            # align_corners=False,
+                            dropout_rat_cls_seg=0.1,
+                            nb_up_blocks=4,
+                            upsample_facs_ch=2,
+                            upsample_facs_wh=2,
+                            bilinear=False,
+                            conv_per_up_blk=2, # 5
+                            res_con=True,
+                            res_con_interv=None, # None = Largest possible (better)
+                            skip_first_res_con=False, 
+                            recurrent=True,
+                            recursion_steps=2, # 3
+                            resnet_cat_inp_upscaling=True,
+                            input_group_cat_nb=input_group_cat_nb,
+                            in_channels_red=576)  # 576  |  384*input_group_cat_nb
         
     else:
         ValueError(f'Decoder name {dec_name} is not defined')

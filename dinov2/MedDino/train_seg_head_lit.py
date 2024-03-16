@@ -8,19 +8,20 @@ sys.path.insert(1, dino_main_pth.as_posix())
 sys.path.insert(2, orig_dino_pth.as_posix())
 
 import torch
-import math
+# import math
 
 # import cv2
 # import numpy as np
 # from matplotlib import pyplot as plt
 
-from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, get_dino_backbone
+from prep_model import time_str
+# from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, get_dino_backbone
 # from OrigDino.dinov2.eval.segmentation import models
 
 # from MedDino.med_dinov2.models.segmentor import Segmentor
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
-from MedDino.med_dinov2.data.datasets import SegmentationDataset, SegmentationDatasetHDF5, VolDataModule
+from MedDino.med_dinov2.data.datasets import VolDataModule # SegmentationDataset, SegmentationDatasetHDF5,
 from torch.utils.data import DataLoader
 # from MedDino.med_dinov2.tools.main_fcts import train, test
 # from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
@@ -42,9 +43,9 @@ from lightning.pytorch import seed_everything
 from MedDino.med_dinov2.tools.configs import *
 
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -52,6 +53,7 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
+backbone = 'dino'  # resnet
 train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
@@ -59,7 +61,7 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 dataset = 'hcp1' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
-test_datasets = ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else [dataset]
+test_datasets = [dataset]  # ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else 
 
 # Select the dec head
 dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
@@ -94,25 +96,16 @@ torch.set_float32_matmul_precision(precision)
 seed_everything(seed, workers=True)
 
 # Backbone config
-backbone_name = get_bb_name(backbone_sz)
+bb_cfg = get_bb_cfg(bb_name=backbone, bb_size=backbone_sz, train_bb=train_backbone, 
+                    dec_name=dec_head_key, main_pth=dino_main_pth)
 
 # Data attributes
 dataset_attrs = get_data_attrs(name=dataset, use_hdf5=hdf5_data)
 batch_sz = get_batch_sz(dataset_attrs, gpus)
 
 # Decoder config
-dec_head_cfg, n_in_ch = get_dec_cfg(dec_name=dec_head_key, bb_name=backbone_name, dataset_attrs=dataset_attrs)
+dec_head_cfg, n_in_ch = get_dec_cfg(dec_name=dec_head_key, dataset_attrs=dataset_attrs)
 
-
-# BAckbione continues
-bb_checkpoint_path = dino_main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
-
-dino_bb_cfg = dict(name='DinoBackBone',
-                   params=dict(n_out=n_in_ch,
-                               last_out_first=True,
-                               bb_model=None,
-                               cfg=dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path),
-                               train=train_backbone))
 
 # Optimizer Config
 optm_cfg = dict(name='AdamW',
@@ -150,13 +143,12 @@ seg_log_batch_idxs = get_batch_log_idxs(batch_sz=batch_sz, data_attr=dataset_att
 seg_res_log_itv = max(nb_epochs//5, 1)  
 
 # Init the segmentor model
-segmentor_cfg = dict(backbone=dino_bb_cfg,
+segmentor_cfg = dict(backbone=bb_cfg,
                      decode_head=dec_head_cfg,
                      loss_config=loss_cfg, 
                      optimizer_config=optm_cfg,
                      schedulers_config=scheduler_cfg,
                      metric_configs=metric_cfgs,
-                     train_backbone=train_backbone,
                      reshape_dec_oup=True,
                      align_corners=False,
                      val_metrics_over_vol=True, # Also report metrics over vol
@@ -173,7 +165,7 @@ model = LitSegmentor(**segmentor_cfg)
 summary(model)
 
 # Get augmentations
-train_augmentations, augmentations = get_augmentations(patch_sz=model.segmentor.backbone.get_input_sz_multiple())
+train_augmentations, augmentations = get_augmentations(patch_sz=model.segmentor.backbone.input_sz_multiple)
 
 # Get the data loader
 if cluster_paths:
@@ -216,7 +208,8 @@ trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strateg
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
                 f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
 dec_head_name = model.segmentor.decode_head.__class__.__name__
-bb_train_str_short = 'bbT' if segmentor_cfg['train_backbone'] else 'NbbT'
+bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
+backbone_name = model.segmentor.backbone.name
 run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
 data_type = 'hdf5' if hdf5_data else 'png'
 
@@ -247,7 +240,7 @@ wnadb_config = dict(backbone_name=backbone_name,
 wandb_log_path = dino_main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
 
-bb_train_str = 'train_bb_YES' if segmentor_cfg['train_backbone'] else 'train_bb_NO'
+bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
 log_mode = 'online' if log_the_run else 'disabled'
 tags = [dataset, loss_name, bb_train_str, dec_head_name]
 tags.extend(backbone_name.split('_'))
@@ -289,8 +282,8 @@ if trainer.global_rank == 0:
                             log_every_n_steps=100, num_sanity_val_steps=0,)
     trainer_testing = L.Trainer(logger=logger, **trainer_cfg_test)
     
-    test_model_cfg = dict(backbone=dino_bb_cfg,
-                          decode_head=dec_head_cfg,
+    test_model_cfg = dict(backbone=bb_cfg,
+                          decode_head=dec_head_cfg,  # WRONG SHOULD BE CHANGED nb class changes
                           loss_config=loss_cfg, 
                           optimizer_config=optm_cfg,
                           schedulers_config=scheduler_cfg,

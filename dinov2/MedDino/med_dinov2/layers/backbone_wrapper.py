@@ -12,11 +12,14 @@ from typing import Union, Optional, Sequence, Callable, Any
 
 class BackBoneBase(nn.Module):
     def __init__(self, 
+                 name:str,
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(*args, **kwargs)
+        
+        self.name = name
         
         assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
         
@@ -32,7 +35,22 @@ class BackBoneBase(nn.Module):
         self.__train_backbone = None
         self.__store_trainable_params_n_cfg_bb(train_bb=train)
         
+        self._input_sz_multiple = 1
         
+    @property
+    @abstractmethod    
+    def hw_shrink_fac(self):
+        pass
+    
+    @property
+    @abstractmethod    
+    def nb_outs(self):
+        pass
+    
+    @property
+    @abstractmethod    
+    def out_feat_channels(self):
+        pass
         
     def __store_trainable_params_n_cfg_bb(self, train_bb:bool):
         assert hasattr(self, 'backbone'), 'Must first set a backbone'
@@ -99,26 +117,29 @@ class BackBoneBase(nn.Module):
         else:
             with torch.no_grad():
                 return self.forward_backbone(x)
-            
-    def get_input_sz_multiple(self):
+     
+    @property        
+    def input_sz_multiple(self):
         """Returns the constriaint, nb of pixels that the input must be amultiple of on height and width"""
-        return 1
+        return self._input_sz_multiple
             
     
 class DinoBackBone(BackBoneBase):
     def __init__(self, 
-                 n_out:int,
+                 nb_outs:int,
+                 name:str,
                  last_out_first:bool=True,
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
                  *args: torch.Any, **kwargs: torch.Any) -> None:
-        super().__init__(bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
+        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
         
-        assert n_out > 1, f'n_out should be at least 1, but got: {n_out}'
-        assert n_out <= self.backbone.n_blocks, f'Requested n_out={n_out}, but only available {self.backbone.n_blocks}'
-        self.n_out = n_out
+        assert nb_outs > 1, f'n_out should be at least 1, but got: {nb_outs}'
+        assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
+        self._nb_outs = nb_outs
         self.last_out_first = last_out_first
+        self._input_sz_multiple = self.backbone.patch_size
         
         
     def _get_bb_from_cfg(self, cfg:dict):
@@ -126,7 +147,7 @@ class DinoBackBone(BackBoneBase):
             
     
     def forward_backbone(self, x):
-        out_patch_feats = self.backbone.get_intermediate_layers(x, n=self.n_out, reshape=True)
+        out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs, reshape=True)
            
         if self.last_out_first:
             # Output of the last ViT block first in the tuple
@@ -135,24 +156,29 @@ class DinoBackBone(BackBoneBase):
             # Output of the last ViT block last in the tuple
             return out_patch_feats
         
-    def get_input_sz_multiple(self):
-        """Returns the constriaint, nb of pixels that the input must be amultiple of on height and width"""
-        return self.backbone.patch_size
+    @property
+    def nb_outs(self):
+        return self._nb_outs 
     
-    
-    def get_out_nb_ch(self):
+    @property  
+    def out_feat_channels(self):
         return self.backbone.embed_dim
+    
+    @property
+    def hw_shrink_fac(self):
+        return self.backbone.patch_size
         
         
 class ResNetBackBone(BackBoneBase):
     def __init__(self, 
                  
+                 name,
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
-        super().__init__(bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
+        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
         
     
     def _get_bb_from_cfg(self, cfg:dict):
@@ -161,6 +187,19 @@ class ResNetBackBone(BackBoneBase):
     def forward_backbone(self, x):
         pass
     
-    def get_out_nb_ch(self):
+    @property
+    def nb_outs(self):
         pass
+    
+    @property  
+    def out_feat_channels(self):
+        pass
+    
+    @property
+    def hw_shrink_fac(self):
+        pass
+    
+    
+implemented_backbones = [DinoBackBone.__class__.__name__,
+                         ResNetBackBone.__class__.__name__,]
         

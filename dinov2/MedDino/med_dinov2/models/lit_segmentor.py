@@ -1,20 +1,20 @@
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
-from abc import abstractclassmethod
+# from abc import abstractclassmethod
 from torch.nn import CrossEntropyLoss
 from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
 from MedDino.med_dinov2.eval.losses import DiceLoss, FocalLoss, CompositionLoss
 import lightning as L
-from torch.optim.optimizer import Optimizer
-from OrigDino.dinov2.hub.utils import CenterPadding
-from lightning.pytorch.core.optimizer import LightningOptimizer
+# from torch.optim.optimizer import Optimizer
+# from OrigDino.dinov2.hub.utils import CenterPadding
+# from lightning.pytorch.core.optimizer import LightningOptimizer
 from MedDino.med_dinov2.models.segmentor import Segmentor
 import torch
 import wandb
 from typing import Union, Optional, Sequence, Callable, Any
-from torchvision.transforms.functional import to_pil_image 
+# from torchvision.transforms.functional import to_pil_image 
 # from tqdm import tqdm
 import torch.nn.functional as F
-import math
+# import math
 from torchvision.utils import make_grid
 from lightning.pytorch.utilities import rank_zero_only
 
@@ -128,7 +128,6 @@ class LitSegmentor(LitBaseModule):
                  optimizer_config:dict,
                  schedulers_config:Optional[dict]=None,
                  metric_configs:Optional[Union[dict, Sequence[dict]]]=None,
-                 train_backbone=False, 
                  reshape_dec_oup=False, 
                  align_corners=False,
                  val_metrics_over_vol=True,
@@ -156,10 +155,9 @@ class LitSegmentor(LitBaseModule):
         self._test_dataset_name =test_dataset_name
         
         self.segmentor = Segmentor(backbone=backbone,
-                               decode_head=decode_head,
-                               train_backbone=train_backbone,
-                               reshape_dec_oup=reshape_dec_oup,
-                               align_corners=align_corners)
+                                   decode_head=decode_head,
+                                   reshape_dec_oup=reshape_dec_oup,
+                                   align_corners=align_corners)
         
         if len(seg_log_batch_idxs) == 0:
             assert len(minibatch_log_idxs)>0

@@ -4,19 +4,19 @@
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms as transforms
-from torchvision.transforms import functional as F
+# import torchvision.transforms as transforms
+# from torchvision.transforms import functional as F
 import numpy as np
 import os
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from torch import optim
 from tqdm import tqdm
 # import torch.nn.functional as F
-import torchvision.transforms.functional as F
+# import torchvision.transforms.functional as F
 # from model import Segmentor
-from scipy.ndimage import zoom
-import matplotlib.pyplot as plt
+# from scipy.ndimage import zoom
+# import matplotlib.pyplot as plt
 from PIL import Image
 from pathlib import Path
 from mmseg.datasets.pipelines import Compose
