@@ -41,7 +41,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
 
 from MedDino.med_dinov2.tools.configs import *
-
+# from torch.utils.data import Sampler
 
 cluster_paths = True
 save_checkpoints = True
@@ -55,10 +55,10 @@ seed = 42
 # Set the BB
 backbone = 'dino'  # resnet
 train_backbone = True
-backbone_sz = "base" # in ("small", "base", "large" or "giant")
+backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp1' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
+dataset = 'abide_stanford' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
 test_datasets = [dataset]  # ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else 
@@ -78,7 +78,7 @@ lr = 0.5e-4  # 0.5e-4
 weigh_loss_bg = False  # False is better
 
 # Test checkpoint
-test_checkpoint_key = 'val_dice'  # 'val_loss', 'val_dice', 'val_mIoU'
+test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vol'
 
 # Dataloader workers
 # num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)

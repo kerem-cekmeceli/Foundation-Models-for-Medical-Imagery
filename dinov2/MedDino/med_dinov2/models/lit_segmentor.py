@@ -258,7 +258,10 @@ class LitSegmentor(LitBaseModule):
                 [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred, batch_idx=batch_idx)],}, commit=False)
     
     def validation_step(self, val_batch, batch_idx):
-        x_batch, y_batch = val_batch
+        if self.val_metrics_over_vol:
+            x_batch, y_batch, n_xyz = val_batch
+        else:
+            x_batch, y_batch = val_batch
         
         assert (x_batch.isnan()==False).all(), \
             f"Validation x_batch nan ratio={torch.count_nonzero(x_batch.isnan()==True)/torch.numel(x_batch)}, batch_idx={batch_idx}"
@@ -267,6 +270,7 @@ class LitSegmentor(LitBaseModule):
         
         # Forward pass
         y_pred = self.segmentor(x_batch)
+        
         assert (y_pred.isnan()==False).all(), \
             f"Validation y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}, batch_idx={batch_idx}"
             
@@ -286,10 +290,11 @@ class LitSegmentor(LitBaseModule):
                 self.log(metric_key, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
                 
             if  self.val_metrics_over_vol:
-                metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
-                for k, v in metric_dict_vol.items():
-                    metric_key = f'val_{metric_n}{k}_vol' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_{metric_n}{k}_vol'
-                    self.log(metric_key, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
+                metric_dicts_vol = metric.get_res_dict(y_pred, y_batch, last_slice=n_xyz['last_slice'])  
+                for metric_dict_vol in metric_dicts_vol:
+                    for k, v in metric_dict_vol.items():
+                        metric_key = f'val_{metric_n}{k}_vol' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_{metric_n}{k}_vol'
+                        self.log(metric_key, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
         # save the segmentation result
         if batch_idx in self.seg_log_batch_idxs and self._test_dataset_name!='':
@@ -317,7 +322,10 @@ class LitSegmentor(LitBaseModule):
         return super().lr_scheduler_step(scheduler, metric)
     
     def test_step(self, batch, batch_idx):   
-        x_batch, y_batch = batch
+        if self.val_metrics_over_vol:
+            x_batch, y_batch, n_xyz = batch
+        else:
+            x_batch, y_batch = batch
              
         # Forward pass
         y_pred = self.segmentor(x_batch)
@@ -344,9 +352,10 @@ class LitSegmentor(LitBaseModule):
                 self.log(f'test_{self._test_dataset_name}_{metric_n}{k}', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                 
             if  self.val_metrics_over_vol:
-                metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=batch_idx )  
-                for k, v in metric_dict_vol.items():
-                    self.log(f'test_{self._test_dataset_name}_{metric_n}{k}_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
+                metric_dicts_vol = metric.get_res_dict(y_pred, y_batch, last_slice=n_xyz['last_slice'])  
+                for metric_dict_vol in metric_dicts_vol:
+                    for k, v in metric_dict_vol.items():
+                        self.log(f'test_{self._test_dataset_name}_{metric_n}{k}_vol', v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)
                     
     @rank_zero_only   
     def wnadb_conf_metrics(self):

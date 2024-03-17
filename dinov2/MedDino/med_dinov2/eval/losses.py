@@ -20,7 +20,7 @@ class mIoULoss(mIoU):
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
                          ret_per_class_scores=False,
-                         vol_batch_sz=None,
+                         EN_vol_scores=None,
                          epsilon=epsilon,
                          weight=weight)
     
@@ -43,7 +43,7 @@ class DiceLoss(DiceScore):
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
                          ret_per_class_scores=False,
-                         vol_batch_sz=None,
+                         EN_vol_scores=None,
                          k=k,
                          epsilon=epsilon,
                          weight=weight)

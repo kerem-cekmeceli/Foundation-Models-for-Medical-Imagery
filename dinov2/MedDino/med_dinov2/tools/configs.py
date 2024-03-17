@@ -411,7 +411,7 @@ def get_loss_cfg(loss_key, data_attr):
 
 def get_metric_cfgs(data_attr):
     ignore_idx_metric = data_attr['ignore_idx_metric']
-    vol_depth = data_attr['vol_depth']
+    # vol_depth = data_attr['vol_depth']
     
     epsilon = 1  # smoothing factor 
     k=1  # power
@@ -420,7 +420,7 @@ def get_metric_cfgs(data_attr):
                 soft=False,
                 bg_ch_to_rm=ignore_idx_metric,  # bg channel to be removed 
                 reduction='mean',
-                vol_batch_sz=vol_depth,
+                EN_vol_scores=True,
                 epsilon=epsilon)
 
     dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
@@ -429,7 +429,7 @@ def get_metric_cfgs(data_attr):
                 reduction='mean',
                 k=k, 
                 epsilon=epsilon,
-                vol_batch_sz=vol_depth)
+                EN_vol_scores=True)
 
     metric_cfgs=[dict(name='mIoU', params=miou_cfg), 
                  dict(name='dice', params=dice_cfg)]
@@ -539,7 +539,7 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_augmentations, augme
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
                                         augmentations=augmentations,
-                                        )
+                                        ret_n_xyz=True)
         
     else:
         hdf5_train_name = data_attr['hdf5_train_name']
@@ -548,13 +548,16 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_augmentations, augme
         
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                                 num_classes=num_classses, 
-                                                augmentations=train_augmentations)
+                                                augmentations=train_augmentations,
+                                                ret_n_xyz=False)
         val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
                                                 num_classes=num_classses, 
-                                                augmentations=augmentations)
+                                                augmentations=augmentations,
+                                                ret_n_xyz=True)
         test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_test_name, 
                                                 num_classes=num_classses, 
-                                                augmentations=augmentations)
+                                                augmentations=augmentations,
+                                                ret_n_xyz=False)
         
     return train_dataset, val_dataset, test_dataset
     

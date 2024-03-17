@@ -215,7 +215,7 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                        soft=True,
                        bg_ch_to_rm=bg_channel,  # bg channel to be removed 
                        reduction='mean',
-                       vol_batch_sz=SLICE_PER_PATIENT), # average over batches and classes
+                       EN_vol_scores=SLICE_PER_PATIENT), # average over batches and classes
              dice=DiceScore(n_class=num_classses, 
                             prob_inputs=False,  # Decoder does not return probas explicitly
                             soft=True,
@@ -223,7 +223,7 @@ metrics=dict(mIoU=mIoU(n_class=num_classses,
                             reduction='mean',
                             k=1, 
                             epsilon=1e-6,
-                            vol_batch_sz=SLICE_PER_PATIENT))
+                            EN_vol_scores=SLICE_PER_PATIENT))
 
 val_metrics_over_vol = True  #@TODO when true it's too slow fix it ! | from 25 sec to 4 min
 

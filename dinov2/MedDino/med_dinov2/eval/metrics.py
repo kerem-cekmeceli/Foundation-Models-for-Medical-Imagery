@@ -13,7 +13,7 @@ class ScoreBase(nn.Module, ABC):
                  bg_ch_to_rm=None,
                  reduction='mean',
                  ret_per_class_scores=True,
-                 vol_batch_sz=None,
+                 EN_vol_scores=False,
                  log_probas=False,
                  weight=None):
         super(ScoreBase, self).__init__()
@@ -31,9 +31,10 @@ class ScoreBase(nn.Module, ABC):
         
         self.ret_per_class_scores = ret_per_class_scores
         
-        if vol_batch_sz is not None:
-            assert vol_batch_sz > 0
-        self.vol_batch_sz = vol_batch_sz
+        self.EN_vol_scores = EN_vol_scores  # Enables score to be computed over the volume
+        if EN_vol_scores:
+            self.slices_mask_pred = []
+            self.slices_mask_gt = []
         
         self.log_probas = log_probas
         
@@ -123,12 +124,57 @@ class ScoreBase(nn.Module, ABC):
         return scores_per_class
     
     
-    def get_res_dict(self, inputs, target_oneHot, depth_idx=None):
+    def score_over_vol(self, mask_pred, mask_gt, last_slice):
+        assert mask_pred.shape[0] == mask_gt.shape[0] == last_slice.shape[0], 'Should have the same batch dim'
+        
+        # Need to append => All slices are from the same volume
+        res = []
+        if (last_slice[:-1]==False).all() or len(last_slice[:-1])==0:
+            # Concat on depth dimension
+            # [N, C, H, W] --> [C, N, H, W]
+            self.slices_mask_pred.append(mask_pred.transpose(0, 1))
+            self.slices_mask_gt.append(mask_gt.transpose(0, 1))
+        
+            # Last element is the end of the volume => compute the score
+            if last_slice[-1]==True:
+                # Compute the scores over the complete volume
+                # scores : [1, C]
+                scores = self._compute_score(torch.cat(self.slices_mask_pred, dim=-3).unsqueeze(0), \
+                                                torch.cat(self.slices_mask_gt, dim=-3).unsqueeze(0))  # [1, C, D, H, W]
+                # Apply the weight
+                scores = self._apply_weight(scores)
+                self.slices_mask_pred.clear()
+                self.slices_mask_gt.clear()
+                res.append(self._put_in_res_dict(scores))
+                
+            else:
+                # Appending empty dict, res calculation is pending for the completion of the volume
+                res.append({})
+        
+        # Need to seperate the batch so that scores can be computed using slices corresponding to the same 3d volume    
+        else:
+            thres_idx = torch.argmax(last_slice) + 1
+            assert thres_idx < last_slice.shape[0]
+            
+            mask_pred_vol_end = mask_pred[:thres_idx]
+            mask_gt_vol_end = mask_gt[:thres_idx]
+            last_slice_vol_end = last_slice[:thres_idx]
+            res.extend(self.score_over_vol(mask_pred=mask_pred_vol_end, mask_gt=mask_gt_vol_end, last_slice=last_slice_vol_end))
+            
+            mask_pred_rest = mask_pred[thres_idx:]
+            mask_gt_rest = mask_gt[thres_idx:]
+            last_slice_rest = last_slice[thres_idx:]
+            res.extend(self.score_over_vol(mask_pred=mask_pred_rest, mask_gt=mask_gt_rest, last_slice=last_slice_rest))
+            
+        return res
+                
+    
+    def get_res_dict(self, inputs, target_oneHot, last_slice=None):
         # Verify and prep inputs
         mask_pred, mask_gt = self._prep_inputs(inputs, target_oneHot)
         
         # Calc score ever 2D
-        if depth_idx is None:
+        if last_slice is None:
             scores = self._compute_score(mask_pred, mask_gt)
             # Apply the weight
             scores = self._apply_weight(scores)
@@ -136,34 +182,8 @@ class ScoreBase(nn.Module, ABC):
         
         # Calc score over 3D 
         else:
-            assert self.vol_batch_sz is not None
-            batch_sz = inputs.size(0)
-            assert self.vol_batch_sz%batch_sz == 0, 'Batch size must be a multiple of samples/volume'
-            
-            vol_minibatch_sz = self.vol_batch_sz / batch_sz
-            
-            if depth_idx % vol_minibatch_sz == 0:
-                # Reinit the slices for the next volume batch
-                self.slices_mask_pred = [mask_pred.transpose(0, 1)]
-                self.slices_mask_gt = [mask_gt.transpose(0, 1)]
-                
-            else:
-                # Concat on depth dimension
-                # [N, C, H, W] --> [C, N, H, W]
-                self.slices_mask_pred.append(mask_pred.transpose(0, 1))
-                self.slices_mask_gt.append(mask_gt.transpose(0, 1))
-                
-                if depth_idx % vol_minibatch_sz == (vol_minibatch_sz-1):
-                    # Compute the scores over the complete volume
-                    scores = self._compute_score(torch.cat(self.slices_mask_pred, dim=-3).unsqueeze(0), \
-                                                 torch.cat(self.slices_mask_gt, dim=-3).unsqueeze(0))  # [1, C, D, H, W]
-                    # Apply the weight
-                    scores = self._apply_weight(scores)
-                    self.slices_mask_pred.clear()
-                    self.slices_mask_gt.clear()
-                    return self._put_in_res_dict(scores)
-                
-            return {}  # Return an empty dict 
+            assert self.EN_vol_scores, 'Computation over the volume should be enabled during intialization'
+            return self.score_over_vol(mask_pred=mask_pred, mask_gt=mask_gt, last_slice=last_slice)
     
     def forward(self, inputs, target_oneHot):
         # Verify and prep inputs
@@ -187,7 +207,7 @@ class mIoU(ScoreBase):
                  bg_ch_to_rm=None,
                  reduction='mean',
                  ret_per_class_scores=True,
-                 vol_batch_sz=None,
+                 EN_vol_scores=True,
                  epsilon=1e-6,
                  weight=None):
         super(mIoU, self).__init__(prob_inputs=prob_inputs, 
@@ -195,7 +215,7 @@ class mIoU(ScoreBase):
                                    bg_ch_to_rm=bg_ch_to_rm,
                                    reduction=reduction,
                                    ret_per_class_scores=ret_per_class_scores,
-                                   vol_batch_sz=vol_batch_sz,
+                                   EN_vol_scores=EN_vol_scores,
                                    weight=weight)  
         
         assert epsilon>0, f'Epsilon must be positive, got: {epsilon}'
@@ -230,7 +250,7 @@ class DiceScore(ScoreBase):
                  reduction='mean',
                  k=1, 
                  epsilon=1e-6,
-                 vol_batch_sz=None,
+                 EN_vol_scores=True,
                  ret_per_class_scores=True,
                  weight=None) -> None:
         super().__init__(prob_inputs=prob_inputs, 
@@ -238,7 +258,7 @@ class DiceScore(ScoreBase):
                          bg_ch_to_rm=bg_ch_to_rm,
                          reduction=reduction,
                          ret_per_class_scores=ret_per_class_scores,
-                         vol_batch_sz=vol_batch_sz,
+                         EN_vol_scores=EN_vol_scores,
                          weight=weight)
         assert epsilon>0, f'Epsilon must be positive, got: {epsilon}'
         self.epsilon=epsilon

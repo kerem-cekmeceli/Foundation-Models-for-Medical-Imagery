@@ -130,7 +130,7 @@ def validate_batches(model: nn.Module,
                     log_epoch[key_epoch] += v.item()
                     
                 if metrics_over_vol:
-                    metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=i_batch )  
+                    metric_dict_vol = metric.get_res_dict(y_pred, y_batch, last_slice=i_batch )  
                     for k, v in metric_dict_vol.items():
                         key_epoch = 'val_'+metric_n+k+'_vol'
                         if not key_epoch in log_epoch.keys():
@@ -172,7 +172,7 @@ def validate_batches(model: nn.Module,
                 if '_vol' not in key:
                     log_epoch[key] /= tot_batches
                 else:
-                    log_epoch[key] /= (tot_batches / (next(iter(metrics.items()))[1].vol_batch_sz / x_batch.size(0)))
+                    log_epoch[key] /= (tot_batches / (next(iter(metrics.items()))[1].EN_vol_scores / x_batch.size(0)))
        
     return log_epoch
 
@@ -328,7 +328,7 @@ def test_batches(model: nn.Module,
                         log_test[key_test] = 0.
                     log_test[key_test] += v.item()
                 if metrics_over_vol:
-                    metric_dict_vol = metric.get_res_dict(y_pred, y_batch, depth_idx=i_batch)
+                    metric_dict_vol = metric.get_res_dict(y_pred, y_batch, last_slice=i_batch)
                     for k, v in metric_dict_vol.items():
                         key_test = 'test_'+metric_n+k+'_vol'
                         if not key_test in log_test.keys():
@@ -347,7 +347,7 @@ def test_batches(model: nn.Module,
             if '_vol' not in key:
                 log_test[key] /= tot_batches
             else:
-                log_test[key] /= (tot_batches / (next(iter(metrics.items()))[1].vol_batch_sz / x_batch.size(0)))
+                log_test[key] /= (tot_batches / (next(iter(metrics.items()))[1].EN_vol_scores / x_batch.size(0)))
             
         # Log the table
         if log_table is not None:

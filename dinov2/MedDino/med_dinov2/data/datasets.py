@@ -165,6 +165,7 @@ class SegmentationDatasetHDF5(Dataset):
     def __init__(self, file_pth, num_classes, 
                  augmentations=None,
                  dtype=torch.float32,
+                 ret_n_xyz:bool=True,
                  *args, **kwargs):
         super(Dataset).__init__(*args, **kwargs)
         
@@ -174,6 +175,7 @@ class SegmentationDatasetHDF5(Dataset):
         self.file_pth = file_pth
         self.num_classes = num_classes
         self.dtype = dtype
+        self.ret_n_xyz = ret_n_xyz
         
         # Put the must have transforms
         transforms = []
@@ -196,19 +198,29 @@ class SegmentationDatasetHDF5(Dataset):
         # Dataset
         self.dataset = None
         with h5py.File(self.file_pth, 'r') as f:
-            nb_vol, scan_depth = f['images'].shape[:2]
-            self.nb_vol = nb_vol
-            self.nb_slice_per_vol = scan_depth
-            self.nb_slice_tot = int(nb_vol*scan_depth)
+            self.nb_vol = f['images'].shape[0]
+            self.nb_slices_until = np.cumsum(f['nz'][:], dtype=int)
+            self.nb_slice_tot = f['nz'][:].sum()
+            assert self.nb_slice_tot == self.nb_slices_until[-1]
         
 
     def __len__(self):
         return self.nb_slice_tot
     
     def _get_nb_vol_n_slice_idxs(self, idx):
-        vol_idx = idx//self.nb_slice_per_vol
-        slice_idx = idx%self.nb_slice_per_vol
-        assert vol_idx * self.nb_slice_per_vol + slice_idx == idx
+        
+        vol_idx = np.searchsorted(self.nb_slices_until, idx, side='right')
+        
+        if vol_idx>0:
+            nb_slices_before = self.nb_slices_until[vol_idx-1]
+        else:
+            nb_slices_before = 0
+            
+        slice_idx = idx - nb_slices_before
+        
+        assert slice_idx >= 0, f'Should be positive but got {slice_idx}'
+        assert slice_idx < self.nb_slices_until[vol_idx]-nb_slices_before
+        assert nb_slices_before + slice_idx == idx, f'Mismatch, expected: {idx}, calculated {nb_slices_before+slice_idx}'
         
         return vol_idx, slice_idx 
 
@@ -218,6 +230,12 @@ class SegmentationDatasetHDF5(Dataset):
             self.dataset = h5py.File(self.file_pth, 'r')
             
         vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
+        
+        if self.ret_n_xyz:
+            n_xyz = dict(nx = self.dataset['nx'][vol_idx].copy(),
+                         ny = self.dataset['ny'][vol_idx].copy(),
+                         nz = self.dataset['nz'][vol_idx].copy(),
+                         last_slice = slice_idx==self.dataset['nz'][vol_idx]-1)
         
         image = self.dataset['images'][vol_idx, slice_idx].copy().astype('float32')
         mask = self.dataset['labels'][vol_idx, slice_idx].copy().astype('uint8')
@@ -239,8 +257,11 @@ class SegmentationDatasetHDF5(Dataset):
         [image, mask] = self.transforms([image, mask])
         image = image.to(self.dtype) # C, H, W
         mask = mask.squeeze(0).to(torch.int64) 
-                    
-        return image, mask
+        
+        if not self.ret_n_xyz:            
+            return image, mask
+        else:
+            return image, mask, n_xyz
     
 from torch.utils.data import DistributedSampler    
 
