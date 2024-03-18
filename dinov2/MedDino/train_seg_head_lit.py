@@ -58,7 +58,7 @@ train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp1' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
+dataset = 'prostate_nci' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
 test_datasets = [dataset]  # ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else 

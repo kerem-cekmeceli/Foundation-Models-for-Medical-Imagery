@@ -128,11 +128,14 @@ def get_data_attrs(name:str, use_hdf5=True):
         attrs['name'] = name
         attrs['data_path_suffix'] = 'prostate/nci'
         attrs['num_classses'] = 3
-        attrs['vol_depth'] = 20  #@TODO VERIFY
+        attrs['vol_depth'] = 20  #@TODO VERIFY  # Approx (for segmentation logging)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         if use_hdf5:
-            ValueError('HDF5 path is not defined yet')
+            attrs['data_path_suffix'] = 'nci'
+            attrs['hdf5_train_name'] = 'train.hdf5'
+            attrs['hdf5_val_name'] = 'val.hdf5'
+            attrs['hdf5_test_name'] = 'test.hdf5'
             
         # weight = [0.1] + [1.]*(attrs['num_classses']-1)
         # weight = torch.Tensor(weight)
@@ -411,7 +414,6 @@ def get_loss_cfg(loss_key, data_attr):
 
 def get_metric_cfgs(data_attr):
     ignore_idx_metric = data_attr['ignore_idx_metric']
-    # vol_depth = data_attr['vol_depth']
     
     epsilon = 1  # smoothing factor 
     k=1  # power
@@ -464,10 +466,10 @@ def get_minibatch_log_idxs(batch_sz):
 def get_batch_log_idxs(batch_sz, data_attr):
     vol_depth = data_attr['vol_depth']
     
-    seg_res_nb_patient = 1  # Process minibatches for N number of patients
+    seg_res_nb_vols = 1  # Process minibatches for N number of 3D volumes
     seg_log_nb_batches = 16
     step = max(vol_depth//batch_sz//seg_log_nb_batches, 1)
-    seg_log_batch_idxs = torch.arange(0+step-1, min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_patient), step).tolist()
+    seg_log_batch_idxs = torch.arange(0+step-1, min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_vols), step).tolist()
     assert len(seg_log_batch_idxs)==seg_log_nb_batches
     
     return seg_log_batch_idxs
