@@ -324,7 +324,7 @@
 
 import h5py
 
-dataset = 'acdc' # 'nci' , 'acdc'
+dataset = 'nci' # 'nci' , 'acdc'
 cluster = True
 
 if cluster:
@@ -370,12 +370,18 @@ def get_train_val_test_dicts(pth, train_suff='_train', val_suff='_validation', t
             if train_suff in key:
                 key_wo_suffix = key.replace(train_suff, '')
                 train_dict[key_wo_suffix] = f[key][:]
+                assert train_dict[key_wo_suffix].shape[0]==train_vols
+
             elif val_suff in key:
                 key_wo_suffix = key.replace(val_suff, '')
                 val_dict[key_wo_suffix] = f[key][:]
+                assert val_dict[key_wo_suffix].shape[0]==val_vols
+
             elif test_suff in key:
                 key_wo_suffix = key.replace(test_suff, '')
                 test_dict[key_wo_suffix] = f[key][:]
+                assert test_dict[key_wo_suffix].shape[0]==test_vols
+
             else:
                 ValueError(f'Undefined key: {key}')
                 
@@ -386,7 +392,7 @@ def write_dict_as_hdf5(dct, pth, name):
     if not isinstance(pth, str):
         pth = str(pth)
     hf_file = h5py.File(pth+f'{name}.hdf5', 'w')
-    for key, val in dct.keys():
+    for key, val in dct.items():
         hf_file.create_dataset(key, data=val)
     hf_file.close()
             
@@ -412,6 +418,16 @@ def save_dicts_as_hdf5(pth, train_dict=None, val_dict=None, test_dict=None):
 train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
 
 save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_dict=test_dict)
+
+
+pth = dir_path+'test.hdf5'
+with h5py.File(pth, "r") as f:
+
+    print("Keys: %s" % f.keys())
+    print(f[f.keys()[0]].shape)
+    
+  
+print()
 
 #######################################################################################################################
 
@@ -487,20 +503,7 @@ save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_
 
 #######################################################################################################################
 
-# pth = main_pth+sub_path+'test.hdf5'
 
-# with h5py.File(pth, "r") as f:
-
-#     print("Keys: %s" % f.keys())
-    
-#     img_shape = f["images"].shape
-#     lab_shape = f["labels"].shape
-#     print(f'Images shape: {img_shape}')
-#     print(f'Labels shape: {lab_shape}')
-    
-
-    
-# print()
 
 # import sys
 # from pathlib import Path
