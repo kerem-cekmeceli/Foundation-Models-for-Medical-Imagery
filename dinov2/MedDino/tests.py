@@ -324,7 +324,7 @@
 
 import h5py
 
-dataset = 'nci' # 'nci' , 'acdc'
+dataset = 'acdc' # 'nci' , 'acdc', 'rvsc'
 cluster = True
 
 if cluster:
@@ -332,8 +332,7 @@ if cluster:
 else:
     main_pth = "../../DataFoundationModels/hdf5/"
 
-#"brain/hcp/"
-#  "data_T1_original_depth_256_from_0_to_20.hdf5"
+# Prostate NCI
 if dataset=='nci':
     sub_path = "nci/"  
     filename = 'data_2d_size_256_256_res_0.625_0.625_cv_fold_1.hdf5'
@@ -342,6 +341,7 @@ if dataset=='nci':
     val_vols = 5
     test_vols = 10
 
+# Cardiac ACDC
 elif dataset=='acdc':
     sub_path = "acdc/"  
     filename = 'data_2D_size_256_256_res_1.33_1.33_cv_fold_1.hdf5'
@@ -349,6 +349,15 @@ elif dataset=='acdc':
     train_vols = 120
     val_vols = 40
     test_vols = 40
+
+# Cardiac RVSC
+elif dataset=='rvsc':
+    sub_path = "rvsc/"  
+    filename = 'data_2D_size_256_256_res_1.33_1.33_cv_fold_1.hdf5'
+
+    train_vols = 48
+    val_vols = 24
+    test_vols = 24
 
 else:
     ValueError('unknown dataset')
@@ -419,6 +428,12 @@ def save_dicts_as_hdf5(pth, train_dict=None, val_dict=None, test_dict=None):
     
     print("Done !")
     
+
+pth = '/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/abide/stanford/' 
+file_n = 'data_T1_original_depth_132_from_10_to_15.hdf5'
+pth += file_n
+with h5py.File(pth, "r") as f:
+    print("Keys: %s" % f.keys())
 
 train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
 
