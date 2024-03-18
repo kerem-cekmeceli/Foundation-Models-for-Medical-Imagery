@@ -126,6 +126,7 @@ class ScoreBase(nn.Module, ABC):
     
     def score_over_vol(self, mask_pred, mask_gt, last_slice):
         assert mask_pred.shape[0] == mask_gt.shape[0] == last_slice.shape[0], 'Should have the same batch dim'
+        assert len(last_slice.shape) == 1, 'last_slice should be a flat 1D tensor'
         
         # Need to append => All slices are from the same volume
         res = []
@@ -153,7 +154,7 @@ class ScoreBase(nn.Module, ABC):
         
         # Need to seperate the batch so that scores can be computed using slices corresponding to the same 3d volume    
         else:
-            thres_idx = torch.argmax(last_slice) + 1
+            thres_idx = torch.nonzero(last_slice)[0] + 1
             assert thres_idx < last_slice.shape[0]
             
             mask_pred_vol_end = mask_pred[:thres_idx]
