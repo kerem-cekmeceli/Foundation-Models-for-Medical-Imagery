@@ -353,80 +353,137 @@ elif dataset=='acdc':
 else:
     ValueError('unknown dataset')
 
-pth = main_pth + sub_path + filename
+dir_path = main_pth + sub_path
+pth_full = dir_path + filename
 
 # pth = main_pth + 'brain/abide/stanford/'+'data_T1_original_depth_132_from_10_to_15.hdf5'
 
-
-with h5py.File(pth, "r") as f:
-
-    print("Keys: %s" % f.keys())
+def get_train_val_test_dicts(pth, train_suff='_train', val_suff='_validation', test_suff='_test'):
+    train_dict = dict()
+    val_dict = dict()
+    test_dict = dict()
     
-    img_shape = f["images"].shape
-    lab_shape = f["labels"].shape
-    nz_shape = f["nz"].shape
-    print(f'Images shape: {img_shape}')
-    print(f'Labels shape: {lab_shape}')
+    with h5py.File(pth, "r") as f:
+        print("Keys: %s" % f.keys())
+        
+        for key in f.keys():
+            if train_suff in key:
+                key_wo_suffix = key.replace(train_suff, '')
+                train_dict[key_wo_suffix] = f[key][:]
+            elif val_suff in key:
+                key_wo_suffix = key.replace(val_suff, '')
+                val_dict[key_wo_suffix] = f[key][:]
+            elif test_suff in key:
+                key_wo_suffix = key.replace(test_suff, '')
+                test_dict[key_wo_suffix] = f[key][:]
+            else:
+                ValueError(f'Undefined key: {key}')
+                
+    assert len(train_dict) == len(val_dict) == len(test_dict)
+    return train_dict, val_dict, test_dict
+
+def write_dict_as_hdf5(dct, pth, name):
+    if not isinstance(pth, str):
+        pth = str(pth)
+    hf_file = h5py.File(pth+f'{name}.hdf5', 'w')
+    for key, val in dct.keys():
+        hf_file.create_dataset(key, data=val)
+    hf_file.close()
+            
+
+def save_dicts_as_hdf5(pth, train_dict=None, val_dict=None, test_dict=None):    
+    assert train_dict is not None or val_dict is not None or test_dict is not None
     
-    assert train_vols + val_vols + test_vols == img_shape[0] == lab_shape[0] == nz_shape[0]
+    if train_dict is not None:
+        print("Writing train files")
+        write_dict_as_hdf5(dct=train_dict, pth=pth, name='train')
     
-    print("Reading train files")
-    train_img = f['images'][:train_vols]
-    train_lab = f['labels'][:train_vols]
-    train_nx = f['nx'][:train_vols]
-    train_ny = f['ny'][:train_vols]
-    train_nz = f['nz'][:train_vols]
-    assert train_img.shape[0] == train_lab.shape[0] == train_nx.shape[0] == \
-        train_ny.shape[0] == train_nz.shape[0] == train_vols
-
-    print("Reading val files")
-    val_img = f['images'][train_vols:val_vols+train_vols]
-    val_lab = f['labels'][train_vols:val_vols+train_vols]
-    val_nx = f['nx'][train_vols:val_vols+train_vols]
-    val_ny = f['ny'][train_vols:val_vols+train_vols]
-    val_nz = f['nz'][train_vols:val_vols+train_vols]
-    assert val_img.shape[0] == val_lab.shape[0] == val_nx.shape[0] == \
-        val_ny.shape[0] == val_nz.shape[0] == val_vols
+    if val_dict is not None:
+        print("Writing val files")
+        write_dict_as_hdf5(dct=train_dict, pth=pth, name='val')
     
-    print("Reading test files")
-    test_img = f['images'][val_vols+train_vols:]
-    test_lab = f['labels'][val_vols+train_vols:]
-    test_nx = f['nx'][val_vols+train_vols:]
-    test_ny = f['ny'][val_vols+train_vols:]
-    test_nz = f['nz'][val_vols+train_vols:]
-    assert test_img.shape[0] == test_lab.shape[0] == test_nx.shape[0] == \
-        test_ny.shape[0] == test_nz.shape[0] == test_vols
+    if test_dict is not None:
+        print("Writing test files")
+        write_dict_as_hdf5(dct=train_dict, pth=pth, name='test')
+    
+    print("Done !")
+    
+
+train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
+
+save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_dict=test_dict)
+
+#######################################################################################################################
+
+# with h5py.File(pth, "r") as f:
+
+#     print("Keys: %s" % f.keys())
+    
+#     img_shape = f["images"].shape
+#     lab_shape = f["labels"].shape
+#     nz_shape = f["nz"].shape
+#     print(f'Images shape: {img_shape}')
+#     print(f'Labels shape: {lab_shape}')
+    
+#     assert train_vols + val_vols + test_vols == img_shape[0] == lab_shape[0] == nz_shape[0]
+    
+#     print("Reading train files")
+#     train_img = f['images'][:train_vols]
+#     train_lab = f['labels'][:train_vols]
+#     train_nx = f['nx'][:train_vols]
+#     train_ny = f['ny'][:train_vols]
+#     train_nz = f['nz'][:train_vols]
+#     assert train_img.shape[0] == train_lab.shape[0] == train_nx.shape[0] == \
+#         train_ny.shape[0] == train_nz.shape[0] == train_vols
+
+#     print("Reading val files")
+#     val_img = f['images'][train_vols:val_vols+train_vols]
+#     val_lab = f['labels'][train_vols:val_vols+train_vols]
+#     val_nx = f['nx'][train_vols:val_vols+train_vols]
+#     val_ny = f['ny'][train_vols:val_vols+train_vols]
+#     val_nz = f['nz'][train_vols:val_vols+train_vols]
+#     assert val_img.shape[0] == val_lab.shape[0] == val_nx.shape[0] == \
+#         val_ny.shape[0] == val_nz.shape[0] == val_vols
+    
+#     print("Reading test files")
+#     test_img = f['images'][val_vols+train_vols:]
+#     test_lab = f['labels'][val_vols+train_vols:]
+#     test_nx = f['nx'][val_vols+train_vols:]
+#     test_ny = f['ny'][val_vols+train_vols:]
+#     test_nz = f['nz'][val_vols+train_vols:]
+#     assert test_img.shape[0] == test_lab.shape[0] == test_nx.shape[0] == \
+#         test_ny.shape[0] == test_nz.shape[0] == test_vols
 
     
-print("Writing train files")
-hf_train = h5py.File(main_pth+sub_path+'train.hdf5', 'w')
-hf_train.create_dataset('images', data=train_img)
-hf_train.create_dataset('labels', data=train_lab)
-hf_train.create_dataset('nx', data=train_nx)
-hf_train.create_dataset('ny', data=train_ny)
-hf_train.create_dataset('nz', data=train_nz)
-hf_train.close()
+# print("Writing train files")
+# hf_train = h5py.File(main_pth+sub_path+'train.hdf5', 'w')
+# hf_train.create_dataset('images', data=train_img)
+# hf_train.create_dataset('labels', data=train_lab)
+# hf_train.create_dataset('nx', data=train_nx)
+# hf_train.create_dataset('ny', data=train_ny)
+# hf_train.create_dataset('nz', data=train_nz)
+# hf_train.close()
 
-print("Writing val files")
-hf_val = h5py.File(main_pth+sub_path+'val.hdf5', 'w')
-hf_val.create_dataset('images', data=val_img)
-hf_val.create_dataset('labels', data=val_lab)
-hf_train.create_dataset('nx', data=val_nx)
-hf_train.create_dataset('ny', data=val_ny)
-hf_train.create_dataset('nz', data=val_nz)
-hf_val.close()
+# print("Writing val files")
+# hf_val = h5py.File(main_pth+sub_path+'val.hdf5', 'w')
+# hf_val.create_dataset('images', data=val_img)
+# hf_val.create_dataset('labels', data=val_lab)
+# hf_train.create_dataset('nx', data=val_nx)
+# hf_train.create_dataset('ny', data=val_ny)
+# hf_train.create_dataset('nz', data=val_nz)
+# hf_val.close()
 
-print("Writing test files")
-hf_test = h5py.File(main_pth+sub_path+'test.hdf5', 'w')
-hf_test.create_dataset('images', data=test_img)
-hf_test.create_dataset('labels', data=test_lab)
-hf_train.create_dataset('nx', data=test_nx)
-hf_train.create_dataset('ny', data=test_ny)
-hf_train.create_dataset('nz', data=test_nz)
-hf_test.close()
+# print("Writing test files")
+# hf_test = h5py.File(main_pth+sub_path+'test.hdf5', 'w')
+# hf_test.create_dataset('images', data=test_img)
+# hf_test.create_dataset('labels', data=test_lab)
+# hf_train.create_dataset('nx', data=test_nx)
+# hf_train.create_dataset('ny', data=test_ny)
+# hf_train.create_dataset('nz', data=test_nz)
+# hf_test.close()
 
 
-print("Done !")
+# print("Done !")
 
 #######################################################################################################################
 
