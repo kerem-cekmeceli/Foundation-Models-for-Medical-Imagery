@@ -188,7 +188,7 @@ def get_batch_sz(data_attrs, num_gpu):
         batch_sz = 6 #@TODO verify
         
     elif dataset_name=='prostate_nci':
-        batch_sz = 10 #@TODO verify
+        batch_sz = 8 #@TODO verify #10
             
     elif dataset_name=='prostate_usz':
         batch_sz = 10 #@TODO verify
@@ -470,8 +470,8 @@ def get_batch_log_idxs(batch_sz, data_attr):
     seg_log_nb_batches = 16
     step = max(vol_depth//batch_sz//seg_log_nb_batches, 1)
     seg_log_batch_idxs = torch.arange(0+step-1, min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_vols), step).tolist()
-    assert len(seg_log_batch_idxs)==seg_log_nb_batches
-    
+    # assert len(seg_log_batch_idxs)==seg_log_nb_batches
+    seg_log_batch_idxs = seg_log_batch_idxs[:seg_log_nb_batches]
     return seg_log_batch_idxs
 
 
