@@ -75,7 +75,7 @@ else:
     test_datasets = [dataset]
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
+dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
