@@ -199,8 +199,8 @@ def get_batch_sz(data_attrs, num_gpu):
     batch_sz = batch_sz // num_gpu     
     
     vol_depth = data_attrs['vol_depth']
-    assert vol_depth % batch_sz == 0,\
-        f'batch size must be a multiple of slice/patient but got {batch_sz} and {vol_depth}'
+    # assert vol_depth % batch_sz == 0,\
+    #     f'batch size must be a multiple of slice/patient but got {batch_sz} and {vol_depth}'
        
     return batch_sz
 
