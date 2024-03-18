@@ -389,7 +389,8 @@ def get_train_val_test_dicts(pth, train_suff='_train', val_suff='_validation', t
     assert val_dict['nz'].shape[0] == val_vols
     assert test_dict['nz'].shape[0] == test_vols
     
-    assert len(train_dict) == len(val_dict) == len(test_dict)
+    assert train_dict.keys() == val_dict.keys() == test_dict.keys()
+    
     return train_dict, val_dict, test_dict
 
 def write_dict_as_hdf5(dct, pth, name):
