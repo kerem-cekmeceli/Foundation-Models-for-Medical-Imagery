@@ -61,7 +61,18 @@ backbone_sz = "small" # in ("small", "base", "large" or "giant")
 dataset = 'prostate_nci' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
-test_datasets = [dataset]  # ['hcp1', 'hcp2', 'abide_caltech'] if cluster_paths else 
+brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
+prostate_datasets = ['prostate_nci', 'prostate_usz']
+
+if cluster_paths:
+    if dataset in brain_datasets:
+        test_datasets = brain_datasets
+    elif dataset in prostate_datasets:
+        test_datasets = prostate_datasets
+    else:
+        test_datasets = [dataset] 
+else:
+    test_datasets = [dataset]
 
 # Select the dec head
 dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
@@ -185,7 +196,7 @@ train_dataset, val_dataset, dataset_name_testing = get_datasets(data_root_pth=da
 # Dataloader configs                                          
 persistent_workers=True
 pin_memory=True
-drop_last=True
+drop_last=False
 
 train_dataloader_cfg = dict(batch_size=batch_sz, shuffle=True, pin_memory=pin_memory, num_workers=num_workers_dataloader,
                             persistent_workers=persistent_workers, drop_last=drop_last)

@@ -200,7 +200,7 @@ class SegmentationDatasetHDF5(Dataset):
         with h5py.File(self.file_pth, 'r') as f:
             self.nb_vol = f['nz'].shape[0]
             self.nb_slices_until = np.cumsum(f['nz'][:], dtype=int)
-            self.nb_slice_tot = f['nz'][:].sum()
+            self.nb_slice_tot = f['nz'][:].sum().astype('int32')
             assert self.nb_slice_tot == self.nb_slices_until[-1]
         
 
@@ -232,9 +232,9 @@ class SegmentationDatasetHDF5(Dataset):
         vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
         
         if self.ret_n_xyz:
-            n_xyz = dict(nx = self.dataset['nx'][vol_idx].copy(),
-                         ny = self.dataset['ny'][vol_idx].copy(),
-                         nz = self.dataset['nz'][vol_idx].copy(),
+            n_xyz = dict(nx = self.dataset['nx'][vol_idx].copy().astype('int32'),
+                         ny = self.dataset['ny'][vol_idx].copy().astype('int32'),
+                         nz = self.dataset['nz'][vol_idx].copy().astype('int32'),
                          last_slice = slice_idx==self.dataset['nz'][vol_idx]-1)
         
         assert self.dataset['images'].shape == self.dataset['labels'].shape, \

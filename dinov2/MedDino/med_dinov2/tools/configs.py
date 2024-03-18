@@ -12,6 +12,8 @@ def get_data_attrs(name:str, use_hdf5=True):
     attrs = {}
     
     # Dataset parameters
+    
+    # Brain - HCP1
     if name=='hcp1':
         attrs['name'] = name
         if not use_hdf5:
@@ -22,7 +24,7 @@ def get_data_attrs(name:str, use_hdf5=True):
             attrs['hdf5_val_name'] = 'data_T1_original_depth_256_from_20_to_25.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_original_depth_256_from_50_to_70.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 256
+        attrs['vol_depth'] = 256  # First val volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -31,7 +33,8 @@ def get_data_attrs(name:str, use_hdf5=True):
         weight = None
         
         attrs['weight'] = weight
-        
+    
+    # Brain - HCP2    
     elif name=='hcp2':
         attrs['name'] = name
         if not use_hdf5:
@@ -42,7 +45,7 @@ def get_data_attrs(name:str, use_hdf5=True):
             attrs['hdf5_val_name'] = 'data_T2_original_depth_256_from_20_to_25.hdf5'
             attrs['hdf5_test_name'] = 'data_T2_original_depth_256_from_50_to_70.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 256
+        attrs['vol_depth'] = 256  # First val volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -51,7 +54,8 @@ def get_data_attrs(name:str, use_hdf5=True):
         weight = None
         
         attrs['weight'] = weight
-        
+    
+    # Brain - Abide-Caltech    
     elif name=='abide_caltech':
         attrs['name'] = name
         if not use_hdf5:
@@ -62,7 +66,7 @@ def get_data_attrs(name:str, use_hdf5=True):
             attrs['hdf5_val_name'] = 'data_T1_original_depth_256_from_10_to_15.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_original_depth_256_from_16_to_36.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 256
+        attrs['vol_depth'] = 256  # First val volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -72,63 +76,34 @@ def get_data_attrs(name:str, use_hdf5=True):
         
         attrs['weight'] = weight
         
-    elif name=='abide_stanford':
-        attrs['name'] = name
-        if not use_hdf5:
-            attrs['data_path_suffix'] = 'brain/abide_stanford'
-        else:
-            attrs['data_path_suffix'] = 'brain/abide/stanford'
-            attrs['hdf5_train_name'] = 'data_T1_original_depth_132_from_0_to_10.hdf5'
-            attrs['hdf5_val_name'] = 'data_T1_original_depth_132_from_10_to_15.hdf5'
-            attrs['hdf5_test_name'] = 'data_T1_original_depth_132_from_16_to_36.hdf5'
-        attrs['num_classses'] = 15
-        attrs['vol_depth'] = 132
-        attrs['ignore_idx_loss'] = None
-        attrs['ignore_idx_metric'] = 0
+    # elif name=='abide_stanford':
+    #     attrs['name'] = name
+    #     if not use_hdf5:
+    #         attrs['data_path_suffix'] = 'brain/abide_stanford'
+    #     else:
+    #         attrs['data_path_suffix'] = 'brain/abide/stanford'
+    #         attrs['hdf5_train_name'] = 'data_T1_original_depth_132_from_0_to_10.hdf5'
+    #         attrs['hdf5_val_name'] = 'data_T1_original_depth_132_from_10_to_15.hdf5'
+    #         attrs['hdf5_test_name'] = 'data_T1_original_depth_132_from_16_to_36.hdf5'
+    #     attrs['num_classses'] = 15
+    #     attrs['vol_depth'] = 132  # First val volume depth (all the same)
+    #     attrs['ignore_idx_loss'] = None
+    #     attrs['ignore_idx_metric'] = 0
         
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
-        # weight = torch.Tensor(weight)
-        weight = None
+    #     # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+    #     # weight = torch.Tensor(weight)
+    #     weight = None
         
-        attrs['weight'] = weight
-        
-    elif name=='cardiac_acdc':
-        attrs['name'] = name
-        attrs['data_path_suffix'] = 'cardiac/acdc'
-        attrs['num_classses'] = 2
-        attrs['vol_depth'] = 256 #@TODO VERIFY
-        attrs['ignore_idx_loss'] = None
-        attrs['ignore_idx_metric'] = 0
-        if use_hdf5:
-            ValueError('HDF5 path is not defined yet')    
-            
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
-        # weight = torch.Tensor(weight)
-        weight = None
-        
-        attrs['weight'] = weight  
-            
-    elif name=='cardiac_rvsc':
-        attrs['name'] = name
-        attrs['data_path_suffix'] = 'cardiac/rvsc'
-        attrs['num_classses'] = 2
-        attrs['vol_depth'] = 256 #@TODO VERIFY
-        attrs['ignore_idx_loss'] = None
-        attrs['ignore_idx_metric'] = 0
-        if use_hdf5:
-            ValueError('HDF5 path is not defined yet')
-            
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
-        # weight = torch.Tensor(weight)
-        weight = None
-        
-        attrs['weight'] = weight
-        
+    #     attrs['weight'] = weight
+    
+    # Prostate - NCI    
     elif name=='prostate_nci':
+        if not use_hdf5:
+            ValueError('only HDF5 is supported')
+            
         attrs['name'] = name
-        attrs['data_path_suffix'] = 'prostate/nci'
         attrs['num_classses'] = 3
-        attrs['vol_depth'] = 20  #@TODO VERIFY  # Approx (for segmentation logging)
+        attrs['vol_depth'] = 15  # First val volume depth
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         if use_hdf5:
@@ -142,16 +117,70 @@ def get_data_attrs(name:str, use_hdf5=True):
         weight = None
         
         attrs['weight'] = weight
-            
+    
+    # Prostate - USZ        
     elif name=='prostate_usz':
+        if not use_hdf5:
+            ValueError('only HDF5 is supported')
+            
         attrs['name'] = name
         attrs['data_path_suffix'] = 'prostate/pirad_erc'
         attrs['num_classses'] = 3
-        attrs['vol_depth'] = 21 #@TODO VERIFY
+        attrs['vol_depth'] = 22  # First val volume depth
+        attrs['ignore_idx_loss'] = None
+        attrs['ignore_idx_metric'] = 0
+            
+        if use_hdf5:
+            attrs['data_path_suffix'] = 'nci'
+            attrs['hdf5_train_name'] = 'data_2d_from_40_to_68_size_256_256_res_0.625_0.625_ek.hdf5'
+            attrs['hdf5_val_name'] = 'data_2d_from_20_to_40_size_256_256_res_0.625_0.625_ek.hdf5'
+            attrs['hdf5_test_name'] = 'data_2d_from_0_to_20_size_256_256_res_0.625_0.625_ek.hdf5'
+            
+        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = torch.Tensor(weight)
+        weight = None
+        
+        attrs['weight'] = weight
+    
+    # Cardiac - ACDC      
+    elif name=='cardiac_acdc':
+        if not use_hdf5:
+            ValueError('only HDF5 is supported')
+            
+        attrs['name'] = name
+        attrs['data_path_suffix'] = 'cardiac/acdc'
+        attrs['num_classses'] = 3
+        attrs['vol_depth'] = 10  # First val volume depth
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         if use_hdf5:
-            ValueError('HDF5 path is not defined yet')
+            attrs['data_path_suffix'] = 'nci'
+            attrs['hdf5_train_name'] = 'train.hdf5'
+            attrs['hdf5_val_name'] = 'val.hdf5'
+            attrs['hdf5_test_name'] = 'test.hdf5'   
+            
+        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = torch.Tensor(weight)
+        weight = None
+        
+        attrs['weight'] = weight  
+    
+    # Cardiac - RVSC           
+    elif name=='cardiac_rvsc':
+        if not use_hdf5:
+            ValueError('only HDF5 is supported')
+            
+        attrs['name'] = name
+        attrs['data_path_suffix'] = 'cardiac/rvsc'
+        attrs['num_classses'] = 2
+        attrs['vol_depth'] = 10  # First val volume depth
+        attrs['ignore_idx_loss'] = None
+        attrs['ignore_idx_metric'] = 0
+        if use_hdf5:
+            attrs['data_path_suffix'] = 'nci'
+            attrs['hdf5_train_name'] = 'train.hdf5'
+            attrs['hdf5_val_name'] = 'val.hdf5'
+            attrs['hdf5_test_name'] = 'test.hdf5'
             
         # weight = [0.1] + [1.]*(attrs['num_classses']-1)
         # weight = torch.Tensor(weight)
