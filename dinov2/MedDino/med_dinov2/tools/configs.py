@@ -20,9 +20,9 @@ def get_data_attrs(name:str, use_hdf5=True):
             attrs['data_path_suffix'] = 'brain/hcp1'
         else:
             attrs['data_path_suffix'] = 'brain/hcp'
-            attrs['hdf5_train_name'] = 'data_T1_original_depth_256_from_0_to_20.hdf5'
-            attrs['hdf5_val_name'] = 'data_T1_original_depth_256_from_20_to_25.hdf5'
-            attrs['hdf5_test_name'] = 'data_T1_original_depth_256_from_50_to_70.hdf5'
+            attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5'
+            attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
+            attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_50_to_70.hdf5'
         attrs['num_classses'] = 15
         attrs['vol_depth'] = 256  # First val volume depth (all the same)
         attrs['ignore_idx_loss'] = None
@@ -41,9 +41,9 @@ def get_data_attrs(name:str, use_hdf5=True):
             attrs['data_path_suffix'] = 'brain/hcp2'
         else:
             attrs['data_path_suffix'] = 'brain/hcp'
-            attrs['hdf5_train_name'] = 'data_T2_original_depth_256_from_0_to_20.hdf5'
-            attrs['hdf5_val_name'] = 'data_T2_original_depth_256_from_20_to_25.hdf5'
-            attrs['hdf5_test_name'] = 'data_T2_original_depth_256_from_50_to_70.hdf5'
+            attrs['hdf5_train_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5'
+            attrs['hdf5_val_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
+            attrs['hdf5_test_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_50_to_70.hdf5'
         attrs['num_classses'] = 15
         attrs['vol_depth'] = 256  # First val volume depth (all the same)
         attrs['ignore_idx_loss'] = None
@@ -60,11 +60,12 @@ def get_data_attrs(name:str, use_hdf5=True):
         attrs['name'] = name
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/abide_caltech'
+            ValueError()
         else:
             attrs['data_path_suffix'] = 'brain/abide/caltech'
-            attrs['hdf5_train_name'] = 'data_T1_original_depth_256_from_0_to_10.hdf5'
-            attrs['hdf5_val_name'] = 'data_T1_original_depth_256_from_10_to_15.hdf5'
-            attrs['hdf5_test_name'] = 'data_T1_original_depth_256_from_16_to_36.hdf5'
+            attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_0_to_10.hdf5'
+            attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_10_to_15.hdf5'
+            attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_16_to_36.hdf5'
         attrs['num_classses'] = 15
         attrs['vol_depth'] = 256  # First val volume depth (all the same)
         attrs['ignore_idx_loss'] = None
@@ -76,25 +77,25 @@ def get_data_attrs(name:str, use_hdf5=True):
         
         attrs['weight'] = weight
         
-    # elif name=='abide_stanford':
-    #     attrs['name'] = name
-    #     if not use_hdf5:
-    #         attrs['data_path_suffix'] = 'brain/abide_stanford'
-    #     else:
-    #         attrs['data_path_suffix'] = 'brain/abide/stanford'
-    #         attrs['hdf5_train_name'] = 'data_T1_original_depth_132_from_0_to_10.hdf5'
-    #         attrs['hdf5_val_name'] = 'data_T1_original_depth_132_from_10_to_15.hdf5'
-    #         attrs['hdf5_test_name'] = 'data_T1_original_depth_132_from_16_to_36.hdf5'
-    #     attrs['num_classses'] = 15
-    #     attrs['vol_depth'] = 132  # First val volume depth (all the same)
-    #     attrs['ignore_idx_loss'] = None
-    #     attrs['ignore_idx_metric'] = 0
+    elif name=='abide_stanford':
+        attrs['name'] = name
+        if not use_hdf5:
+            attrs['data_path_suffix'] = 'brain/abide_stanford'
+        else:
+            attrs['data_path_suffix'] = 'brain/abide/stanford'
+            attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_0_to_10.hdf5'
+            attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_10_to_15.hdf5'
+            attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_16_to_36.hdf5'
+        attrs['num_classses'] = 15
+        attrs['vol_depth'] = 132  # First val volume depth (all the same)
+        attrs['ignore_idx_loss'] = None
+        attrs['ignore_idx_metric'] = 0
         
-    #     # weight = [0.1] + [1.]*(attrs['num_classses']-1)
-    #     # weight = torch.Tensor(weight)
-    #     weight = None
+        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = torch.Tensor(weight)
+        weight = None
         
-    #     attrs['weight'] = weight
+        attrs['weight'] = weight
     
     # Prostate - NCI    
     elif name=='prostate_nci':
