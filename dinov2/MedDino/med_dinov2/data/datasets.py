@@ -238,7 +238,7 @@ class SegmentationDatasetHDF5(Dataset):
                          last_slice = slice_idx==self.dataset['nz'][vol_idx]-1)
         
         assert self.dataset['images'].shape == self.dataset['labels'].shape, \
-            f'Image and labels shape mismatch, {self.dataset['images'].shape} and {self.dataset['labels'].shape}'
+            f'Image and labels shape mismatch, {self.dataset["images"].shape} and {self.dataset["labels"].shape}'
         
         if len(self.dataset['images'].shape) == 4:
             image = self.dataset['images'][vol_idx, slice_idx].copy().astype('float32')
