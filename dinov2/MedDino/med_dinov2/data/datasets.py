@@ -198,7 +198,7 @@ class SegmentationDatasetHDF5(Dataset):
         # Dataset
         self.dataset = None
         with h5py.File(self.file_pth, 'r') as f:
-            self.nb_vol = f['images'].shape[0]
+            self.nb_vol = f['nz'].shape[0]
             self.nb_slices_until = np.cumsum(f['nz'][:], dtype=int)
             self.nb_slice_tot = f['nz'][:].sum()
             assert self.nb_slice_tot == self.nb_slices_until[-1]
@@ -237,8 +237,19 @@ class SegmentationDatasetHDF5(Dataset):
                          nz = self.dataset['nz'][vol_idx].copy(),
                          last_slice = slice_idx==self.dataset['nz'][vol_idx]-1)
         
-        image = self.dataset['images'][vol_idx, slice_idx].copy().astype('float32')
-        mask = self.dataset['labels'][vol_idx, slice_idx].copy().astype('uint8')
+        assert self.dataset['images'].shape == self.dataset['labels'].shape, \
+            f'Image and labels shape mismatch, {self.dataset['images'].shape} and {self.dataset['labels'].shape}'
+        
+        if len(self.dataset['images'].shape) == 4:
+            image = self.dataset['images'][vol_idx, slice_idx].copy().astype('float32')
+            mask = self.dataset['labels'][vol_idx, slice_idx].copy().astype('uint8')
+            
+        elif len(self.dataset['images'].shape) == 3:
+            image = self.dataset['images'][idx].copy().astype('float32')
+            mask = self.dataset['labels'][idx].copy().astype('uint8')
+            
+        else:
+            ValueError(f'Unsupported dataset images shape')
         
         if image.max()<=1 and image.min()>=0:
             image = image*255.

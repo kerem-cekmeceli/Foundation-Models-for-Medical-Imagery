@@ -369,22 +369,26 @@ def get_train_val_test_dicts(pth, train_suff='_train', val_suff='_validation', t
         for key in f.keys():
             if train_suff in key:
                 key_wo_suffix = key.replace(train_suff, '')
+                key_wo_suffix = 'labels' if key_wo_suffix=='masks' else key_wo_suffix
                 train_dict[key_wo_suffix] = f[key][:]
-                assert train_dict[key_wo_suffix].shape[0]==train_vols
 
             elif val_suff in key:
                 key_wo_suffix = key.replace(val_suff, '')
+                key_wo_suffix = 'labels' if key_wo_suffix=='masks' else key_wo_suffix
                 val_dict[key_wo_suffix] = f[key][:]
-                assert val_dict[key_wo_suffix].shape[0]==val_vols
 
             elif test_suff in key:
                 key_wo_suffix = key.replace(test_suff, '')
+                key_wo_suffix = 'labels' if key_wo_suffix=='masks' else key_wo_suffix
                 test_dict[key_wo_suffix] = f[key][:]
-                assert test_dict[key_wo_suffix].shape[0]==test_vols
 
             else:
                 ValueError(f'Undefined key: {key}')
-                
+    
+    assert train_dict['nz'].shape[0] == train_vols
+    assert val_dict['nz'].shape[0] == val_vols
+    assert test_dict['nz'].shape[0] == test_vols
+    
     assert len(train_dict) == len(val_dict) == len(test_dict)
     return train_dict, val_dict, test_dict
 
