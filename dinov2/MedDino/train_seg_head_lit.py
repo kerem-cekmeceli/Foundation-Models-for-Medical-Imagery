@@ -58,7 +58,7 @@ train_backbone = True
 backbone_sz = "small" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'prostate_nci' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
+dataset = 'hcp1' if cluster_paths else 'hcp1' # 'hcp1', 'hcp2' , cardiac_acdc, cardiac_rvsc, prostate_nci, prostate_usz, abide_caltech, abide_stanford
 hdf5_data = True
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
@@ -75,13 +75,13 @@ else:
     test_datasets = [dataset]
 
 # Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
+dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'resnet', 'unet', 'segformer'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 100
+nb_epochs = 100 if cluster_paths else 2
 warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
 
 # Config the batch size and lr for training
@@ -274,8 +274,8 @@ models_pth = dino_main_pth / f'Checkpoints/MedDino/{model.segmentor.decode_head.
 models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
 checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
-                     val_dice = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
-                     val_mIoU = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
+                     val_dice_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
+                     val_mIoU_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
 
 # Create the trainer object
 trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)

@@ -589,7 +589,7 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_augmentations, augme
         test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_test_name, 
                                                 num_classes=num_classses, 
                                                 augmentations=augmentations,
-                                                ret_n_xyz=False)
+                                                ret_n_xyz=True)
         
     return train_dataset, val_dataset, test_dataset
     
