@@ -429,7 +429,8 @@ pth = dir_path+'test.hdf5'
 with h5py.File(pth, "r") as f:
 
     print("Keys: %s" % f.keys())
-    print(f[f.keys()[0]].shape)
+    keys = f.keys()
+    # print(f[keys[0]].shape)
     
   
 print()
