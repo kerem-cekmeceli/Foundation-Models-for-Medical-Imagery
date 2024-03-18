@@ -498,10 +498,9 @@ def get_batch_log_idxs(batch_sz, data_attr):
     
     seg_res_nb_vols = 1  # Process minibatches for N number of 3D volumes
     seg_log_nb_batches = 16
-    step = max(vol_depth//batch_sz//seg_log_nb_batches, 1)
-    seg_log_batch_idxs = torch.arange(0+step-1, min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_vols), step).tolist()
-    # assert len(seg_log_batch_idxs)==seg_log_nb_batches
-    seg_log_batch_idxs = seg_log_batch_idxs[:seg_log_nb_batches]
+    step = max(int(vol_depth/batch_sz/seg_log_nb_batches), 1)
+    seg_log_batch_idxs = torch.arange(0+step-1, max(min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_vols), seg_log_nb_batches), step).tolist()
+    assert len(seg_log_batch_idxs)==seg_log_nb_batches
     return seg_log_batch_idxs
 
 

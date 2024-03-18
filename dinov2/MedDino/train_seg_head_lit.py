@@ -43,9 +43,9 @@ from lightning.pytorch import seed_everything
 from MedDino.med_dinov2.tools.configs import *
 # from torch.utils.data import Sampler
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
