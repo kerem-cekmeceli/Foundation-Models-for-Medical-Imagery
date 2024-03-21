@@ -156,6 +156,13 @@ class DinoBackBone(BackBoneBase):
     
     def get_pre_processing_cfg_list(self, central_crop=True):
         processing = []
+        
+        img_scale_fac = 1  # Keep at 1 
+        if img_scale_fac != 1:
+            processing.append(dict(type='Resize2',
+                                scale_factor=float(img_scale_fac), #HW
+                                keep_ratio=True))
+            
         processing.append(dict(type='Normalize', 
                                mean=[123.675, 116.28, 103.53],  #RGB
                                std=[58.395, 57.12, 57.375],  #RGB
@@ -199,6 +206,7 @@ class SamBackBone(BackBoneBase):
     def __init__(self, 
                  nb_outs:int,
                  name,
+                 last_out_first:bool=True,
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
@@ -209,6 +217,7 @@ class SamBackBone(BackBoneBase):
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
         self._nb_outs = nb_outs
+        self.last_out_first = last_out_first
         
     
     def _get_bb_from_cfg(self, cfg:dict):
@@ -216,6 +225,13 @@ class SamBackBone(BackBoneBase):
     
     def get_pre_processing_cfg_list(self):
         processing = []
+        
+        img_scale_fac = 1  # Keep at 1 
+        if img_scale_fac != 1:
+            processing.append(dict(type='Resize2',
+                                scale_factor=float(img_scale_fac), #HW
+                                keep_ratio=True))
+            
         # sam_model.image_encoder.img_size
         processing.append(dict(type='ResizeLongestSide',
                                long_side_length=self.backbone.img_size))
@@ -232,19 +248,26 @@ class SamBackBone(BackBoneBase):
         return processing
         
     def forward_backbone(self, x):
-        pass
+        out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
+           
+        if self.last_out_first:
+            # Output of the last ViT block first in the tuple
+            return out_patch_feats[::-1]
+        else:
+            # Output of the last ViT block last in the tuple
+            return out_patch_feats
     
     @property
     def nb_outs(self):
-        self._nb_outs
+        return self._nb_outs
     
     @property  
     def out_feat_channels(self):
-        pass
+        return self.backbone.patch_embed.proj.out_channels
     
     @property
     def hw_shrink_fac(self):
-        pass
+        return self.backbone.patch_embed.proj.kernel_size[0]
     
     
             

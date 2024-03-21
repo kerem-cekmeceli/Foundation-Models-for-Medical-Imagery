@@ -1150,6 +1150,8 @@ class CentralPad(object):
                  size_divisor=None,
                  pad_val=0,
                  seg_pad_val=255):
+        if isinstance(size, int):
+            size = (size, size)
         self.size = size
         self.size_divisor = size_divisor
         self.pad_val = pad_val

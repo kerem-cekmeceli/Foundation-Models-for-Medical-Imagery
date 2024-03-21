@@ -28,8 +28,15 @@ class ImageEncoderViTFeats(nn.Module):
             x = blk(x)
             
         return x.permute(0, 3, 1, 2)
+        
     
-    def _get_intermediate_layers_not_chunked(self, x, n=1):
+    def get_intermediate_layers(
+        self,
+        x: torch.Tensor,
+        n: Union[int, Sequence] = 1,  
+        # norm=True,
+    ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]:
+        
         x = self.patch_embed(x)
         if self.pos_embed is not None:
             x = x + self.pos_embed
@@ -44,42 +51,13 @@ class ImageEncoderViTFeats(nn.Module):
                 output.append(x)
         # output: [B, C, H, W] C = 1280 ViTH and 256 after the neck (if used)
         assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
-        return output
-        
-    
-    def get_intermediate_layers(
-        self,
-        x: torch.Tensor,
-        n: Union[int, Sequence] = 1,  
-        # norm=True,
-    ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]:
-        """_summary_
-
-        Args:
-            x (torch.Tensor): [B, nc(r, G, B), h, w]
-            n (Union[int, Sequence], optional): Layers or n last layers to take. Defaults to 1.
-            reshape (bool, optional): If True reshapes the output patches respecting the W, H order in Defaults to True.
-            return_class_token (bool, optional): also returns the cls token among the pathch tokens. Defaults to False.
-            norm (bool, optional): Applies normalization to the ooutputs before returning. Defaults to True.
-
-        Returns:
-            Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]: 
-        """
-    
-        outputs = self._get_intermediate_layers_not_chunked(x, n)
-        # outputs is a list of length n
         
         # if norm:
         #     outputs = [self.norm(out) for out in outputs]
         
-        class_tokens = [out[:, 0] for out in outputs]  # list of cls_token outputs (of length n)
-        outputs = [out[:, 1 + self.num_register_tokens:] for out in outputs]  # Discard register tokens
-        
-        
-        return tuple(outputs)
+        return tuple(output)
     
     
-
 def get_sam_vit_backbone(bb_size, sam_checkpoint=None):
     if bb_size == 'base':
         model_type = 'vit_b'

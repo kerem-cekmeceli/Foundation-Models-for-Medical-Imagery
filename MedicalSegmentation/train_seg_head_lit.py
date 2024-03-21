@@ -52,9 +52,9 @@ from lightning.pytorch import seed_everything
 from med_seg_foundation.tools.configs import *
 # from torch.utils.data import Sampler
 
-cluster_paths = False
-save_checkpoints = False
-log_the_run = False
+cluster_paths = True
+save_checkpoints = True
+log_the_run = True
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -62,12 +62,12 @@ strategy='ddp' if gpus>1 else 'auto'
 seed = 42
 
 # Set the BB
-backbone = 'dino'  # resnet
+backbone = 'sam'  # sam, resnet
 train_backbone = True
-backbone_sz = "small" # in ("small", "base", "large" or "giant")
+backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'abide_stanford' if cluster_paths else 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'hcp1' if cluster_paths else 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
@@ -117,7 +117,7 @@ seed_everything(seed, workers=True)
 
 # Backbone config
 bb_cfg = get_bb_cfg(bb_name=backbone, bb_size=backbone_sz, train_bb=train_backbone, 
-                    dec_name=dec_head_key, main_pth=main_pth)
+                    dec_name=dec_head_key, main_pth=main_pth, pretrained=True)
 
 # Data attributes
 dataset_attrs = get_data_attrs(name=dataset, use_hdf5=hdf5_data)
@@ -185,7 +185,10 @@ model = LitSegmentor(**segmentor_cfg)
 summary(model)
 
 # Get augmentations
-train_augmentations, augmentations = get_augmentations(patch_sz=model.segmentor.backbone.input_sz_multiple)
+augmentations = get_augmentations()
+
+# Get data pre-processing
+processings = model.segmentor.backbone.get_pre_processing_cfg_list()
 
 # Get the data loader
 if cluster_paths:
@@ -199,8 +202,8 @@ else:
 train_dataset, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
                                                         hdf5_data=hdf5_data, 
                                                         data_attr=dataset_attrs, 
-                                                        train_augmentations=train_augmentations, 
-                                                        augmentations=augmentations)
+                                                        train_procs=augmentations+processings, 
+                                                        val_test_procs=processings)
                                             
 # Dataloader configs                                          
 persistent_workers=True
@@ -342,8 +345,8 @@ if trainer.global_rank == 0:
         _, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
                                                                 hdf5_data=hdf5_data, 
                                                                 data_attr=dataset_attrs, 
-                                                                train_augmentations=train_augmentations, 
-                                                                augmentations=augmentations)
+                                                                train_procs=train_augmentations, 
+                                                                val_test_procs=augmentations)
         
         val_dataloader = DataLoader(dataset=val_dataset, **test_dataloader_cfg)
         test_dataloader = DataLoader(dataset=dataset_name_testing, **test_dataloader_cfg)

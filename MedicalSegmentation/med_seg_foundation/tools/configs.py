@@ -5,7 +5,7 @@ import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone
+from layers.backbone_wrapper import DinoBackBone, SamBackBone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 
 def get_data_attrs(name:str, use_hdf5=True):
@@ -235,18 +235,23 @@ def get_batch_sz(data_attrs, num_gpu):
     return batch_sz
 
 
-def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth):
+def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
+    bb_cps_pth = 'Checkpoints/Orig/backbone'
+    
     if bb_name == 'dino':
         if dec_name=='unet':
             n_out = 5*2
         else:
             n_out = 4
-            
         last_out_first = True
         
         assert bb_size in ["small", "base", "large", "giant"]
         backbone_name = get_bb_name(bb_size)
-        bb_checkpoint_path = main_pth/f'Checkpoints/Orig/backbone/{backbone_name}_pretrain.pth'
+        
+        if pretrained:
+            bb_checkpoint_path = main_pth/bb_cps_pth/f'DinoV2/{backbone_name}_pretrain.pth'
+        else:
+            bb_checkpoint_path = None
         
         name = DinoBackBone.__name__
         params = dict(nb_outs=n_out,
@@ -254,7 +259,37 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth):
                       last_out_first=last_out_first,
                       bb_model=None,
                       cfg=dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path),
-                      train=train_bb)
+                      train=train_bb,
+                      disable_mask_tokens=True)
+        
+    elif bb_name == 'sam':
+        if dec_name=='unet':
+            n_out = 5*2
+        else:
+            n_out = 4
+        last_out_first = True
+        
+        if pretrained:
+            bb_checkpoint_path = main_pth/bb_cps_pth/'SAM'
+            if bb_size=='base':
+                bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_b_01ec64.pth'
+            elif bb_size=='large':
+                bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_l_0b3195.pth'
+            elif bb_size=='huge':
+                bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_h_4b8939.pth'
+            else:
+                ValueError(f'Size: {bb_size} is not available for SAM')
+        else:
+            bb_checkpoint_path = None
+            
+        name = SamBackBone.__name__
+        params = dict(nb_outs=n_out,
+                      name=f'sam_enc_vit_{bb_size}',
+                      last_out_first=last_out_first,
+                      bb_model=None,
+                      cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path),
+                      train=train_bb,
+                      )
         
     else:
         ValueError(f'Undefined backbone: {bb_name}')
@@ -504,43 +539,19 @@ def get_batch_log_idxs(batch_sz, data_attr):
     return seg_log_batch_idxs
 
 
-def get_augmentations(patch_sz):
+def get_augmentations():    
+    augmentations = []  
     
-    # Define data augmentations
-    img_scale_fac = 1  # Keep at 1 
-    central_crop = True
+    augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
+    augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
+    augmentations.append(dict(type='PhotoMetricDistortion'))
     
-    augmentations = []  # For val and test
-    train_augmentations = []  # For train
-    
-    
-    train_augmentations.append(dict(type='ElasticTransformation', data_aug_ratio=0.25))
-    train_augmentations.append(dict(type='StructuralAug', data_aug_ratio=0.25))
-    train_augmentations.append(dict(type='PhotoMetricDistortion'))
-
-    if img_scale_fac > 1:
-        augmentations.append(dict(type='Resize2',
-                                scale_factor=float(img_scale_fac), #HW
-                                keep_ratio=True))
-
-    augmentations.append(dict(type='Normalize', 
-                            mean=[123.675, 116.28, 103.53],  #RGB
-                            std=[58.395, 57.12, 57.375],  #RGB
-                            to_rgb=True))
-    if central_crop:
-        augmentations.append(dict(type='CentralCrop',  
-                                size_divisor=patch_sz))
-    else:
-        augmentations.append(dict(type='CentralPad',  
-                                size_divisor=patch_sz,
-                                pad_val=0, seg_pad_val=0))
-        
-    train_augmentations = train_augmentations + augmentations
-    
-    return train_augmentations, augmentations
+    return augmentations
 
 
-def get_datasets(data_root_pth, hdf5_data, data_attr, train_augmentations, augmentations):
+def get_datasets(data_root_pth, hdf5_data, data_attr, train_procs, val_test_procs):
+    """Order of procs: First augmentations then pre-processings ! """
+    
     data_path_suffix = data_attr['data_path_suffix']
     dataset = data_attr['name']
     num_classses = data_attr['num_classses']
@@ -555,21 +566,21 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_augmentations, augme
                                             num_classes=num_classses,
                                             file_extension='.png',
                                             mask_suffix='_labelTrainIds',
-                                            augmentations=train_augmentations,
+                                            augmentations=train_procs,
                                             )
         val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                         mask_dir=data_root_pth/'labels/val',
                                         num_classes=num_classses,
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
-                                        augmentations=augmentations,
+                                        augmentations=val_test_procs,
                                         )
         test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                         mask_dir=data_root_pth/'labels/test',
                                         num_classes=num_classses,
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
-                                        augmentations=augmentations,
+                                        augmentations=val_test_procs,
                                         ret_n_xyz=True)
         
     else:
@@ -579,15 +590,15 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_augmentations, augme
         
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                                 num_classes=num_classses, 
-                                                augmentations=train_augmentations,
+                                                augmentations=train_procs,
                                                 ret_n_xyz=False)
         val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
                                                 num_classes=num_classses, 
-                                                augmentations=augmentations,
+                                                augmentations=val_test_procs,
                                                 ret_n_xyz=True)
         test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_test_name, 
                                                 num_classes=num_classses, 
-                                                augmentations=augmentations,
+                                                augmentations=val_test_procs,
                                                 ret_n_xyz=True)
         
     return train_dataset, val_dataset, test_dataset
