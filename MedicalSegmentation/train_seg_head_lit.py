@@ -67,7 +67,7 @@ train_backbone = True
 backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'prostate_nci' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
@@ -84,7 +84,7 @@ else:
     test_datasets = [dataset]
 
 # Select the dec head
-dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
