@@ -200,7 +200,7 @@ def get_batch_sz(data_attrs, num_gpu):
     dataset_name = data_attrs['name']
     
     if dataset_name=='hcp1':
-        batch_sz = 2
+        batch_sz = 1
         
     elif dataset_name=='hcp2':
         batch_sz = 8
