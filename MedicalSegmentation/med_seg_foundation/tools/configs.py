@@ -6,7 +6,7 @@ from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
 from layers.backbone_wrapper import DinoBackBone
-from ModelSpecific.MedDino.prep_model import get_bb_name
+from ModelSpecific.DinoMedical.prep_model import get_bb_name
 
 def get_data_attrs(name:str, use_hdf5=True):
     attrs = {}

@@ -2,7 +2,8 @@ import torch
 from torch import nn
 # import lightning as L
 
-from ModelSpecific.MedDino.prep_model import get_dino_backbone
+from ModelSpecific.DinoMedical.prep_model import get_dino_backbone
+from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone
 
 from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
@@ -50,6 +51,10 @@ class BackBoneBase(nn.Module):
     @property
     @abstractmethod    
     def out_feat_channels(self):
+        pass
+    
+    @abstractmethod
+    def get_pre_processing_cfg_list():
         pass
         
     def __store_trainable_params_n_cfg_bb(self, train_bb:bool):
@@ -132,18 +137,39 @@ class DinoBackBone(BackBoneBase):
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
+                 disable_mask_tokens=True,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
         
-        assert nb_outs > 1, f'n_out should be at least 1, but got: {nb_outs}'
+        assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
         self._nb_outs = nb_outs
         self.last_out_first = last_out_first
         self._input_sz_multiple = self.backbone.patch_size
         
+        if disable_mask_tokens:
+            self.backbone.mask_token.requires_grad = False
+        
         
     def _get_bb_from_cfg(self, cfg:dict):
         return get_dino_backbone(**cfg)
+    
+    def get_pre_processing_cfg_list(self, central_crop=True):
+        processing = []
+        processing.append(dict(type='Normalize', 
+                               mean=[123.675, 116.28, 103.53],  #RGB
+                               std=[58.395, 57.12, 57.375],  #RGB
+                               to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        
+        if central_crop:
+            processing.append(dict(type='CentralCrop',  
+                                    size_divisor=self.backbone.patch_size))
+        else:
+            processing.append(dict(type='CentralPad',  
+                                    size_divisor=self.backbone.patch_size,
+                                    pad_val=0, seg_pad_val=0))
+            
+        return processing
             
     
     def forward_backbone(self, x):
@@ -168,8 +194,61 @@ class DinoBackBone(BackBoneBase):
     def hw_shrink_fac(self):
         return self.backbone.patch_size
         
+
+class SamBackBone(BackBoneBase):
+    def __init__(self, 
+                 nb_outs:int,
+                 name,
+                 bb_model:Optional[nn.Module]=None,
+                 cfg:Optional[dict]=None,
+                 train: bool = False, 
+                 *args: torch.Any, **kwargs: torch.Any) -> None:
         
-class ResNetBackBone(BackBoneBase):
+        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
+        
+        assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
+        assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
+        self._nb_outs = nb_outs
+        
+    
+    def _get_bb_from_cfg(self, cfg:dict):
+        return get_sam_vit_backbone(**cfg)
+    
+    def get_pre_processing_cfg_list(self):
+        processing = []
+        # sam_model.image_encoder.img_size
+        processing.append(dict(type='ResizeLongestSide',
+                               long_side_length=self.backbone.img_size))
+        
+        processing.append(dict(type='Normalize', 
+                               mean=[123.675, 116.28, 103.53],  #RGB
+                               std=[58.395, 57.12, 57.375],  #RGB
+                               to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        
+        #  Pad to a square input
+        processing.append(dict(type='CentralPad',  
+                               size=self.backbone.img_size,
+                               pad_val=0, seg_pad_val=0))
+        return processing
+        
+    def forward_backbone(self, x):
+        pass
+    
+    @property
+    def nb_outs(self):
+        self._nb_outs
+    
+    @property  
+    def out_feat_channels(self):
+        pass
+    
+    @property
+    def hw_shrink_fac(self):
+        pass
+    
+    
+            
+class ResNetBackBone(BackBoneBase):  #@TODO implement with mmcv
     def __init__(self, 
                  
                  name,

@@ -1239,6 +1239,11 @@ class CentralCrop(object):
     def __init__(self,
                  size=None,
                  size_divisor=None,):
+        if size is not None:
+            if isinstance(size, int):
+                size = (size, size)
+            else:
+                assert isinstance(size, tuple)
         self.size = size
         self.size_divisor = size_divisor
                 
@@ -1494,6 +1499,55 @@ class Resize2(object):
         repr_str += f'backend={self.backend}), '
         repr_str += f'interpolation={self.interpolation})'
         return repr_str
+    
+        
+
+@PIPELINES.register_module()
+class ResizeLongestSide(Resize2):
+    def __init__(self, 
+                 long_side_length: int,
+                 keep_ratio = False, 
+                 clip_object_border = True, 
+                 backend = 'cv2', 
+                 interpolation='bilinear', 
+                 only_img = False) -> None:
+        
+        self.long_side_length =long_side_length
+        
+        super().__init__(scale=1,
+                         keep_ratio=keep_ratio,
+                         clip_object_border=clip_object_border,
+                         backend=backend,
+                         interpolation=interpolation,
+                         only_img=only_img)
+        
+    def __call__(self, results: dict) -> dict:
+        """
+        Compute the output size given input size and target long side length.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Resized results, 'img', 'gt_bboxes', 'gt_seg_map',
+            'gt_keypoints', 'scale', 'scale_factor', 'img_shape',
+            and 'keep_ratio' keys are updated in result dict.
+        """
+        
+        oldh, oldw = results['img'].shape[:2]
+        
+        scale = self.long_side_length * 1.0 / max(oldh, oldw)
+        newh, neww = oldh * scale, oldw * scale
+        neww = int(neww + 0.5)
+        newh = int(newh + 0.5)
+        self.scale = (newh, neww)
+        results['scale'] = self.scale
+        
+        self._resize_img(results)
+        if not self.only_img:
+            self._resize_bboxes(results)
+            self._resize_seg(results)
+            self._resize_keypoints(results)
+        return results
 
 
 

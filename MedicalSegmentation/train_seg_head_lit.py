@@ -8,10 +8,12 @@ med_seg_mod_pth = med_seg_path / 'med_seg_foundation'
 
 orig_models_pth = main_pth / 'OrigModels' 
 dino_mod_pth = orig_models_pth / 'DinoV2' 
+sam_mod_pth = orig_models_pth / 'SAM' 
 
 sys.path.insert(0, str(main_pth))
-sys.path.insert(1, str(dino_mod_pth))
-sys.path.insert(2, str(med_seg_mod_pth))
+sys.path.insert(1, str(med_seg_mod_pth))
+sys.path.insert(2, str(dino_mod_pth))
+sys.path.insert(3, str(sam_mod_pth))
 
 import torch
 # import math
@@ -20,7 +22,7 @@ import torch
 # import numpy as np
 # from matplotlib import pyplot as plt
 
-from ModelSpecific.MedDino.prep_model import time_str
+from ModelSpecific.DinoMedical.prep_model import time_str
 # from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, get_dino_backbone
 # from OrigDino.dinov2.eval.segmentation import models
 
@@ -232,6 +234,7 @@ run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss
 data_type = 'hdf5' if hdf5_data else 'png'
 
 wnadb_config = dict(backbone_name=backbone_name,
+                    bb_cfg=bb_cfg,
                     backbone_n_in_ch=n_in_ch,
                     decode_head=dec_head_name,
                     dec_head_cfg=dec_head_cfg,

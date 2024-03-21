@@ -216,6 +216,14 @@ class LitSegmentor(LitBaseModule):
                 
         return loss
     
+    # def on_after_backward(self) -> None:
+    #     print("on_after_backward enter")
+    #     for name, p in self.named_parameters():
+    #         if p.requires_grad:
+    #             if p.grad is None:
+    #                 print(name)
+    #     print("on_after_backward exit")
+    
     def get_segmentations(self, x_batch, y_batch, y_pred, batch_idx):
         imgs = []
         masks_pred = []

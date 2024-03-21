@@ -2,10 +2,16 @@
 import sys
 from pathlib import Path
  
-dino_main_pth = Path(__file__).parent.parent
-orig_dino_pth = dino_main_pth / 'OrigDino'
-sys.path.insert(1, dino_main_pth.as_posix())
-sys.path.insert(2, orig_dino_pth.as_posix())
+med_seg_path = Path(__file__).parent
+main_pth = med_seg_path.parent
+med_seg_mod_pth = med_seg_path / 'med_seg_foundation'
+
+orig_models_pth = main_pth / 'OrigModels' 
+dino_mod_pth = orig_models_pth / 'DinoV2' 
+
+sys.path.insert(0, str(main_pth))
+sys.path.insert(1, str(dino_mod_pth))
+sys.path.insert(2, str(med_seg_mod_pth))
 
 import torch
 import math
@@ -14,24 +20,24 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-from prep_model import get_bb_name, get_dino_backbone, time_str, get_backone_patch_embed_sizes
-from OrigDino.dinov2.eval.segmentation import models
+from ModelSpecific.DinoMedical.prep_model import get_bb_name, get_dino_backbone, time_str, get_backone_patch_embed_sizes
+from OrigModels.DinoV2.dinov2.eval.segmentation import models
 
-from MedDino.med_dinov2.models.segmentor import Segmentor
+from med_seg_foundation.models.segmentor import Segmentor
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
-from MedDino.med_dinov2.data.datasets import SegmentationDataset
+from med_seg_foundation.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
-from MedDino.med_dinov2.tools.main_fcts import train, test
-from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
-from MedDino.med_dinov2.eval.losses import FocalLoss, DiceScore, CompositionLoss
+from med_seg_foundation.tools.main_fcts import train, test
+from med_seg_foundation.eval.metrics import mIoU, DiceScore
+from med_seg_foundation.eval.losses import FocalLoss, DiceScore, CompositionLoss
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary
 from torch.nn import CrossEntropyLoss
 import wandb
-from MedDino.med_dinov2.tools.checkpointer import Checkpointer
-from MedDino.med_dinov2.eval.losses import * 
+from med_seg_foundation.tools.checkpointer import Checkpointer
+from med_seg_foundation.eval.losses import * 
 
 
 cluster_paths = False
