@@ -35,6 +35,7 @@ class ImageEncoderViTFeats(nn.Module):
         x: torch.Tensor,
         n: Union[int, Sequence] = 1,  
         # norm=True,
+        reshape=True,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]:
         
         x = self.patch_embed(x)
@@ -48,7 +49,7 @@ class ImageEncoderViTFeats(nn.Module):
         for i, blk in enumerate(self.blocks):
             x = blk(x)
             if i in blocks_to_take:
-                output.append(x)
+                output.append(x if not reshape else x.permute(0, 3, 1, 2).contiguous())
         # output: [B, C, H, W] C = 1280 ViTH and 256 after the neck (if used)
         assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
         

@@ -247,7 +247,7 @@ class SamBackBone(BackBoneBase):
                                pad_val=0, seg_pad_val=0))
         return processing
         
-    def forward_backbone(self, x):
+    def forward_backbone(self, x, reshape=True):
         out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
            
         if self.last_out_first:

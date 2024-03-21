@@ -52,9 +52,9 @@ from lightning.pytorch import seed_everything
 from med_seg_foundation.tools.configs import *
 # from torch.utils.data import Sampler
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
@@ -67,7 +67,7 @@ train_backbone = True
 backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'hcp1' if cluster_paths else 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']

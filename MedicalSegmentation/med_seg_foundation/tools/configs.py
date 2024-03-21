@@ -200,7 +200,7 @@ def get_batch_sz(data_attrs, num_gpu):
     dataset_name = data_attrs['name']
     
     if dataset_name=='hcp1':
-        batch_sz = 8
+        batch_sz = 2
         
     elif dataset_name=='hcp2':
         batch_sz = 8
@@ -508,7 +508,7 @@ def get_minibatch_log_idxs(batch_sz):
     """Computes which samples in the batch to log for segmentation"""
     
     # Seg result logging cfg
-    seg_log_per_batch = 4  # Log N samples from each minibatch
+    seg_log_per_batch = min(4, batch_sz)  # Log N samples from each minibatch
     assert seg_log_per_batch<=batch_sz
 
     # Which samles in the minibatch to log
