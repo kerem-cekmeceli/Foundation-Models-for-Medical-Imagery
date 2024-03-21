@@ -52,9 +52,9 @@ from lightning.pytorch import seed_everything
 from med_seg_foundation.tools.configs import *
 # from torch.utils.data import Sampler
 
-cluster_paths = False
-save_checkpoints = False
-log_the_run = False
+cluster_paths = True
+save_checkpoints = True
+log_the_run = True
 
 gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
