@@ -116,6 +116,10 @@ device = torch.cuda.device(current_dev_idx)
 # Get device properties
 props = torch.cuda.get_device_properties(device)
 print(f'Current device is GPU{current_dev_idx}: {torch.cuda.get_device_name(current_dev_idx)}')
+# Convert to gigabytes (GB) for readability
+total_memory_gb = props.total_memory / (1024**3)
+formatted_total_memory_gb = "{:.2f}".format(total_memory_gb)
+print("Total VRAM:", formatted_total_memory_gb, "GB")
 
 if props.major >= 7:
     print("GPU has tensor cores (Volta architecture or newer).")
