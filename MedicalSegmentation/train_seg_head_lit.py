@@ -56,11 +56,6 @@ cluster_paths = True
 save_checkpoints = True
 log_the_run = True
 
-gpus=torch.cuda.device_count()
-strategy='ddp' if gpus>1 else 'auto'
-
-seed = 42
-
 # Set the BB
 backbone = 'sam'  # sam, resnet
 train_backbone = True
@@ -104,8 +99,33 @@ test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vo
 # num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
 num_workers_dataloader=3
 
+####################################################################################################
+seed = 42
+
+gpus=torch.cuda.device_count()
+strategy='ddp' if gpus>1 else 'auto'
+
+print(f'{gpus} available GPUs')
+for gpu_i in gpus:
+    print(f'GPU{gpu_i}: {torch.cuda.get_device_name(gpu_i)}')
+
+# Get device 
+current_dev_idx = torch.cuda.current_device()
+device = torch.cuda.device(current_dev_idx)
+
+# Get device properties
+props = torch.cuda.get_device_properties(device)
+print(f'Current device is GPU{current_dev_idx}: {torch.cuda.get_device_name(current_dev_idx)}')
+
+if props.major >= 7:
+    print("GPU has tensor cores (Volta architecture or newer).")
+    tensor_cores = True
+else:
+    print("GPU does not have tensor cores.")
+    tensor_cores = False
+
 # Set the precision
-precision = 'highest' if cluster_paths else 'high'  # medium
+precision = 'highest' if not tensor_cores else 'high'  # medium
 torch.set_float32_matmul_precision(precision)
 
 
