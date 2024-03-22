@@ -67,7 +67,7 @@ train_backbone = True
 backbone_sz = "base" # in ("small", "base", "large" or "giant")
 
 # Select dataset
-dataset = 'prostate_nci' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
