@@ -106,7 +106,7 @@ gpus=torch.cuda.device_count()
 strategy='ddp' if gpus>1 else 'auto'
 
 print(f'{gpus} available GPUs')
-for gpu_i in gpus:
+for gpu_i in range(gpus):
     print(f'GPU{gpu_i}: {torch.cuda.get_device_name(gpu_i)}')
 
 # Get device 
