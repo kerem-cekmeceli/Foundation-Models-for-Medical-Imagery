@@ -8,6 +8,7 @@ import lightning as L
 # from OrigDino.dinov2.hub.utils import CenterPadding
 # from lightning.pytorch.core.optimizer import LightningOptimizer
 from models.segmentor import Segmentor
+from models.unet import UNet
 import torch
 import wandb
 from typing import Union, Optional, Sequence, Callable, Any
@@ -17,6 +18,8 @@ import torch.nn.functional as F
 # import math
 from torchvision.utils import make_grid
 from lightning.pytorch.utilities import rank_zero_only
+
+implemented_segmentors = [Segmentor.__name__, UNet.__name__]
 
 class LitBaseModule(L.LightningModule):
     def __init__(self,
@@ -122,14 +125,11 @@ class LitBaseModule(L.LightningModule):
 
 class LitSegmentor(LitBaseModule):
     def __init__(self,
-                 backbone, 
-                 decode_head, 
+                 segmentor,
                  loss_config:dict,
                  optimizer_config:dict,
                  schedulers_config:Optional[dict]=None,
                  metric_configs:Optional[Union[dict, Sequence[dict]]]=None,
-                 reshape_dec_oup=False, 
-                 align_corners=False,
                  val_metrics_over_vol=True,
                  seg_log_batch_idxs=None, # 0 means no logging
                  minibatch_log_idxs=None,
@@ -154,10 +154,21 @@ class LitSegmentor(LitBaseModule):
         
         self._test_dataset_name =test_dataset_name
         
-        self.segmentor = Segmentor(backbone=backbone,
-                                   decode_head=decode_head,
-                                   reshape_dec_oup=reshape_dec_oup,
-                                   align_corners=align_corners)
+        if isinstance(segmentor, dict):
+            # config is given
+            segmentor_name = segmentor['name']
+            segmentor_params = segmentor['params']
+            
+            if segmentor_name not in implemented_segmentors:
+                ValueError(f"Decode head {segmentor_name} is not supported from config.")
+            
+            self.segmentor = globals()[segmentor_name](**segmentor_params)
+            
+        else:
+            assert isinstance(segmentor, torch.nn.Module)
+            # Model is given
+            self.segmentor = segmentor
+        
         
         if len(seg_log_batch_idxs) == 0:
             assert len(minibatch_log_idxs)>0

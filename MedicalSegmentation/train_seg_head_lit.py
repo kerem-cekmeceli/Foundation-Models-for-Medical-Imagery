@@ -17,7 +17,7 @@ sys.path.insert(3, str(sam_mod_pth))
 
 import torch
 # import math
-
+from enum import Enum
 # import cv2
 # import numpy as np
 # from matplotlib import pyplot as plt
@@ -51,35 +51,33 @@ from lightning.pytorch import seed_everything
 
 from med_seg_foundation.tools.configs import *
 # from torch.utils.data import Sampler
+from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
+from MedicalSegmentation.med_seg_foundation.models.unet import UNet
 
 cluster_paths = True
 save_checkpoints = True
 log_the_run = True
 
-# Set the BB
-backbone = 'sam'  # sam, resnet
-train_backbone = True
-backbone_sz = "base" # in ("small", "base", "large" or "giant")
+class ModelType(Enum):
+    SEGMENTOR=1
+    UNET=2
+
+# Select model type
+model_type = ModelType.UNET
+
+if model_type == ModelType.SEGMENTOR:
+    # Set the BB
+    backbone = 'sam'  # sam, resnet
+    train_backbone = True
+    backbone_sz = "base" # in ("small", "base", "large" or "giant")
+    
+    # Select the dec head
+    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+    
 
 # Select dataset
 dataset = 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
-
-brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
-prostate_datasets = ['prostate_nci', 'prostate_usz']
-
-if cluster_paths:
-    if dataset in brain_datasets:
-        test_datasets = brain_datasets
-    elif dataset in prostate_datasets:
-        test_datasets = prostate_datasets
-    else:
-        test_datasets = [dataset] 
-else:
-    test_datasets = [dataset]
-
-# Select the dec head
-dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -98,6 +96,19 @@ test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vo
 # Dataloader workers
 # num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
 num_workers_dataloader=3
+
+brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
+prostate_datasets = ['prostate_nci', 'prostate_usz']
+
+if cluster_paths:
+    if dataset in brain_datasets:
+        test_datasets = brain_datasets
+    elif dataset in prostate_datasets:
+        test_datasets = prostate_datasets
+    else:
+        test_datasets = [dataset] 
+else:
+    test_datasets = [dataset]
 
 ####################################################################################################
 seed = 42
@@ -139,16 +150,17 @@ torch.set_float32_matmul_precision(precision)
 # Set seeds for numpy, torch and python.random
 seed_everything(seed, workers=True)
 
-# Backbone config
-bb_cfg = get_bb_cfg(bb_name=backbone, bb_size=backbone_sz, train_bb=train_backbone, 
-                    dec_name=dec_head_key, main_pth=main_pth, pretrained=True)
-
 # Data attributes
 dataset_attrs = get_data_attrs(name=dataset, use_hdf5=hdf5_data)
 batch_sz = get_batch_sz(dataset_attrs, gpus)
 
-# Decoder config
-dec_head_cfg, n_in_ch = get_dec_cfg(dec_name=dec_head_key, dataset_attrs=dataset_attrs)
+if model_type==ModelType.SEGMENTOR:
+    # Backbone config
+    bb_cfg = get_bb_cfg(bb_name=backbone, bb_size=backbone_sz, train_bb=train_backbone, 
+                        dec_name=dec_head_key, main_pth=main_pth, pretrained=True)
+
+    # Decoder config
+    dec_head_cfg, n_in_ch = get_dec_cfg(dec_name=dec_head_key, dataset_attrs=dataset_attrs)
 
 
 # Optimizer Config
@@ -187,23 +199,36 @@ seg_log_batch_idxs = get_batch_log_idxs(batch_sz=batch_sz, data_attr=dataset_att
 seg_res_log_itv = max(nb_epochs//5, 1)  
 
 # Init the segmentor model
-segmentor_cfg = dict(backbone=bb_cfg,
-                     decode_head=dec_head_cfg,
-                     loss_config=loss_cfg, 
-                     optimizer_config=optm_cfg,
-                     schedulers_config=scheduler_cfg,
-                     metric_configs=metric_cfgs,
-                     reshape_dec_oup=True,
-                     align_corners=False,
-                     val_metrics_over_vol=True, # Also report metrics over vol
-                     seg_log_batch_idxs=seg_log_batch_idxs,
-                     minibatch_log_idxs=log_idxs,
-                     seg_val_intv=seg_res_log_itv,
-                     sync_dist_train=gpus>1,
-                     sync_dist_val=gpus>1,
-                     sync_dist_test=gpus>1)
+if model_type == ModelType.SEGMENTOR:
+    segmentor_cfg = dict(name=Segmentor.__name__,
+                         params=dict(backbone=bb_cfg,
+                                     decode_head=dec_head_cfg,
+                                     reshape_dec_oup=True,
+                                     align_corners=False))
+    
+elif model_type == ModelType.UNET:
+    segmentor_cfg = dict(name=UNet.__name__,
+                         params=dict(n_channels=3, 
+                                     n_classes=dataset_attrs['num_classses'], 
+                                     bilinear=False))
+    
+else:
+    ValueError(f'Model type: {model_type} is not found')
 
-model = LitSegmentor(**segmentor_cfg)
+segmentor_cfg_lit = dict(segmentor=segmentor_cfg,
+                         loss_config=loss_cfg, 
+                         optimizer_config=optm_cfg,
+                         schedulers_config=scheduler_cfg,
+                         metric_configs=metric_cfgs,
+                         val_metrics_over_vol=True, # Also report metrics over vol
+                         seg_log_batch_idxs=seg_log_batch_idxs,
+                         minibatch_log_idxs=log_idxs,
+                         seg_val_intv=seg_res_log_itv,
+                         sync_dist_train=gpus>1,
+                         sync_dist_val=gpus>1,
+                         sync_dist_test=gpus>1)
+
+model = LitSegmentor(**segmentor_cfg_lit)
 
 # Print model info
 summary(model)
@@ -212,7 +237,13 @@ summary(model)
 augmentations = get_augmentations()
 
 # Get data pre-processing
-processings = model.segmentor.backbone.get_pre_processing_cfg_list()
+if model_type==ModelType.SEGMENTOR:
+    processings = model.segmentor.backbone.get_pre_processing_cfg_list()
+else:
+    processings = [dict(type='Normalize', 
+                               mean=[123.675, 116.28, 103.53],  #RGB
+                               std=[58.395, 57.12, 57.375],  #RGB
+                               to_rgb=True)]
 
 # Get the data loader
 if cluster_paths:
@@ -254,18 +285,38 @@ trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strateg
 # Init the logger (wandb)
 loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
                 f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
-dec_head_name = model.segmentor.decode_head.__class__.__name__
-bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
-backbone_name = model.segmentor.backbone.name
-run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
 data_type = 'hdf5' if hdf5_data else 'png'
 
-wnadb_config = dict(backbone_name=backbone_name,
-                    bb_cfg=bb_cfg,
-                    backbone_n_in_ch=n_in_ch,
-                    decode_head=dec_head_name,
-                    dec_head_cfg=dec_head_cfg,
-                    segmentor_cfg=segmentor_cfg,
+# Tags
+tags = [dataset, loss_name, data_type]
+
+if model_type==ModelType.SEGMENTOR:
+    dec_head_name = model.segmentor.decode_head.__class__.__name__
+    backbone_name = model.segmentor.backbone.name
+    bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
+    wnadb_config_add = dict(dec_head_name = dec_head_name,
+                            dec_head_cfg=dec_head_cfg,
+                            backbone_name = backbone_name,
+                            bb_cfg=bb_cfg,
+                            backbone_n_in_ch=n_in_ch,
+                            )
+    run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
+    bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
+    tags.append(bb_train_str)
+    tags.append(dec_head_name)
+    tags.extend(backbone_name.split('_'))
+    group_name = backbone_name
+    
+    
+elif model_type==ModelType.UNET:
+    group_name = UNet.__name__ + 'Model'
+    run_name = f'{dataset}_{group_name}_{loss_cfg_key}'
+    
+else:
+    ValueError(f'Model type: {model_type} is not found')
+
+
+wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     dataset=str(data_root_pth),
                     batch_sz=batch_sz,
                     num_classes=dataset_attrs['num_classses'],
@@ -282,20 +333,16 @@ wnadb_config = dict(backbone_name=backbone_name,
                     test_datasets=test_datasets,
                     trainer_cfg=trainer_cfg,
                     nb_gpus=gpus,
+                    precision=precision,
                     strategy=strategy,
                     data_type=data_type)
 
 wandb_log_path = main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
 
-bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
 log_mode = 'online' if log_the_run else 'disabled'
-tags = [dataset, loss_name, bb_train_str, dec_head_name]
-tags.extend(backbone_name.split('_'))
-tags.append(data_type)
-
 logger = WandbLogger(project='FoundationModels_MedDino',
-                     group=backbone_name,
+                     group=group_name,
                      config=wnadb_config,
                      dir=wandb_log_path,
                      name=run_name,
@@ -307,7 +354,10 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 logger.watch(model, log="all")
 
 n_best = 1 if save_checkpoints else 0
-models_pth = main_pth / f'Checkpoints/{backbone_name}/{model.segmentor.decode_head.__class__.__name__}'
+models_pth = main_pth / f'Checkpoints/{group_name}'
+if model_type == ModelType.SEGMENTOR:
+    models_pth = models_pth / model.segmentor.decode_head.__class__.__name__
+    
 models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
 checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
@@ -369,8 +419,8 @@ if trainer.global_rank == 0:
         _, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
                                                                 hdf5_data=hdf5_data, 
                                                                 data_attr=dataset_attrs, 
-                                                                train_procs=train_augmentations, 
-                                                                val_test_procs=augmentations)
+                                                                train_procs=augmentations+processings, 
+                                                                val_test_procs=processings)
         
         val_dataloader = DataLoader(dataset=val_dataset, **test_dataloader_cfg)
         test_dataloader = DataLoader(dataset=dataset_name_testing, **test_dataloader_cfg)
