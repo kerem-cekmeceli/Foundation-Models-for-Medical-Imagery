@@ -82,7 +82,7 @@ if model_type == ModelType.SEGMENTOR:
     
 
 # Select dataset
-dataset = 'abide_caltech' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'prostate_nci' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 # Select loss
