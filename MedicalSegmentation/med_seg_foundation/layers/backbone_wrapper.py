@@ -4,6 +4,7 @@ from torch import nn
 
 from ModelSpecific.DinoMedical.prep_model import get_dino_backbone
 from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone
+from torchvision.models import get_model
 
 from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
@@ -162,7 +163,8 @@ class DinoBackBone(BackBoneBase):
             processing.append(dict(type='Resize2',
                                 scale_factor=float(img_scale_fac), #HW
                                 keep_ratio=True))
-            
+        
+        # ImageNet values      
         processing.append(dict(type='Normalize', 
                                mean=[123.675, 116.28, 103.53],  #RGB
                                std=[58.395, 57.12, 57.375],  #RGB
@@ -236,6 +238,7 @@ class SamBackBone(BackBoneBase):
         processing.append(dict(type='ResizeLongestSide',
                                long_side_length=self.backbone.img_size))
         
+        # ImageNet values  
         processing.append(dict(type='Normalize', 
                                mean=[123.675, 116.28, 103.53],  #RGB
                                std=[58.395, 57.12, 57.375],  #RGB
@@ -269,9 +272,8 @@ class SamBackBone(BackBoneBase):
     def hw_shrink_fac(self):
         return self.backbone.patch_embed.proj.kernel_size[0]
     
-    
             
-class ResNetBackBone(BackBoneBase):  #@TODO implement with mmcv
+class ResNetBackBone(BackBoneBase): 
     def __init__(self, 
                  
                  name,
@@ -282,26 +284,64 @@ class ResNetBackBone(BackBoneBase):  #@TODO implement with mmcv
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
         
+        self._hw_shrink_fac = 32
+        self._nb_outs=1
+        
+        # Turn off gradient computation for the final FC and avg pooling layers of the resnet model (Required for DDP)
+        for layer in [self.backbone.avgpool, self.backbone.fc]:
+            for param in layer.parameters():
+                param.requires_grad = False
+        
     
     def _get_bb_from_cfg(self, cfg:dict):
-        pass
+        cfg = dict(name='resnet50', weights='ResNet50_Weights.IMAGENET1K_V2')
+        # No weights - random initialization
+        return get_model(**cfg)
         
     def forward_backbone(self, x):
-        pass
+        x = self.backbone.conv1(x)
+        x = self.backbone.bn1(x)
+        x = self.backbone.relu(x)
+        x = self.backbone.maxpool(x)
+
+        x = self.backbone.layer1(x)
+        x = self.backbone.layer2(x)
+        x = self.backbone.layer3(x)
+        x = self.backbone.layer4(x)
+        return x
     
     @property
     def nb_outs(self):
-        pass
+        return self._nb_outs
     
     @property  
     def out_feat_channels(self):
-        pass
+        return self.backbone.layer4[-1].conv3.out_channels
     
     @property
     def hw_shrink_fac(self):
-        pass
+        return self._hw_shrink_fac
+    
+    def get_pre_processing_cfg_list(self):
+        processing = []
+      
+        processing.append(dict(type='Resize2',
+                            scale=224, #HW
+                            keep_ratio=True))
+    
+        # ImageNet values    
+        processing.append(dict(type='Normalize', 
+                               mean=[123.675, 116.28, 103.53],  #RGB
+                               std=[58.395, 57.12, 57.375],  #RGB
+                               to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        
+        #  Pad to a square input
+        processing.append(dict(type='CentralCrop',  
+                               size_divisor=self._hw_shrink_fac))
+        return processing
     
     
 implemented_backbones = [DinoBackBone.__class__.__name__,
+                         SamBackBone.__class__.__name__,
                          ResNetBackBone.__class__.__name__,]
         

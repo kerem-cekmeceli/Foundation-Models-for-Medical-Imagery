@@ -5,7 +5,7 @@ import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone, SamBackBone
+from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 
 def get_data_attrs(name:str, use_hdf5=True):
@@ -290,6 +290,29 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path),
                       train=train_bb,
                       )
+        
+    elif bb_name == 'resnet':
+        if dec_name=='unet':
+            ValueError(f'Decoder {dec_name} is not supported for {bb_name} backbone')
+        
+        if bb_size=='small':
+            layers=50
+        elif bb_size=='base':
+            layers=101
+        elif bb_size=='large':
+            layers=152
+        else:
+            ValueError(f'Size is not defined for resnet {bb_size}')
+        backbone_name = f'resnet{layers}'    
+        
+        weights = f'ResNet{layers}_Weights.IMAGENET1K_V2' if pretrained else None
+        
+        name = ResNetBackBone.__name__
+        params = dict(name=backbone_name,
+                      bb_model=None,
+                      cfg=dict(name=backbone_name, weights=weights),
+                      train=train_bb,
+                      )   
         
     else:
         ValueError(f'Undefined backbone: {bb_name}')

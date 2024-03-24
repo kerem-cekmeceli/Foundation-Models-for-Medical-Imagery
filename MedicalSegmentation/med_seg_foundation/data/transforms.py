@@ -1277,7 +1277,9 @@ class CentralCrop(object):
 
     def _crop(self, res):
         (crop_l, crop_t, crop_r, crop_b) = self._get_central_crops(res.shape)
-        croped = res[crop_t:-crop_b, crop_l:-crop_r, ...]
+        crop_b = res.shape[0] if crop_b==0 else -crop_b
+        crop_r = res.shape[1] if crop_r==0 else -crop_r
+        croped = res[crop_t:crop_b, crop_l:crop_r, ...]
         return croped
             
     def __call__(self, results):

@@ -54,6 +54,12 @@ from med_seg_foundation.tools.configs import *
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
 
+from torchvision.models import get_model
+
+# cfg = dict(name='resnet50', weights='ResNet50_Weights.IMAGENET1K_V2')
+# # No weights - random initialization
+# mdl = get_model(**cfg)
+
 cluster_paths = True
 save_checkpoints = True
 log_the_run = True
@@ -63,20 +69,20 @@ class ModelType(Enum):
     UNET=2
 
 # Select model type
-model_type = ModelType.UNET
+model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # sam, resnet
+    backbone = 'resnet'  # dino, sam, resnet
     train_backbone = True
-    backbone_sz = "base" # in ("small", "base", "large" or "giant")
+    backbone_sz = "small" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+    dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
     
 
 # Select dataset
-dataset = 'hcp2' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 # Select loss
