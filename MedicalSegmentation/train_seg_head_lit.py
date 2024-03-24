@@ -69,7 +69,7 @@ class ModelType(Enum):
     UNET=2
 
 # Select model type
-model_type = ModelType.SEGMENTOR
+model_type = ModelType.UNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
@@ -82,7 +82,7 @@ if model_type == ModelType.SEGMENTOR:
     
 
 # Select dataset
-dataset = 'hcp2' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'abide_caltech' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 # Select loss
