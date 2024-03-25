@@ -69,20 +69,20 @@ class ModelType(Enum):
     UNET=2
 
 # Select model type
-model_type = ModelType.UNET
+model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'resnet'  # dino, sam, resnet
+    backbone = 'dino'  # dino, sam, resnet
     train_backbone = True
     backbone_sz = "small" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
     
 
 # Select dataset
-dataset = 'cardiac_acdc' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'prostate_usz' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 hdf5_data = True
 
 # Select loss
