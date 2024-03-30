@@ -79,7 +79,7 @@ if model_type == ModelType.SEGMENTOR:
     
 
 # Select dataset
-dataset = 'abide_stanford' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'prostate_usz' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -101,7 +101,7 @@ test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vo
 num_workers_dataloader=3
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech', 'abide_stanford']
-prostate_datasets = ['prostate_nci', 'prostate_usz']
+prostate_datasets = ['prostate_nci', 'prostate_usz'] if backbone != 'medsam' else ['prostate_usz']
 
 
 if dataset in brain_datasets:
