@@ -10,7 +10,7 @@ class ScoreBase(nn.Module, ABC):
     def __init__(self, 
                  prob_inputs=False, 
                  soft=True, 
-                 bg_ch_to_rm=None,
+                 ignore_idxs=None,
                  reduction='mean',
                  ret_per_class_scores=True,
                  EN_vol_scores=False,
@@ -27,7 +27,13 @@ class ScoreBase(nn.Module, ABC):
         assert reduction in ['none', 'mean', 'sum'], f'Undefined reduction: {reduction}'
         self.reduction=reduction
         
-        self.bg_ch_to_rm=bg_ch_to_rm
+        if ignore_idxs is None:
+            ignore_idxs = []
+        elif isinstance(ignore_idxs, int):
+            ignore_idxs = [ignore_idxs]
+        else:
+            ignore_idxs = list(ignore_idxs)
+        self.ignore_idxs=ignore_idxs
         
         self.ret_per_class_scores = ret_per_class_scores
         
@@ -78,8 +84,11 @@ class ScoreBase(nn.Module, ABC):
         mask_pred = self._get_probas(mask_pred)
         
         # remove bg
-        if self.bg_ch_to_rm is not None:
-            fg_mask = (torch.arange(mask_pred.shape[1]) != self.bg_ch_to_rm)
+        if self.ignore_idxs:
+            fg_mask = torch.ones(mask_pred.shape[1], dtype=torch.bool)
+            for i in self.ignore_idxs:
+                fg_mask &= (torch.arange(mask_pred.shape[1]) != i)
+          
             mask_pred = mask_pred[:, fg_mask, ...]  # Indexing, not slicing => returns a copy
             mask_gt = mask_gt[:, fg_mask, ...]
             
@@ -98,7 +107,7 @@ class ScoreBase(nn.Module, ABC):
     def _put_in_res_dict(self, scores):
         '''scores: [N, (C or C-1)]'''
         offset = 0
-        if not self.bg_ch_to_rm is None and self.bg_ch_to_rm==0:
+        if self.ignore_idxs and (0 in self.ignore_idxs):
             offset = 1
         
         if not self.ret_per_class_scores:        
@@ -205,7 +214,7 @@ class mIoU(ScoreBase):
     def __init__(self, 
                  prob_inputs=False, 
                  soft=False,
-                 bg_ch_to_rm=None,
+                 ignore_idxs=None,
                  reduction='mean',
                  ret_per_class_scores=True,
                  EN_vol_scores=True,
@@ -213,7 +222,7 @@ class mIoU(ScoreBase):
                  weight=None):
         super(mIoU, self).__init__(prob_inputs=prob_inputs, 
                                    soft=soft,  # score => not differentiable => can be hard
-                                   bg_ch_to_rm=bg_ch_to_rm,
+                                   ignore_idxs=ignore_idxs,
                                    reduction=reduction,
                                    ret_per_class_scores=ret_per_class_scores,
                                    EN_vol_scores=EN_vol_scores,
@@ -247,7 +256,7 @@ class DiceScore(ScoreBase):
     def __init__(self, 
                  prob_inputs=False, 
                  soft=False,
-                 bg_ch_to_rm=None,
+                 ignore_idxs=None,
                  reduction='mean',
                  k=1, 
                  epsilon=1e-6,
@@ -256,7 +265,7 @@ class DiceScore(ScoreBase):
                  weight=None) -> None:
         super().__init__(prob_inputs=prob_inputs, 
                          soft=soft,  # score => not differentiable => can be hard
-                         bg_ch_to_rm=bg_ch_to_rm,
+                         ignore_idxs=ignore_idxs,
                          reduction=reduction,
                          ret_per_class_scores=ret_per_class_scores,
                          EN_vol_scores=EN_vol_scores,

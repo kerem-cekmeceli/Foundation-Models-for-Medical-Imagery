@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import torch
 from matplotlib import pyplot as plt
-
+import wandb
 
 
 def show_result(img,
@@ -122,3 +122,47 @@ def show_result(img,
         plt.imshow(img_res)
         plt.savefig(out_file)
     return img
+
+
+
+def get_class_rel_freqs(dataset):
+    class_counts = np.zeros(dataset.num_classes)
+    total_pixels = 0
+    
+    for idx in range(len(dataset)):
+        if dataset.ret_n_xyz:
+            _, mask, _ = dataset[idx]
+        else:
+             _, mask = dataset[idx]
+        
+        class_counts += np.bincount(mask.flatten(), minlength=dataset.num_classes)  # Update class counts
+        total_pixels += mask.flatten().size()[0]  # Update total pixels
+        
+    # Calculate relative frequencies
+    relative_frequencies = class_counts / total_pixels
+    assert relative_frequencies.size == dataset.num_classes
+    return relative_frequencies
+
+def log_class_rel_freqs(dataset, log_name_key):
+    rel_freqs = get_class_rel_freqs(dataset)
+    num_classes = rel_freqs.size
+    
+    for i in range(num_classes):
+        metric_n = f'{log_name_key}_rel_freq_class{i}'
+        wandb.define_metric(metric_n, summary="max")
+        wandb.log({metric_n : rel_freqs[i]})
+    
+
+def log_class_rel_freq_plot(dataset, logger, log_name_key):
+    rel_freqs = get_class_rel_freqs(dataset)
+    num_classes = rel_freqs.size
+    
+    # Plot the relative frequency graph
+    fig = plt.figure(figsize=(8, 5))
+    plt.bar(range(num_classes), rel_freqs, tick_label=range(num_classes))
+    plt.xlabel('Class')
+    plt.ylabel('Relative Frequency')
+    plt.title('Segmentation Class Relative Frequencies')
+    plt.grid(axis='y')
+    # plt.show()
+    logger.log({log_name_key: fig})

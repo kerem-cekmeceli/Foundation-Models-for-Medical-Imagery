@@ -1,7 +1,6 @@
 import torch 
 from torch import nn
-# import lightning as L
-
+from mmseg.ops import resize
 from ModelSpecific.DinoMedical.prep_model import get_dino_backbone
 from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone
 from torchvision.models import get_model
@@ -10,7 +9,7 @@ from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from abc import abstractmethod
-from typing import Union, Optional, Sequence, Callable, Any
+from typing import Union, Optional, Tuple, Callable, Any
 
 class BackBoneBase(nn.Module):
     def __init__(self, 
@@ -212,6 +211,7 @@ class SamBackBone(BackBoneBase):
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
+                 interp_to_inp_shape:bool=True,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
@@ -220,6 +220,38 @@ class SamBackBone(BackBoneBase):
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
         self._nb_outs = nb_outs
         self.last_out_first = last_out_first
+        self.interp_to_inp_shape = interp_to_inp_shape
+        
+    def reshape_bb_inp(self, x):
+        oldh, oldw = x.shape[-2:]
+        scale = self.backbone.img_size * 1.0 / max(oldh, oldw)
+        newh, neww = oldh * scale, oldw * scale
+        neww = int(neww + 0.5)
+        newh = int(newh + 0.5)
+        target_size = (newh, neww)
+        
+        # Interpolate to the supported image shape
+        up = newh > oldh and neww > oldw
+        x_new = resize(x, size=target_size, mode="bilinear" if up else 'area')
+        
+        # BB oup feat shape
+        out_feat_h = oldh // self.hw_shrink_fac
+        out_feat_w = oldw // self.hw_shrink_fac
+        self.bb_oup_feat_shape = (out_feat_h, out_feat_w)
+        
+        return x_new
+        
+    def reshape_bb_oup(self, out_feat): 
+        assert hasattr(self, 'bb_oup_feat_shape')
+        
+        # Interpolate the oup feats 
+        up = self.bb_oup_feat_shape[0] > out_feat.shape[-2] and self.bb_oup_feat_shape[1] > out_feat.shape[-1]
+        reshaped_feats = resize(out_feat,
+                                size=self.bb_oup_feat_shape,
+                                mode="bilinear" if up else "area",
+                                )
+        # [B, N_class, H', W']
+        return reshaped_feats    
         
     
     def _get_bb_from_cfg(self, cfg:dict):
@@ -228,15 +260,10 @@ class SamBackBone(BackBoneBase):
     def get_pre_processing_cfg_list(self):
         processing = []
         
-        img_scale_fac = 1  # Keep at 1 
-        if img_scale_fac != 1:
-            processing.append(dict(type='Resize2',
-                                scale_factor=float(img_scale_fac), #HW
-                                keep_ratio=True))
-            
-        # sam_model.image_encoder.img_size
-        processing.append(dict(type='ResizeLongestSide',
-                               long_side_length=self.backbone.img_size))
+        if not self.interp_to_inp_shape:  
+            # sam_model.image_encoder.img_size
+            processing.append(dict(type='ResizeLongestSide',
+                                long_side_length=self.backbone.img_size))
         
         # ImageNet values  
         processing.append(dict(type='Normalize', 
@@ -246,12 +273,23 @@ class SamBackBone(BackBoneBase):
         
         #  Pad to a square input
         processing.append(dict(type='CentralPad',  
-                               size=self.backbone.img_size,
+                            #    size=self.backbone.img_size if not self.interp_to_inp_shape else None,
+                            #    make_square=self.interp_to_inp_shape,
+                               make_square=True,
                                pad_val=0, seg_pad_val=0))
+            
         return processing
         
-    def forward_backbone(self, x, reshape=True):
+    def forward_backbone(self, x):
+        if self.interp_to_inp_shape:
+            x = self.reshape_bb_inp(x)
         out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
+        
+        if self.interp_to_inp_shape:
+            out_patch_feats = list(out_patch_feats)
+            for i in range(len(out_patch_feats)):
+                out_patch_feats[i] = self.reshape_bb_oup(out_patch_feats[i])
+            out_patch_feats = tuple(out_patch_feats)
            
         if self.last_out_first:
             # Output of the last ViT block first in the tuple

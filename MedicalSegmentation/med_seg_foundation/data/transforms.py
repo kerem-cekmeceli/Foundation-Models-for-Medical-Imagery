@@ -1138,7 +1138,7 @@ class CentralPad(object):
     Added keys are "pad_shape", "pad_fixed_size", "pad_size_divisor",
 
     Args:
-        size (tuple, optional): Fixed padding size.
+        size (tuple, optional): Fixed padding size.  [HW]
         size_divisor (int, optional): The divisor of padded size.
         pad_val (float, optional): Padding value. Default: 0.
         seg_pad_val (float, optional): Padding value of segmentation map.
@@ -1148,6 +1148,7 @@ class CentralPad(object):
     def __init__(self,
                  size=None,
                  size_divisor=None,
+                 make_square=False,
                  pad_val=0,
                  seg_pad_val=255):
         if isinstance(size, int):
@@ -1156,13 +1157,17 @@ class CentralPad(object):
         self.size_divisor = size_divisor
         self.pad_val = pad_val
         self.seg_pad_val = seg_pad_val
-                
-        # only one of size and size_divisor should be valid
-        assert size is not None or size_divisor is not None
-        assert size is None or size_divisor is None
+          
+        if not make_square:      
+            # only one of size and size_divisor should be valid
+            assert size is not None or size_divisor is not None
+            assert size is None or size_divisor is None
+        else:
+            assert size is None and size_divisor is None 
+            self.make_square = make_square
         
     def _get_central_pads(self, orig_sz):
-        # Orig_sz [HWC]
+        # Orig_sz [HWC]  self.size [HW]
         if self.size is not None:
             pad_w_tot = max(self.size[1] - orig_sz[1], 0)
             pad_h_tot = max(self.size[0] - orig_sz[0], 0)
@@ -1211,7 +1216,9 @@ class CentralPad(object):
         Returns:
             dict: Updated result dict.
         """
-
+        if self.make_square:
+            sz = max(results['img'].shape[1], results['img'].shape[0])
+            self.size = (sz, sz)
         self._pad_img(results)
         self._pad_seg(results)
         return results
@@ -1231,7 +1238,7 @@ class CentralCrop(object):
     Added keys are "pad_shape", "pad_fixed_size", "pad_size_divisor",
 
     Args:
-        size (tuple, optional): Fixed padding size.
+        size (tuple, optional): Fixed padding size. [HW]
         size_divisor (int, optional): The divisor of padded size.
         pad_val (float, optional): Padding value. Default: 0.
         seg_pad_val (float, optional): Padding value of segmentation map.
@@ -1366,9 +1373,15 @@ class Resize2(object):
                  keep_ratio: bool = False,
                  clip_object_border: bool = True,
                  backend: str = 'cv2',
-                 interpolation='bilinear',
-                 only_img:bool = False) -> None:
+                 interpolation_up:Optional[str]=None,
+                 interpolation_down:Optional[str]=None,
+                 only_img:bool = False,
+                 only_meta:bool = False) -> None:
+        assert not (only_img and only_meta), f'`only_img` and `only_meta` can not be both True at the same time'
+        
         self.only_img = only_img
+        self.only_meta = only_meta
+        
         assert scale is not None or scale_factor is not None, (
             '`scale` and'
             '`scale_factor` can not both be `None`')
@@ -1381,7 +1394,14 @@ class Resize2(object):
                 self.scale = scale
 
         self.backend = backend
-        self.interpolation = interpolation
+        if interpolation_up is None: 
+            self.interpolation_up = 'bilinear'
+        else:
+            self.interpolation_up = interpolation_up
+        if interpolation_down is None:
+            self.interpolation_down = 'area'
+        else:
+            self.interpolation_down = interpolation_down
         self.keep_ratio = keep_ratio
         self.clip_object_border = clip_object_border
         if scale_factor is None:
@@ -1398,13 +1418,18 @@ class Resize2(object):
 
     def _resize_img(self, results: dict) -> None:
         """Resize images with ``results['scale']``."""
+        
+        # Choose interpolation type
+        h, w = results['img'].shape[:2]
+        up = w > results['scale'][1] and h > results['scale'][0]
+        interpolation = self.interpolation_up if up else self.interpolation_down
 
         if results.get('img', None) is not None:
             if self.keep_ratio:
                 img, scale_factor = mmcv.imrescale(
                     results['img'],
                     results['scale'],
-                    interpolation=self.interpolation,
+                    interpolation=interpolation,
                     return_scale=True,
                     backend=self.backend)
                 # the w_scale and h_scale has minor difference
@@ -1417,7 +1442,7 @@ class Resize2(object):
                 img, w_scale, h_scale = mmcv.imresize(
                     results['img'],
                     results['scale'],
-                    interpolation=self.interpolation,
+                    interpolation=interpolation,
                     return_scale=True,
                     backend=self.backend)
             results['img'] = img
@@ -1440,17 +1465,22 @@ class Resize2(object):
     def _resize_seg(self, results: dict) -> None:
         """Resize semantic segmentation map with ``results['scale']``."""
         if results.get('gt_seg_map', None) is not None:
+            # Choose interpolation type
+            h, w = results['gt_seg_map'].shape[:2]
+            up = w > results['scale'][1] and h > results['scale'][0]
+            interpolation = self.interpolation_up if up else self.interpolation_down
+            
             if self.keep_ratio:
                 gt_seg = mmcv.imrescale(
                     results['gt_seg_map'],
                     results['scale'],
-                    interpolation='nearest',
+                    interpolation=interpolation,
                     backend=self.backend)
             else:
                 gt_seg = mmcv.imresize(
                     results['gt_seg_map'],
                     results['scale'],
-                    interpolation='nearest',
+                    interpolation=interpolation,
                     backend=self.backend)
             results['gt_seg_map'] = gt_seg
 
@@ -1486,7 +1516,9 @@ class Resize2(object):
             img_shape = results['img'].shape[:2]
             results['scale'] = _scale_size(img_shape[::-1],
                                            self.scale_factor)  # type: ignore
-        self._resize_img(results)
+            
+        if not self.only_meta:
+            self._resize_img(results)
         if not self.only_img:
             self._resize_bboxes(results)
             self._resize_seg(results)
@@ -1513,8 +1545,10 @@ class ResizeLongestSide(Resize2):
                  keep_ratio = False, 
                  clip_object_border = True, 
                  backend = 'cv2', 
-                 interpolation='bilinear', 
-                 only_img = False) -> None:
+                 interpolation_up:Optional[str]=None,
+                 interpolation_down:Optional[str]=None,
+                 only_img = False,
+                 only_meta = False) -> None:
         
         self.long_side_length =long_side_length
         
@@ -1522,8 +1556,10 @@ class ResizeLongestSide(Resize2):
                          keep_ratio=keep_ratio,
                          clip_object_border=clip_object_border,
                          backend=backend,
-                         interpolation=interpolation,
-                         only_img=only_img)
+                         interpolation_up=interpolation_up,
+                         interpolation_down=interpolation_down,
+                         only_img=only_img,
+                         only_meta=only_meta)
         
     def __call__(self, results: dict) -> dict:
         """
@@ -1546,7 +1582,8 @@ class ResizeLongestSide(Resize2):
         self.scale = (newh, neww)
         results['scale'] = self.scale
         
-        self._resize_img(results)
+        if not self.only_meta:
+            self._resize_img(results)
         if not self.only_img:
             self._resize_bboxes(results)
             self._resize_seg(results)

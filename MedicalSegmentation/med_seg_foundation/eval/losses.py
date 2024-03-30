@@ -10,14 +10,14 @@ from torch.nn import CrossEntropyLoss
 class mIoULoss(mIoU):
     def __init__(self, 
                  prob_inputs=False, 
-                 bg_ch_to_rm=None,
+                 ignore_idxs=None,
                  reduction='mean',
                  epsilon=1e-6,
                  weight=None):
         assert reduction in ['mean , sum']
         super().__init__(prob_inputs=prob_inputs, 
                          soft=True,  # loss => must be differentiable => soft
-                         bg_ch_to_rm=bg_ch_to_rm,
+                         ignore_idxs=ignore_idxs,
                          reduction=reduction,
                          ret_per_class_scores=False,
                          EN_vol_scores=None,
@@ -32,7 +32,7 @@ class mIoULoss(mIoU):
 class DiceLoss(DiceScore):
     def __init__(self, 
                  prob_inputs=False, 
-                 bg_ch_to_rm=None,
+                 ignore_idxs=None,
                  reduction='mean',
                  k=1, 
                  epsilon=1e-6,
@@ -40,7 +40,7 @@ class DiceLoss(DiceScore):
         assert reduction in ['mean', 'sum']
         super().__init__(prob_inputs=prob_inputs, 
                          soft=True,  # loss => must be differentiable => soft
-                         bg_ch_to_rm=bg_ch_to_rm,
+                         ignore_idxs=ignore_idxs,
                          reduction=reduction,
                          ret_per_class_scores=False,
                          EN_vol_scores=None,
@@ -55,7 +55,7 @@ class DiceLoss(DiceScore):
 
 class FocalLoss(nn.Module):
     def __init__(self, 
-                 bg_ch_to_rm=None,
+                 ignore_idxs=None,
                  reduction='mean',
                  gamma=2,
                  weight=None,
@@ -63,9 +63,9 @@ class FocalLoss(nn.Module):
         assert reduction in ['mean', 'sum']
         
         super().__init__()
-        if bg_ch_to_rm is None:
-            bg_ch_to_rm = -100
-        self.bg_ch_to_rm = bg_ch_to_rm
+        if ignore_idxs is None:
+            ignore_idxs = -100
+        self.ignore_idxs = ignore_idxs
         assert reduction in ['sum', 'mean']
         self.reduction = reduction
         
@@ -83,10 +83,10 @@ class FocalLoss(nn.Module):
         ce_loss_weighted = F.nll_loss(input=mask_pred, 
                                       target=mask_gt.argmax(dim=1), 
                                       weight=self.weight, reduction='none',
-                                      ignore_index=self.bg_ch_to_rm) # [N, H, W]
+                                      ignore_index=self.ignore_idxs) # [N, H, W]
         
         pt = torch.exp(-1*F.nll_loss(input=mask_pred, target=mask_gt.argmax(dim=1), 
-                                     reduction='none', ignore_index=self.bg_ch_to_rm))  # [N, H, W]
+                                     reduction='none', ignore_index=self.ignore_idxs))  # [N, H, W]
         
         focal_loss = (1-pt) ** self.gamma * ce_loss_weighted
         

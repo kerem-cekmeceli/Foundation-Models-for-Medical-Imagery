@@ -198,21 +198,27 @@ class LitSegmentor(LitBaseModule):
     
         return ret
     
+    
+    def on_train_epoch_start(self) -> None:
+        super().on_train_epoch_start()
+        self.log('epoch', self.current_epoch, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
+    
+    def check_nans(tensor, batch_idx, name=''):
+        assert (tensor.isnan()==False).all(), \
+            f"{name} nan ratio={torch.count_nonzero(tensor.isnan()==True)/torch.numel(tensor)}, batch_idx={batch_idx}"
+        
     def training_step(self, batch, batch_idx):
         x_batch, y_batch = batch
         
-        assert (x_batch.isnan()==False).all(), \
-            f"Train x_batch nan ratio={torch.count_nonzero(x_batch.isnan()==True)/torch.numel(x_batch)}, batch_idx={batch_idx}"
-        assert (y_batch.isnan()==False).all(), \
-            f"Train y_batch nan ratio={torch.count_nonzero(y_batch.isnan()==True)/torch.numel(y_batch)}, batch_idx={batch_idx}"
-        
+        LitSegmentor.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Train x_batch')
+        LitSegmentor.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Train y_batch')
+       
         # Forward pass
         y_pred = self.segmentor(x_batch)
-        assert (y_pred.isnan()==False).all(),\
-            f"Train y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}, batch_idx={batch_idx}"
+        LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
+        
         loss = self.loss_fn(y_pred, y_batch)
-        assert (loss.isnan()==False).all(), \
-            f"Train loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}, batch_idx={batch_idx}"
+        LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Train loss')
                         
         # Log the loss
         self.log('loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
@@ -282,21 +288,16 @@ class LitSegmentor(LitBaseModule):
         else:
             x_batch, y_batch = val_batch
         
-        assert (x_batch.isnan()==False).all(), \
-            f"Validation x_batch nan ratio={torch.count_nonzero(x_batch.isnan()==True)/torch.numel(x_batch)}, batch_idx={batch_idx}"
-        assert (y_batch.isnan()==False).all(), \
-            f"Validation y_batch nan ratio={torch.count_nonzero(y_batch.isnan()==True)/torch.numel(y_batch)}, batch_idx={batch_idx}"
+        LitSegmentor.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Validation x_batch')
+        LitSegmentor.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Validation y_batch')
+    
         
         # Forward pass
         y_pred = self.segmentor(x_batch)
-        
-        assert (y_pred.isnan()==False).all(), \
-            f"Validation y_pred nan ratio={torch.count_nonzero(y_pred.isnan()==True)/torch.numel(y_pred)}, batch_idx={batch_idx}"
+        LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Validation y_pred')
             
         loss = self.loss_fn(y_pred, y_batch)
-        
-        assert (loss.isnan()==False).all(), \
-            f"Validation loss nan ratio={torch.count_nonzero(loss.isnan()==True)/torch.numel(loss)}, batch_idx={batch_idx}"
+        LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Validation loss')
         
         loss_key = 'val_loss' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_loss'
         self.log(loss_key, loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
@@ -319,15 +320,23 @@ class LitSegmentor(LitBaseModule):
         if batch_idx in self.seg_log_batch_idxs and self._test_dataset_name!='':
             if (self.current_epoch+1)%self.seg_val_intv==0:
                 self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'val')
-                # self.logger.experiment.log({f'val_seg_batch{batch_idx+1}':\
-                #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)  
+                
+                
+        # return y_pred, y_batch, n_xyz
+
     
-    def on_train_epoch_start(self) -> None:
-        super().on_train_epoch_start()
-        self.log('epoch', self.current_epoch, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
-        
-    # def on_train_epoch_end(self) -> None:
-    #     return super().on_train_epoch_end()
+    # def on_validation_epoch_end(self, outputs):
+    #     if self.val_metrics_over_vol:
+    #         y_pred, y_batch, n_xyz = self.all_gather(outputs)
+            
+    #         if self.trainer.is_global_zero:                        
+    #             # Compute the metrics 
+    #             for metric_n, metric in self.metrics.items():     
+    #                 metric_dicts_vol = metric.get_res_dict(y_pred, y_batch, last_slice=n_xyz['last_slice'])  
+    #                 for metric_dict_vol in metric_dicts_vol:
+    #                     for k, v in metric_dict_vol.items():
+    #                         metric_key = f'val_{metric_n}{k}_vol' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_{metric_n}{k}_vol'
+    #                         self.log(metric_key, v, on_epoch=True, on_step=False, rank_zero_only=True)
         
     
     def backward(self, loss: torch.Tensor, *args: torch.Any, **kwargs: torch.Any) -> None:
@@ -345,21 +354,24 @@ class LitSegmentor(LitBaseModule):
             x_batch, y_batch, n_xyz = batch
         else:
             x_batch, y_batch = batch
+            
+        LitSegmentor.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Test x_batch')
+        LitSegmentor.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Test y_batch')
              
         # Forward pass
         y_pred = self.segmentor(x_batch)
+        LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Test y_pred')
         
         # Hard decision
         n_classes = y_pred.shape[1]
         y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(y_pred)
         
         loss = self.loss_fn(y_pred, y_batch)
+        LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Test loss')
         
         # save the segmentation result
         if batch_idx in self.seg_log_batch_idxs:
             self.log_seg(batch_idx, x_batch, y_batch, y_pred, f'test_{self._test_dataset_name}')
-            # self.logger.experiment.log({f'test_seg_batch{batch_idx+1}': \
-            #     [self.get_segmentations(x_batch=x_batch, y_batch=y_batch, y_pred=y_pred)],}, commit=False)
 
         # Log the test loss        
         self.log(f'test_{self._test_dataset_name}_loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_test)

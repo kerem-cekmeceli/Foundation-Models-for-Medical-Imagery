@@ -17,7 +17,7 @@ sys.path.insert(3, str(sam_mod_pth))
 
 import torch
 # import math
-from enum import Enum
+
 # import cv2
 # import numpy as np
 # from matplotlib import pyplot as plt
@@ -55,45 +55,42 @@ from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
 
 from torchvision.models import get_model
+from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freqs
 
 # cfg = dict(name='resnet50', weights='ResNet50_Weights.IMAGENET1K_V2')
 # # No weights - random initialization
 # mdl = get_model(**cfg)
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
-
-class ModelType(Enum):
-    SEGMENTOR=1
-    UNET=2
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Select model type
 model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, sam, resnet
+    backbone = 'sam'  # dino, sam, resnet
     train_backbone = True
-    backbone_sz = "small" # in ("small", "base", "large" or "giant")
+    backbone_sz = "small" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+    dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
     
 
 # Select dataset
-dataset = 'cardiac_acdc' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
-hdf5_data = True
+dataset = 'prostate_nci' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
 nb_epochs = 100 if cluster_paths else 2
-warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
+
 
 # Config the batch size and lr for training
-lr = 0.5e-4  # 0.5e-4
+batch_sz = 1#8 
+# lr = 0.5e-4 
 weigh_loss_bg = False  # False is better
 
 # Test checkpoint
@@ -106,15 +103,14 @@ num_workers_dataloader=3
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech']
 prostate_datasets = ['prostate_nci', 'prostate_usz']
 
-if cluster_paths:
-    if dataset in brain_datasets:
-        test_datasets = brain_datasets
-    elif dataset in prostate_datasets:
-        test_datasets = prostate_datasets
-    else:
-        test_datasets = [dataset] 
+
+if dataset in brain_datasets:
+    test_datasets = brain_datasets
+elif dataset in prostate_datasets:
+    test_datasets = prostate_datasets
 else:
-    test_datasets = [dataset]
+    test_datasets = [dataset] 
+
 
 ####################################################################################################
 seed = 42
@@ -156,84 +152,23 @@ torch.set_float32_matmul_precision(precision)
 # Set seeds for numpy, torch and python.random
 seed_everything(seed, workers=True)
 
+batch_sz = batch_sz // gpus  if strategy == 'ddp' else batch_sz
+
 # Data attributes
-dataset_attrs = get_data_attrs(name=dataset, use_hdf5=hdf5_data)
-batch_sz = get_batch_sz(dataset_attrs, gpus)
-
-if model_type==ModelType.SEGMENTOR:
-    # Backbone config
-    bb_cfg = get_bb_cfg(bb_name=backbone, bb_size=backbone_sz, train_bb=train_backbone, 
-                        dec_name=dec_head_key, main_pth=main_pth, pretrained=True)
-
-    # Decoder config
-    dec_head_cfg, n_in_ch = get_dec_cfg(dec_name=dec_head_key, dataset_attrs=dataset_attrs)
-
-
-# Optimizer Config
-optm_cfg = dict(name='AdamW',
-                params=dict(lr = lr,
-                            weight_decay = 0.5e-4,   # 0.5e-4  | 1e-2
-                            betas = (0.9, 0.999)))
-
-# LR scheduler config
-scheduler_configs = []
-scheduler_configs.append(\
-    dict(name='LinearLR',
-         params=dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)))
-scheduler_configs.append(\
-    dict(name='PolynomialLR',
-         params=dict(power=1.0, total_iters=(nb_epochs-warmup_iters)*2)))
-
-scheduler_cfg = dict(name='SequentialLR',
-                     params=dict(scheduler_configs=scheduler_configs,
-                                  milestones=[warmup_iters]),
-                    )
-
-# Loss Config
-loss_cfg = get_loss_cfg(loss_key=loss_cfg_key, data_attr=dataset_attrs)
-
-# Metrics
-metric_cfgs = get_metric_cfgs(data_attr=dataset_attrs)
-
-# Log indexes for segmentation for the minibatch
-log_idxs = get_minibatch_log_idxs(batch_sz=batch_sz)
-
-# Log indexes for segmentation for the batches
-seg_log_batch_idxs = get_batch_log_idxs(batch_sz=batch_sz, data_attr=dataset_attrs)
-
- # Log seg val reult every N epochs during training
-seg_res_log_itv = max(nb_epochs//5, 1)  
+dataset_attrs = get_data_attrs(name=dataset, use_hdf5=None)
 
 # Init the segmentor model
 if model_type == ModelType.SEGMENTOR:
-    segmentor_cfg = dict(name=Segmentor.__name__,
-                         params=dict(backbone=bb_cfg,
-                                     decode_head=dec_head_cfg,
-                                     reshape_dec_oup=True,
-                                     align_corners=False))
-    
-elif model_type == ModelType.UNET:
-    segmentor_cfg = dict(name=UNet.__name__,
-                         params=dict(n_channels=3, 
-                                     n_classes=dataset_attrs['num_classses'], 
-                                     bilinear=False))
-    
+    kwargs = dict(backbone=backbone,
+                  backbone_sz=backbone_sz,
+                  train_backbone=train_backbone,
+                  dec_head_key=dec_head_key,
+                  main_pth=main_pth)
 else:
-    ValueError(f'Model type: {model_type} is not found')
-
-segmentor_cfg_lit = dict(segmentor=segmentor_cfg,
-                         loss_config=loss_cfg, 
-                         optimizer_config=optm_cfg,
-                         schedulers_config=scheduler_cfg,
-                         metric_configs=metric_cfgs,
-                         val_metrics_over_vol=True, # Also report metrics over vol
-                         seg_log_batch_idxs=seg_log_batch_idxs,
-                         minibatch_log_idxs=log_idxs,
-                         seg_val_intv=seg_res_log_itv,
-                         sync_dist_train=gpus>1,
-                         sync_dist_val=gpus>1,
-                         sync_dist_test=gpus>1)
-
+    kwargs=dict()
+    
+segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
+                                          dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, **kwargs)
 model = LitSegmentor(**segmentor_cfg_lit)
 
 # Print model info
@@ -256,12 +191,11 @@ if cluster_paths:
     data_root_pth = Path('/usr/bmicnas02/data-biwi-01/foundation_models/da_data') 
 else:      
     data_root_pth = main_pth.parent / 'DataFoundationModels'
-    if hdf5_data:
+    if dataset_attrs['format']=='hdf5':
         data_root_pth = data_root_pth / 'hdf5'
         
 # Get datasets
 train_dataset, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
-                                                        hdf5_data=hdf5_data, 
                                                         data_attr=dataset_attrs, 
                                                         train_procs=augmentations+processings, 
                                                         val_test_procs=processings)
@@ -279,7 +213,7 @@ val_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_worker
 
 data_module = VolDataModule(train_dataset=train_dataset, val_dataset=val_dataset, test_dataset=dataset_name_testing, 
                             train_dataloader_cfg=train_dataloader_cfg, val_dataloader_cfg=val_dataloader_cfg, 
-                            vol_depth=dataset_attrs['vol_depth'], num_gpus=gpus)
+                            vol_depth=None, num_gpus=gpus) #@TODO remove vol depth field
 
 # Trainer config (loggable components)
 trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strategy=strategy,
@@ -289,22 +223,18 @@ trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strateg
                    accumulate_grad_batches=1) #  runs K small batches of size N before doing a backwards pass. The effect is a large effective batch size of size KxN.
 
 # Init the logger (wandb)
-loss_name = loss_cfg['name'] if not loss_cfg['name']=='CompositionLoss' else \
-                f'{loss_cfg["params"]["loss1"]["name"]}{loss_cfg["params"]["loss2"]["name"]}Loss'
-data_type = 'hdf5' if hdf5_data else 'png'
+loss_name = segmentor_cfg_lit['loss_config']['name'] if not segmentor_cfg_lit['loss_config']['name']=='CompositionLoss' else \
+                f'{segmentor_cfg_lit["loss_config"]["params"]["loss1"]["name"]}{segmentor_cfg_lit["loss_config"]["params"]["loss2"]["name"]}Loss'
 
 # Tags
-tags = [dataset, loss_name, data_type]
+tags = [dataset, loss_name, dataset_attrs['format']]
 
 if model_type==ModelType.SEGMENTOR:
     dec_head_name = model.segmentor.decode_head.__class__.__name__
     backbone_name = model.segmentor.backbone.name
     bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
     wnadb_config_add = dict(dec_head_name = dec_head_name,
-                            dec_head_cfg=dec_head_cfg,
                             backbone_name = backbone_name,
-                            bb_cfg=bb_cfg,
-                            backbone_n_in_ch=n_in_ch,
                             )
     run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
     bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
@@ -323,15 +253,11 @@ else:
 
 
 wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
-                    dataset=str(data_root_pth),
+                    dataset=dataset_attrs,
                     batch_sz=batch_sz,
                     num_classes=dataset_attrs['num_classses'],
                     augmentations=augmentations,
                     nb_epochs=nb_epochs,
-                    scheduler_cfg=scheduler_cfg,
-                    optm_cfg=optm_cfg,
-                    loss_cfg=loss_cfg,
-                    metrics_cfg=metric_cfgs,
                     timestamp=time_str(),
                     torch_precision=precision,
                     train_dataloader_cfg=train_dataloader_cfg,
@@ -340,8 +266,7 @@ wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     trainer_cfg=trainer_cfg,
                     nb_gpus=gpus,
                     precision=precision,
-                    strategy=strategy,
-                    data_type=data_type)
+                    strategy=strategy,)
 
 wandb_log_path = main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
@@ -355,7 +280,6 @@ logger = WandbLogger(project='FoundationModels_MedDino',
                      mode=log_mode,
                      settings=wandb.Settings(_service_wait=300),  # Can increase timeout
                      tags=tags)
-
 # log gradients, parameter histogram and model topology
 logger.watch(model, log="all")
 
@@ -381,40 +305,29 @@ trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloa
 if gpus>1:
     torch.distributed.destroy_process_group()
 if trainer.global_rank == 0:
+    # Log the relative frequencies
+    log_class_rel_freqs(dataset=train_dataset, log_name_key=f'train_{dataset}')
+    
     # Trainer cfg for testing
     trainer_cfg_test = dict(accelerator='gpu', devices=1, 
                             log_every_n_steps=100, num_sanity_val_steps=0,)
     trainer_testing = L.Trainer(logger=logger, **trainer_cfg_test)
     
-    test_model_cfg = dict(backbone=bb_cfg,
-                          decode_head=dec_head_cfg,  # WRONG SHOULD BE CHANGED nb class changes
-                          loss_config=loss_cfg, 
-                          optimizer_config=optm_cfg,
-                          schedulers_config=scheduler_cfg,
-                          metric_configs=metric_cfgs,
-                          train_backbone=train_backbone,
-                          reshape_dec_oup=True,
-                          align_corners=False,
-                          val_metrics_over_vol=True, # Also report metrics over vol
-                          seg_log_batch_idxs=seg_log_batch_idxs,
-                          minibatch_log_idxs=log_idxs,
-                          seg_val_intv=seg_res_log_itv,
-                          sync_dist_train=False,
-                          sync_dist_val=False,
-                          sync_dist_test=False)
+    batch_sz = batch_sz * gpus  if strategy == 'ddp' else batch_sz
+    test_model_cfg = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
+                                          dataset_attrs=dataset_attrs, gpus=1, model_type=model_type, **kwargs)
     
     # Load the best checkpoint (highest val_dice_vol)
     model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **test_model_cfg)
     
     for i, dataset_name_testing in enumerate(test_datasets):
-        print(f'Testing for dataset: {dataset_name_testing} {i+1}/{len(test_datasets)}')
+        print(f'Eval/Test for dataset: {dataset_name_testing} {i+1}/{len(test_datasets)}')
         
         # Set the test_dataset name
         model._test_dataset_name = dataset_name_testing
         
         # Get attributes and the batch size for the given dataset
-        dataset_attrs = get_data_attrs(name=dataset_name_testing, use_hdf5=hdf5_data)
-        batch_sz = get_batch_sz(dataset_attrs, num_gpu=gpus)  # use the same batch size as ddp to ensure it will fit in the memory
+        dataset_attrs = get_data_attrs(name=dataset_name_testing, use_hdf5=None)
         
         # Dataloader config for val and test on singl GPU
         test_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_workers=num_workers_dataloader,
@@ -423,7 +336,6 @@ if trainer.global_rank == 0:
         
         # Get datasets
         _, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
-                                                                hdf5_data=hdf5_data, 
                                                                 data_attr=dataset_attrs, 
                                                                 train_procs=augmentations+processings, 
                                                                 val_test_procs=processings)

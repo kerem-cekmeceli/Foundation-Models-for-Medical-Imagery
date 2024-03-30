@@ -1,4 +1,4 @@
-# from prep_model import get_backone_patch_embed_sizes
+from enum import Enum
 from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
@@ -7,24 +7,34 @@ from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
 from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
+from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
+from MedicalSegmentation.med_seg_foundation.models.unet import UNet
 
-def get_data_attrs(name:str, use_hdf5=True):
+class ModelType(Enum):
+    SEGMENTOR=1
+    UNET=2
+
+def get_data_attrs(name:str, use_hdf5=None):
     attrs = {}
-    
-    # Dataset parameters
-    
+        
     # Brain - HCP1
     if name=='hcp1':
         attrs['name'] = name
+        attrs['available_formats'] = ["png", "hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/hcp1'
+            attrs['format'] = 'png'
         else:
+            attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'brain/hcp'
             attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5'
             attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_50_to_70.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 256  # First val volume depth (all the same)
+        attrs['vol_depth'] = 256  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -37,15 +47,21 @@ def get_data_attrs(name:str, use_hdf5=True):
     # Brain - HCP2    
     elif name=='hcp2':
         attrs['name'] = name
+        attrs['available_formats'] = ["png", "hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/hcp2'
+            attrs['format'] = 'png'
         else:
+            attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'brain/hcp'
             attrs['hdf5_train_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5'
             attrs['hdf5_val_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
             attrs['hdf5_test_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_50_to_70.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 256  # First val volume depth (all the same)
+        attrs['vol_depth'] = 256  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -58,16 +74,22 @@ def get_data_attrs(name:str, use_hdf5=True):
     # Brain - Abide-Caltech    
     elif name=='abide_caltech':
         attrs['name'] = name
+        attrs['available_formats'] = ["png", "hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/abide_caltech'
-            ValueError()
+            attrs['format'] = 'png'
+            ValueError('Varying volume depth !')
         else:
+            attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'brain/abide/caltech'
             attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_0_to_10.hdf5'
             attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_10_to_15.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_16_to_36.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 256  # First val volume depth (all the same)
+        attrs['vol_depth'] = 256  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -79,15 +101,22 @@ def get_data_attrs(name:str, use_hdf5=True):
         
     elif name=='abide_stanford':
         attrs['name'] = name
+        attrs['available_formats'] = ["png", "hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/abide_stanford'
+            attrs['format'] = 'png'
+            ValueError('Varying volume depth !')
         else:
+            attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'brain/abide/stanford'
             attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_0_to_10.hdf5'
             attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_10_to_15.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_16_to_36.hdf5'
         attrs['num_classses'] = 15
-        attrs['vol_depth'] = 132  # First val volume depth (all the same)
+        attrs['vol_depth'] = 132  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
@@ -99,19 +128,26 @@ def get_data_attrs(name:str, use_hdf5=True):
     
     # Prostate - NCI    
     elif name=='prostate_nci':
+        attrs['available_formats'] = ["hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
         attrs['name'] = name
         attrs['num_classses'] = 3
-        attrs['vol_depth'] = 15  # First val volume depth
+        attrs['vol_depth_first'] = 15  # First val volume depth NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         if use_hdf5:
+            attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'nci'
-            attrs['hdf5_train_name'] = 'train.hdf5'
-            attrs['hdf5_val_name'] = 'val.hdf5'
-            attrs['hdf5_test_name'] = 'test.hdf5'
+            attrs['hdf5_train_name'] = 'nci_train.hdf5'
+            attrs['hdf5_val_name'] = 'nci_val.hdf5'
+            attrs['hdf5_test_name'] = 'nci_test.hdf5'
+        else:
+            attrs['format'] = 'png'
             
         # weight = [0.1] + [1.]*(attrs['num_classses']-1)
         # weight = torch.Tensor(weight)
@@ -121,21 +157,28 @@ def get_data_attrs(name:str, use_hdf5=True):
     
     # Prostate - USZ        
     elif name=='prostate_usz':
+        attrs['available_formats'] = ["hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
         attrs['name'] = name
         attrs['data_path_suffix'] = 'prostate/pirad_erc'
         attrs['num_classses'] = 3
-        attrs['vol_depth'] = 22  # First val volume depth
+        attrs['vol_depth_first'] = 22  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
             
         if use_hdf5:
-            attrs['data_path_suffix'] = 'nci'
+            attrs['format'] = 'hdf5'
+            attrs['data_path_suffix'] = 'pirad_erc'
             attrs['hdf5_train_name'] = 'data_2d_from_40_to_68_size_256_256_res_0.625_0.625_ek.hdf5'
             attrs['hdf5_val_name'] = 'data_2d_from_20_to_40_size_256_256_res_0.625_0.625_ek.hdf5'
             attrs['hdf5_test_name'] = 'data_2d_from_0_to_20_size_256_256_res_0.625_0.625_ek.hdf5'
+        else:
+            attrs['format'] = 'png'
             
         # weight = [0.1] + [1.]*(attrs['num_classses']-1)
         # weight = torch.Tensor(weight)
@@ -145,20 +188,27 @@ def get_data_attrs(name:str, use_hdf5=True):
     
     # Cardiac - ACDC      
     elif name=='cardiac_acdc':
+        attrs['available_formats'] = ["hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
         attrs['name'] = name
         attrs['data_path_suffix'] = 'cardiac/acdc'
         attrs['num_classses'] = 3
-        attrs['vol_depth'] = 10  # First val volume depth
+        attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         if use_hdf5:
-            attrs['data_path_suffix'] = 'nci'
-            attrs['hdf5_train_name'] = 'train.hdf5'
-            attrs['hdf5_val_name'] = 'val.hdf5'
-            attrs['hdf5_test_name'] = 'test.hdf5'   
+            attrs['format'] = 'hdf5'
+            attrs['data_path_suffix'] = 'acdc'
+            attrs['hdf5_train_name'] = 'acdc_train.hdf5'
+            attrs['hdf5_val_name'] = 'acdc_val.hdf5'
+            attrs['hdf5_test_name'] = 'acdc_test.hdf5'   
+        else:
+            attrs['format'] = 'png'
             
         # weight = [0.1] + [1.]*(attrs['num_classses']-1)
         # weight = torch.Tensor(weight)
@@ -168,20 +218,27 @@ def get_data_attrs(name:str, use_hdf5=True):
     
     # Cardiac - RVSC           
     elif name=='cardiac_rvsc':
+        attrs['available_formats'] = ["hdf5"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
         attrs['name'] = name
         attrs['data_path_suffix'] = 'cardiac/rvsc'
         attrs['num_classses'] = 2
-        attrs['vol_depth'] = 10  # First val volume depth
+        attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         if use_hdf5:
-            attrs['data_path_suffix'] = 'nci'
-            attrs['hdf5_train_name'] = 'train.hdf5'
-            attrs['hdf5_val_name'] = 'val.hdf5'
-            attrs['hdf5_test_name'] = 'test.hdf5'
+            attrs['format'] = 'hdf5'
+            attrs['data_path_suffix'] = 'rvsc'
+            attrs['hdf5_train_name'] = 'rvsc_train.hdf5'
+            attrs['hdf5_val_name'] = 'rvsc_val.hdf5'
+            attrs['hdf5_test_name'] = 'rvsc_test.hdf5'
+        else:
+            attrs['format'] = 'png'
             
         # weight = [0.1] + [1.]*(attrs['num_classses']-1)
         # weight = torch.Tensor(weight)
@@ -194,45 +251,41 @@ def get_data_attrs(name:str, use_hdf5=True):
         
     return attrs
 
-def get_batch_sz(data_attrs, num_gpu):
-    assert num_gpu>0
+# def get_batch_sz(data_attrs, num_gpu):
+#     assert num_gpu>0
     
-    dataset_name = data_attrs['name']
+#     dataset_name = data_attrs['name']
     
-    if dataset_name=='hcp1':
-        batch_sz = 1
+#     if dataset_name=='hcp1':
+#         batch_sz = 8
         
-    elif dataset_name=='hcp2':
-        batch_sz = 8
+#     elif dataset_name=='hcp2':
+#         batch_sz = 8
         
-    elif dataset_name=='abide_caltech':
-        batch_sz = 8
+#     elif dataset_name=='abide_caltech':
+#         batch_sz = 8
         
-    elif dataset_name=='abide_stanford':
-        batch_sz = 6
+#     elif dataset_name=='abide_stanford':
+#         batch_sz = 6
        
-    elif dataset_name=='cardiac_acdc':
-       batch_sz = 6 #@TODO verify
+#     elif dataset_name=='cardiac_acdc':
+#        batch_sz = 6 
             
-    elif dataset_name=='cardiac_rvsc':
-        batch_sz = 6 #@TODO verify
+#     elif dataset_name=='cardiac_rvsc':
+#         batch_sz = 6 
         
-    elif dataset_name=='prostate_nci':
-        batch_sz = 8 #@TODO verify #10
+#     elif dataset_name=='prostate_nci':
+#         batch_sz = 8 
             
-    elif dataset_name=='prostate_usz':
-        batch_sz = 10 #@TODO verify
+#     elif dataset_name=='prostate_usz':
+#         batch_sz = 10 
         
-    else:
-        ValueError(f'Dataset: {dataset_name} is not defined')
+#     else:
+#         ValueError(f'Dataset: {dataset_name} is not defined')
     
-    batch_sz = batch_sz // num_gpu     
-    
-    vol_depth = data_attrs['vol_depth']
-    # assert vol_depth % batch_sz == 0,\
-    #     f'batch size must be a multiple of slice/patient but got {batch_sz} and {vol_depth}'
-       
-    return batch_sz
+#     batch_sz = batch_sz // num_gpu     
+   
+#     return batch_sz
 
 
 def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
@@ -289,7 +342,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb_model=None,
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path),
                       train=train_bb,
-                      )
+                      interp_to_inp_shape=True)
         
     elif bb_name == 'resnet':
         if dec_name=='unet':
@@ -439,12 +492,13 @@ def get_dec_cfg(dec_name, dataset_attrs):
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
         
-    return dict(name=class_name, params=dec_head_cfg), n_in_ch
+    return dict(name=class_name, params=dec_head_cfg)
 
 
 def get_loss_cfg(loss_key, data_attr):
     
     ignore_idx_loss = data_attr['ignore_idx_loss']
+    
     weight = data_attr['weight']
     
     # CE Loss
@@ -498,9 +552,36 @@ def get_loss_cfg(loss_key, data_attr):
     else:
         ValueError(f'Loss {loss_key} is not defined')
         
-        
 
-def get_metric_cfgs(data_attr):
+def get_optimizer_cfg(lr):
+     
+    optm_cfg = dict(name='AdamW',
+                params=dict(lr = lr,
+                            weight_decay = 0.5e-4,   # 0.5e-4  | 1e-2
+                            betas = (0.9, 0.999)))
+    return optm_cfg
+
+
+def get_scheduler_cfg(nb_epochs):
+    warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
+    
+    scheduler_configs = []
+    scheduler_configs.append(\
+        dict(name='LinearLR',
+            params=dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)))
+    scheduler_configs.append(\
+        dict(name='PolynomialLR',
+            params=dict(power=1.0, total_iters=(nb_epochs-warmup_iters)*2)))
+
+    scheduler_cfg = dict(name='SequentialLR',
+                        params=dict(scheduler_configs=scheduler_configs,
+                                    milestones=[warmup_iters]),
+                        )
+    return scheduler_cfg
+            
+    
+    
+def get_metric_cfgs(data_attr, dom_gen_tst=False):
     ignore_idx_metric = data_attr['ignore_idx_metric']
     
     epsilon = 1  # smoothing factor 
@@ -508,14 +589,14 @@ def get_metric_cfgs(data_attr):
 
     miou_cfg=dict(prob_inputs=False, # Decoder does not return probas explicitly
                 soft=False,
-                bg_ch_to_rm=ignore_idx_metric,  # bg channel to be removed 
+                ignore_idxs=ignore_idx_metric,  # bg channel to be removed 
                 reduction='mean',
                 EN_vol_scores=True,
                 epsilon=epsilon)
 
     dice_cfg=dict(prob_inputs=False,  # Decoder does not return probas explicitly
                 soft=False,
-                bg_ch_to_rm=ignore_idx_metric,
+                ignore_idxs=ignore_idx_metric,
                 reduction='mean',
                 k=k, 
                 epsilon=epsilon,
@@ -552,7 +633,7 @@ def get_minibatch_log_idxs(batch_sz):
     return log_idxs
 
 def get_batch_log_idxs(batch_sz, data_attr):
-    vol_depth = data_attr['vol_depth']
+    vol_depth = data_attr['vol_depth'] if 'vol_depth' in data_attr.keys() else data_attr['vol_depth_first']
     
     seg_res_nb_vols = 1  # Process minibatches for N number of 3D volumes
     seg_log_nb_batches = 16
@@ -560,6 +641,85 @@ def get_batch_log_idxs(batch_sz, data_attr):
     seg_log_batch_idxs = torch.arange(0+step-1, max(min(seg_log_nb_batches*step, vol_depth//batch_sz*seg_res_nb_vols), seg_log_nb_batches), step).tolist()
     assert len(seg_log_batch_idxs)==seg_log_nb_batches
     return seg_log_batch_idxs
+
+
+def get_lr(model_type, **kwargs):
+    # if model_type==ModelType.SEGMENTOR:
+    #     pass
+    # elif model_type==ModelType.UNET:
+    #     pass
+    # else:
+    #     ValueError(f'Unknown model type {model_type}')
+    return 0.5e-4 
+
+
+def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
+                          dom_gen_tst=False, **kwargs):
+
+    
+    if model_type==ModelType.SEGMENTOR:
+        lr = get_lr(model_type=model_type)
+        
+        # Backbone config
+        bb_cfg = get_bb_cfg(bb_name=kwargs['backbone'], bb_size=kwargs['backbone_sz'], train_bb=kwargs['train_backbone'], 
+                            dec_name=kwargs['dec_head_key'], main_pth=kwargs['main_pth'], pretrained=True)
+        # Decoder config
+        dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs)
+        
+        segmentor_cfg = dict(name=Segmentor.__name__,
+                         params=dict(backbone=bb_cfg,
+                                     decode_head=dec_head_cfg,
+                                     reshape_dec_oup=True,
+                                     align_corners=False))
+        
+    elif model_type==ModelType.UNET:
+        lr = get_lr(model_type=model_type)
+        
+        segmentor_cfg = dict(name=UNet.__name__,
+                         params=dict(n_channels=3, 
+                                     n_classes=dataset_attrs['num_classses'], 
+                                     bilinear=False))
+        
+    else:
+        ValueError(f'Unknown model type {model_type}')
+        
+    # Optimizer Config    
+    optm_cfg = get_optimizer_cfg(lr=lr)
+
+    # LR scheduler config
+    scheduler_cfg = get_scheduler_cfg(nb_epochs=nb_epochs)
+
+    # Loss Config
+    loss_cfg = get_loss_cfg(loss_key=loss_cfg_key, data_attr=dataset_attrs)
+
+    # Metrics
+    metric_cfgs = get_metric_cfgs(data_attr=dataset_attrs, dom_gen_tst=dom_gen_tst)
+
+    # Log indexes for segmentation for the minibatch
+    log_idxs = get_minibatch_log_idxs(batch_sz=batch_sz)
+
+    # Log indexes for segmentation for the batches
+    seg_log_batch_idxs = get_batch_log_idxs(batch_sz=batch_sz, data_attr=dataset_attrs)
+
+    # Log seg val reult every N epochs during training
+    seg_res_log_itv = max(nb_epochs//5, 1)  
+    
+    # Lit segmentor config
+    segmentor_cfg_lit = dict(segmentor=segmentor_cfg,
+                         loss_config=loss_cfg, 
+                         optimizer_config=optm_cfg,
+                         schedulers_config=scheduler_cfg,
+                         metric_configs=metric_cfgs,
+                         val_metrics_over_vol=True, # Also report metrics over vol
+                         seg_log_batch_idxs=seg_log_batch_idxs,
+                         minibatch_log_idxs=log_idxs,
+                         seg_val_intv=seg_res_log_itv,
+                         sync_dist_train=gpus>1,
+                         sync_dist_val=gpus>1,
+                         sync_dist_test=gpus>1)
+    return segmentor_cfg_lit
+    
+    
 
 
 def get_augmentations():    
@@ -572,7 +732,7 @@ def get_augmentations():
     return augmentations
 
 
-def get_datasets(data_root_pth, hdf5_data, data_attr, train_procs, val_test_procs):
+def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
     """Order of procs: First augmentations then pre-processings ! """
     
     data_path_suffix = data_attr['data_path_suffix']
@@ -581,7 +741,7 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_procs, val_test_proc
     
     data_root_pth = data_root_pth / data_path_suffix
 
-    if not hdf5_data:
+    if data_attr['format']=='png':
         train_fld = 'train-filtered' if 'hcp' in dataset else 'train'
 
         train_dataset = SegmentationDataset(img_dir=data_root_pth/'images'/train_fld,
@@ -606,7 +766,7 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_procs, val_test_proc
                                         augmentations=val_test_procs,
                                         ret_n_xyz=True)
         
-    else:
+    elif data_attr['format']=='hdf5':
         hdf5_train_name = data_attr['hdf5_train_name']
         hdf5_val_name = data_attr['hdf5_val_name']
         hdf5_test_name = data_attr['hdf5_test_name']
@@ -623,6 +783,8 @@ def get_datasets(data_root_pth, hdf5_data, data_attr, train_procs, val_test_proc
                                                 num_classes=num_classses, 
                                                 augmentations=val_test_procs,
                                                 ret_n_xyz=True)
+    else:
+        ValueError(f'Unsupported data format {data_attr["format"]}')
         
     return train_dataset, val_dataset, test_dataset
     
