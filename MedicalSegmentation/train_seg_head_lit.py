@@ -85,7 +85,7 @@ dataset = 'cardiac_rvsc' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prosta
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 120 if cluster_paths else 2
+nb_epochs = 150 if cluster_paths else 2
 
 
 # Config the batch size and lr for training

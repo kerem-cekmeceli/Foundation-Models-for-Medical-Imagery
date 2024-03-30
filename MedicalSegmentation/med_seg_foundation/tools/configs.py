@@ -197,7 +197,7 @@ def get_data_attrs(name:str, use_hdf5=None):
             
         attrs['name'] = name
         attrs['data_path_suffix'] = 'cardiac/acdc'
-        attrs['num_classses'] = 3
+        attrs['num_classses'] = 4
         attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -227,7 +227,7 @@ def get_data_attrs(name:str, use_hdf5=None):
             
         attrs['name'] = name
         attrs['data_path_suffix'] = 'cardiac/rvsc'
-        attrs['num_classses'] = 2
+        attrs['num_classses'] = 3
         attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
