@@ -75,11 +75,11 @@ if model_type == ModelType.SEGMENTOR:
     backbone_sz = "small" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
     
 
 # Select dataset
-dataset = 'prostate_nci' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+dataset = 'hcp1' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -89,7 +89,7 @@ nb_epochs = 100 if cluster_paths else 2
 
 
 # Config the batch size and lr for training
-batch_sz = 1#8 
+batch_sz = 4#8 
 # lr = 0.5e-4 
 weigh_loss_bg = False  # False is better
 
