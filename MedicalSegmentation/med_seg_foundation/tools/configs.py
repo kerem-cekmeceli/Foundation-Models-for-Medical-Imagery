@@ -315,7 +315,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       train=train_bb,
                       disable_mask_tokens=True)
         
-    elif bb_name == 'sam':
+    elif bb_name == 'sam' or bb_name == 'medsam':
         if dec_name=='unet':
             n_out = 5*2
         else:
@@ -323,21 +323,28 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         last_out_first = True
         
         if pretrained:
-            bb_checkpoint_path = main_pth/bb_cps_pth/'SAM'
-            if bb_size=='base':
-                bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_b_01ec64.pth'
-            elif bb_size=='large':
-                bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_l_0b3195.pth'
-            elif bb_size=='huge':
-                bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_h_4b8939.pth'
+            if bb_name == 'sam':
+                bb_checkpoint_path = main_pth/bb_cps_pth/'SAM'
+                prefix = ''
+                if bb_size=='base':
+                    bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_b_01ec64.pth'
+                elif bb_size=='large':
+                    bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_l_0b3195.pth'
+                elif bb_size=='huge':
+                    bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_h_4b8939.pth'
+                else:
+                    ValueError(f'Size: {bb_size} is not available for SAM')
             else:
-                ValueError(f'Size: {bb_size} is not available for SAM')
+                prefix = 'med'
+                assert bb_size=='base', f'Medsam is only availabel for size base but got {bb_size}'
+                bb_checkpoint_path = main_pth/bb_cps_pth/'MedSam'/'medsam_vit_b.pth'
+                    
         else:
             bb_checkpoint_path = None
             
         name = SamBackBone.__name__
         params = dict(nb_outs=n_out,
-                      name=f'sam_enc_vit_{bb_size}',
+                      name=f'{prefix}sam_enc_vit_{bb_size}',
                       last_out_first=last_out_first,
                       bb_model=None,
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path),
