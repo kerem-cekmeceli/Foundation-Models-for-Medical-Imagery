@@ -106,12 +106,14 @@ num_workers_dataloader=3
 
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech', 'abide_stanford']
 prostate_datasets = ['prostate_nci', 'prostate_usz'] #if backbone != 'medsam' else ['prostate_usz']
-
+spine_datasets = ['spine_mrspinesegv', 'spine_verse']
 
 if dataset in brain_datasets:
     test_datasets = brain_datasets
 elif dataset in prostate_datasets:
     test_datasets = prostate_datasets
+elif dataset in spine_datasets:
+    test_datasets = spine_datasets
 else:
     test_datasets = [dataset] 
 
