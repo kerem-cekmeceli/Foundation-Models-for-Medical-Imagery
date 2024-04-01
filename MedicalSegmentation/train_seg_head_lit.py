@@ -66,7 +66,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.UNET
+model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
