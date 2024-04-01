@@ -159,13 +159,13 @@ class SegmentationDataset(Dataset):
         image = image.to(self.dtype) # C, H, W
         mask = mask.squeeze(0).to(torch.int64) #.reshape(image.shape[1:]) # H, W
         
-        if not self.ret_n_xyz:
+        if not self.ret_n_z:
             return image, mask
         else:
-            n_xyz = dict(nz = self.nz,
+            n_z = dict(nz = self.nz,
                          last_slice = (idx+1)%self.nz==0)
         
-            return image, mask, n_xyz
+            return image, mask, n_z
 
 #################################################################################################
 
