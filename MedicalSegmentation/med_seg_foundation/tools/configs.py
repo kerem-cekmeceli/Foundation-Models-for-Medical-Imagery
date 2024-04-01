@@ -564,7 +564,7 @@ def get_optimizer_cfg(lr):
      
     optm_cfg = dict(name='AdamW',
                 params=dict(lr = lr,
-                            weight_decay = 0.5e-4,   # 0.5e-4  | 1e-2
+                            weight_decay = 1e-5,   # 0.5e-4  | 1e-2
                             betas = (0.9, 0.999)))
     return optm_cfg
 
