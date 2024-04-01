@@ -93,7 +93,8 @@ class SegmentationDataset(Dataset):
                  file_extension=None, mask_suffix='',
                  augmentations=None, images=None,
                  dtype=torch.float32,
-                 *args, **kwargs):
+                 ret_n_z:bool=True,
+                 nz=None, *args, **kwargs):
         super(Dataset).__init__(*args, **kwargs)
         
         if isinstance(img_dir, Path):
@@ -107,6 +108,15 @@ class SegmentationDataset(Dataset):
         self.num_classes = num_classes
         self.mask_suffix = mask_suffix
         self.dtype = dtype
+        
+        if nz is not None:
+            assert nz>0
+            assert isinstance(nz, int)
+        self.nz = int(nz)
+        
+        self.ret_n_z = ret_n_z
+        if self.ret_n_z:
+            assert self.nz is not None, 'Need to provide the constant vol depth nz'
         
         # Put the must have transforms
         transforms = []
@@ -148,16 +158,14 @@ class SegmentationDataset(Dataset):
         [image, mask] = self.transforms([image, mask])
         image = image.to(self.dtype) # C, H, W
         mask = mask.squeeze(0).to(torch.int64) #.reshape(image.shape[1:]) # H, W
-                    
-        # # Create a tensor to hold the binary masks (GT probas of each class)  [num_cls, H, W]
-        # bin_mask = torch.zeros(self.num_classes, mask.shape[0], mask.shape[1], dtype=self.dtype)
         
-        # for i in range(self.num_classes):
-        #     bin_mask[i] = (mask == i).to(self.dtype)  # Ensure resulting mask is float type
-            
-        # # Bin_mask = gt_proba of all classes [num_cls, H, W]
-        return image, mask
-    
+        if not self.ret_n_xyz:
+            return image, mask
+        else:
+            n_xyz = dict(nz = self.nz,
+                         last_slice = (idx+1)%self.nz==0)
+        
+            return image, mask, n_xyz
 
 #################################################################################################
 

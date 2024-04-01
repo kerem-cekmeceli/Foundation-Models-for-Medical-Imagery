@@ -66,11 +66,11 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.SEGMENTOR
+model_type = ModelType.UNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, sam, medsam, resnet
+    backbone = 'dino'  # dino, sam, medsam, resnet
     train_backbone = True
     backbone_sz = "small" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
     
@@ -79,13 +79,17 @@ if model_type == ModelType.SEGMENTOR:
     
 
 # Select dataset
-dataset = 'hcp2' # 'hcp1', 'hcp2', abide_caltech, abide_stanford, prostate_nci, prostate_usz, cardiac_acdc, cardiac_rvsc, 
+# 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
+# prostate_nci, prostate_usz, 
+# cardiac_acdc, cardiac_rvsc, 
+# spine_mrspinesegv, spine_verse
+dataset = 'prostate_nci' 
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 130 if cluster_paths else 2
+nb_epochs = 150 if cluster_paths else 2
 
 
 # Config the batch size and lr for training

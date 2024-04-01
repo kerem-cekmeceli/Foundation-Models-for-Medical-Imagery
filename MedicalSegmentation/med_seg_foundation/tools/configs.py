@@ -246,6 +246,68 @@ def get_data_attrs(name:str, use_hdf5=None):
         
         attrs['weight'] = weight
         
+    # LumbarSpine - MRSpineSegV     
+    elif name=='spine_mrspinesegv':
+        attrs['available_formats'] = ["png"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
+        if use_hdf5:
+            ValueError(f'HDF5 format is not supported for {name}')
+            
+        attrs['name'] = name
+        attrs['data_path_suffix'] = 'lumbarspine/MRSpineSegV'
+        attrs['num_classses'] = 6
+        attrs['vol_depth'] = 12  
+        attrs['ignore_idx_loss'] = None
+        attrs['ignore_idx_metric'] = 0
+            
+        if use_hdf5:
+            attrs['format'] = 'hdf5'
+            attrs['data_path_suffix'] = ''
+            attrs['hdf5_train_name'] = '.hdf5'
+            attrs['hdf5_val_name'] = '.hdf5'
+            attrs['hdf5_test_name'] = '.hdf5'
+        else:
+            attrs['format'] = 'png'
+            
+        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = torch.Tensor(weight)
+        weight = None
+        
+        attrs['weight'] = weight
+        
+    # LumbarSpine - VerSe     
+    elif name=='spine_verse':
+        attrs['available_formats'] = ["png"]
+        if use_hdf5 is None:
+            use_hdf5 = 'hdf5' in attrs['available_formats']
+            
+        if use_hdf5:
+            ValueError(f'HDF5 format is not supported for {name}')
+            
+        attrs['name'] = name
+        attrs['data_path_suffix'] = 'lumbarspine/VerSe'
+        attrs['num_classses'] = 6
+        attrs['vol_depth'] = 120  
+        attrs['ignore_idx_loss'] = None
+        attrs['ignore_idx_metric'] = 0
+            
+        if use_hdf5:
+            attrs['format'] = 'hdf5'
+            attrs['data_path_suffix'] = ''
+            attrs['hdf5_train_name'] = '.hdf5'
+            attrs['hdf5_val_name'] = '.hdf5'
+            attrs['hdf5_test_name'] = '.hdf5'
+        else:
+            attrs['format'] = 'png'
+            
+        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = torch.Tensor(weight)
+        weight = None
+        
+        attrs['weight'] = weight
+        
     else:
         ValueError(f'Dataset: {name} is not defined')
         
@@ -750,6 +812,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
 
     if data_attr['format']=='png':
         train_fld = 'train-filtered' if 'hcp' in dataset else 'train'
+        nz = data_attr.get('vol_depth')
 
         train_dataset = SegmentationDataset(img_dir=data_root_pth/'images'/train_fld,
                                             mask_dir=data_root_pth/'labels'/train_fld,
@@ -757,21 +820,24 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                             file_extension='.png',
                                             mask_suffix='_labelTrainIds',
                                             augmentations=train_procs,
-                                            )
+                                            nz=nz,
+                                            ret_n_z=False)
         val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                         mask_dir=data_root_pth/'labels/val',
                                         num_classes=num_classses,
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
                                         augmentations=val_test_procs,
-                                        )
+                                        nz=nz,
+                                        ret_n_z=True)
         test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                         mask_dir=data_root_pth/'labels/test',
                                         num_classes=num_classses,
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
                                         augmentations=val_test_procs,
-                                        ret_n_xyz=True)
+                                        nz=nz,
+                                        ret_n_z=True)
         
     elif data_attr['format']=='hdf5':
         hdf5_train_name = data_attr['hdf5_train_name']
