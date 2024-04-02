@@ -66,7 +66,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.SEGMENTOR
+model_type = ModelType.UNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'prostate_usz' 
+dataset = 'spine_verse' 
 rcs_enabled = False
 
 # Select loss
