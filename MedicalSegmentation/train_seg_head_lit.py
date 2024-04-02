@@ -83,8 +83,8 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'abide_stanford' 
-rcs_enabled = True
+dataset = 'spine_verse' 
+rcs_enabled = False
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
