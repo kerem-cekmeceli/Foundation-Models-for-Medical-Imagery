@@ -713,13 +713,20 @@ def get_batch_log_idxs(batch_sz, data_attr):
 
 
 def get_lr(model_type, **kwargs):
-    # if model_type==ModelType.SEGMENTOR:
-    #     pass
-    # elif model_type==ModelType.UNET:
-    #     pass
-    # else:
-    #     ValueError(f'Unknown model type {model_type}')
-    return 0.5e-4 
+    bb_name=kwargs['backbone'] 
+    bb_size=kwargs['backbone_sz'] 
+    train_bb=kwargs['train_backbone']
+    dec_name=kwargs['dec_head_key']
+    
+    if model_type==ModelType.SEGMENTOR:
+        if bb_name=='dino':
+            return 1e-5
+        else:
+            return 0.5e-4 
+    elif model_type==ModelType.UNET:
+        return 0.5e-4 
+    else:
+        ValueError(f'Unknown model type {model_type}')
 
 
 def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
@@ -727,7 +734,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
 
     
     if model_type==ModelType.SEGMENTOR:
-        lr = get_lr(model_type=model_type)
+        lr = get_lr(model_type=model_type, **kwargs)
         
         # Backbone config
         bb_cfg = get_bb_cfg(bb_name=kwargs['backbone'], bb_size=kwargs['backbone_sz'], train_bb=kwargs['train_backbone'], 
@@ -742,7 +749,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                                      align_corners=False))
         
     elif model_type==ModelType.UNET:
-        lr = get_lr(model_type=model_type)
+        lr = get_lr(model_type=model_type, **kwargs)
         
         segmentor_cfg = dict(name=UNet.__name__,
                          params=dict(n_channels=3, 
@@ -847,15 +854,15 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                                 num_classes=num_classses, 
                                                 augmentations=train_procs,
-                                                ret_n_xyz=False)
+                                                ret_n_xyz=False, rcs_enabled=False)
         val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
                                                 num_classes=num_classses, 
                                                 augmentations=val_test_procs,
-                                                ret_n_xyz=True)
+                                                ret_n_xyz=True, rcs_enabled=False)
         test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_test_name, 
                                                 num_classes=num_classses, 
                                                 augmentations=val_test_procs,
-                                                ret_n_xyz=True)
+                                                ret_n_xyz=True, rcs_enabled=False)
     else:
         ValueError(f'Unsupported data format {data_attr["format"]}')
         
