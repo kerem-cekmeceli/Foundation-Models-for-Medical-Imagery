@@ -705,12 +705,11 @@ def get_batch_log_idxs(batch_sz, data_attr):
 
 
 def get_lr(model_type, **kwargs):
-    bb_name=kwargs['backbone'] 
-    bb_size=kwargs['backbone_sz'] 
-    train_bb=kwargs['train_backbone']
-    dec_name=kwargs['dec_head_key']
-    
     if model_type==ModelType.SEGMENTOR:
+        bb_name=kwargs['backbone'] 
+        bb_size=kwargs['backbone_sz'] 
+        train_bb=kwargs['train_backbone']
+        dec_name=kwargs['dec_head_key']
         if bb_name=='dino':
             return 1e-5
         else:
