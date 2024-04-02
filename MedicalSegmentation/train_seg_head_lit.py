@@ -61,9 +61,9 @@ from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freq
 # # No weights - random initialization
 # mdl = get_model(**cfg)
 
-cluster_paths = False
+cluster_paths = True
 save_checkpoints = True
-log_the_run = False
+log_the_run = True
 
 # Select model type
 model_type = ModelType.SEGMENTOR
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'hcp1' 
+dataset = 'abide_stanford' 
 rcs_enabled = True
 
 # Select loss

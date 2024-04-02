@@ -24,6 +24,7 @@ import mmcv
 from data.transforms import *
 import h5py
 import lightning as L
+from abc import abstractmethod
 
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -88,15 +89,84 @@ def rm_from_res_dict(results):
     return [img]
 
 
-class SegmentationDataset(Dataset):
+class SegDatasetRcsBase(Dataset):
+    def __init__(self, 
+                 num_classes:int,
+                 rcs_enabled:bool=False) -> None:
+        super().__init__()
+        
+        assert num_classes>0
+        self.num_classes = num_classes
+        
+        # If to apply rcs or not 
+        self.rcs_enabled = rcs_enabled
+        
+    def get_rare_class_idx(self):
+        # Choose a random class following the RCS probability distributtion
+        c = np.random.choice(self.rcs_classes, p=self.rcs_classprob)
+        # Choose a random sample (uniform dist) index correspomding to that class
+        idx = np.random.choice(self.file_indexes_containing_classes[c])
+        return idx   
+        
+    @abstractmethod
+    def get_mask(self, idx):
+        pass    
+        
+    def init_rcs(self):
+        assert self.rcs_enabled, 'RCS flag should be enabled !'
+        # An image should contain at least this many pixels from a class to be considered as it has that class 
+        self.rcs_min_pixels = 30
+        
+        # smoothing of RCS proba dist - higher T = more uniform distribution, lower T = stronger focus on rare classes 
+        self.rcs_class_temp = 0.01
+        #############################################################
+        
+        # array of contained classes e.g. [0, 1, 2, ...]
+        self.rcs_classes = list(range(self.num_classes))
+        
+        # list storing sample idxs containing each class
+        self.file_indexes_containing_classes = [list()]*self.num_classes 
+        
+        # Relative frequency of classes (i.e. number of pixels with class c)
+        self.class_freqs = np.zeros(self.num_classes, dtype=np.float32)
+            
+        for idx in range(self.nb_slice_tot):
+            mask = self.get_mask(idx) 
+            assert len(mask.shape)==2, f'Expected a 2D mask but got one of shape {mask.shape}'
+            
+            # Get the unique classes and their pixel counts
+            unique_classes, counts = np.unique(mask, return_counts=True)  # Read are the img indices (single channel)
+            
+            # Relative frequency (per mask)
+            freqs_per_im = counts / (mask.shape[0]*mask.shape[1])
+            
+            # Save file index to classes 
+            for class_i, count_i in zip(unique_classes, counts):
+                if count_i>self.rcs_min_pixels:
+                    self.file_indexes_containing_classes[class_i].append(idx)
+            
+            for i, class_i in enumerate(unique_classes):
+                assert freqs_per_im[i]<=1. and freqs_per_im[i]>=0., f'Class{i} freq is invlaid {freqs_per_im[i]}'
+                self.class_freqs[class_i] += freqs_per_im[i]
+            
+        # Mean over the dataset
+        self.class_freqs /= self.nb_slice_tot
+        
+        # proba of the associated classes computed via RCS
+        freq = torch.tensor(self.class_freqs, dtype=torch.float32)
+        # freq = freq / torch.sum(freq)  # TODO ASK WHY
+        freq = 1 - freq
+        self.rcs_classprob = torch.softmax(freq / self.rcs_class_temp, dim=-1).cpu().numpy()
+
+
+class SegmentationDataset(SegDatasetRcsBase):
     def __init__(self, img_dir, mask_dir, num_classes, 
                  file_extension=None, mask_suffix='',
                  augmentations=None, images=None,
                  dtype=torch.float32,
                  ret_n_z:bool=True,
-                 nz=None, rcs_enabled:bool=False, 
-                 *args, **kwargs):
-        super(Dataset).__init__(*args, **kwargs)
+                 nz=None, rcs_enabled:bool=False):
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled)
         
         if isinstance(img_dir, Path):
             img_dir = str(img_dir)
@@ -106,10 +176,8 @@ class SegmentationDataset(Dataset):
         
         self.img_dir = img_dir
         self.mask_dir = mask_dir
-        self.num_classes = num_classes
         self.mask_suffix = mask_suffix
         self.dtype = dtype
-        self.rcs_enabled = rcs_enabled
         
         if nz is not None:
             assert nz>0
@@ -148,67 +216,13 @@ class SegmentationDataset(Dataset):
             self.images = images
             
         if self.rcs_enabled:
-            
             self.init_rcs()
     
-    
-    def init_rcs(self):
-        # An image should contain at least this many pixels from a class to be considered as it has that class 
-        self.rcs_min_pixels = 25
+    def get_mask(self, idx):
+        mask_path = os.path.join(self.mask_dir, 
+                                 self.images[idx].split(".")[0] + self.mask_suffix +'.'+ self.images[idx].split(".")[-1])
+        return np.array(Image.open(mask_path))
         
-        # smoothing of RCS proba dist - higher T = more uniform distribution, lower T = stronger focus on rare classes 
-        self.rcs_class_temp = 0.01
-        #############################################################
-        
-        # array of contained classes e.g. [0, 1, 2, ...]
-        self.rcs_classes = list(range(self.num_classes))
-        
-        # list storing sample idxs containing each class
-        self.file_indexes_containing_classes = [list()]*self.num_classes 
-        
-        # Relative frequency of classes (i.e. number of pixels with class c)
-        self.class_freqs = np.zeros(self.num_classes, dtype=np.float32)
-            
-        for idx, im in enumerate(self.images):
-            mask_path = os.path.join(self.mask_dir, 
-                                     im.split(".")[0] + self.mask_suffix +'.'+ im.split(".")[-1])
-            mask = np.array(Image.open(mask_path))
-            assert len(mask.shape)==2, f'Expected a 2D mask but got one of shape {mask.shape}'
-            
-            # Get the unique classes and their pixel counts
-            unique_classes, counts = np.unique(mask, return_counts=True)  # Read are the img indices (single channel)
-            
-            # Relative frequency (per mask)
-            freqs_per_im = counts / (mask.shape[0]*mask.shape[1])
-            
-            # Save file index to classes 
-            for class_i, count_i in zip(unique_classes, counts):
-                if count_i>self.rcs_min_pixels:
-                    self.file_indexes_containing_classes[class_i].append(idx)
-            
-            for i, class_i in enumerate(unique_classes):
-                assert freqs_per_im[i]<=1. and freqs_per_im[i]>=0., f'Class{i} freq is invlaid {freqs_per_im[i]}'
-                self.class_freqs[class_i] += freqs_per_im[i]
-            
-        # Mean over the dataset
-        self.class_freqs /= len(self.images)
-        
-        # proba of the associated classes computed via RCS
-        freq = torch.tensor(self.class_freqs, dtype=torch.float32)
-        # freq = freq / torch.sum(freq)  # TODO ASK WHY
-        freq = 1 - freq
-        self.rcs_classprob = torch.softmax(freq / self.rcs_class_temp, dim=-1)
-        
-        
-            
-    def get_rare_class_idx(self):
-        # Choose a random class following the RCS probability distributtion
-        c = np.random.choice(self.rcs_classes, p=self.rcs_classprob)
-        # Choose a random sample (uniform dist) index correspomding to that class
-        idx = np.random.choice(self.file_indexes_containing_classes[c])
-        return idx
-        
-
     def __len__(self):
         return len(self.images)
 
@@ -238,20 +252,18 @@ class SegmentationDataset(Dataset):
 
 #################################################################################################
 
-class SegmentationDatasetHDF5(Dataset):
+class SegmentationDatasetHDF5(SegDatasetRcsBase):
     def __init__(self, file_pth, num_classes, 
                  augmentations=None,
                  dtype=torch.float32,
                  ret_n_xyz:bool=True,
-                 rcs_enabled:bool=False,
-                 *args, **kwargs):
-        super(Dataset).__init__(*args, **kwargs)
+                 rcs_enabled:bool=False):
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled)
         
         if isinstance(file_pth, Path):
             file_pth = str(file_pth)
         
         self.file_pth = file_pth
-        self.num_classes = num_classes
         self.dtype = dtype
         self.ret_n_xyz = ret_n_xyz
         
@@ -281,74 +293,20 @@ class SegmentationDatasetHDF5(Dataset):
             self.nb_slice_tot = f['nz'][:].sum().astype('int32')
             assert self.nb_slice_tot == self.nb_slices_until[-1]
             
-        self.rcs_enabled = rcs_enabled
         if self.rcs_enabled:
             self.init_rcs()
     
-    def init_rcs(self):
-        # An image should contain at least this many pixels from a class to be considered as it has that class 
-        self.rcs_min_pixels = 25
-        
-        # smoothing of RCS proba dist - higher T = more uniform distribution, lower T = stronger focus on rare classes 
-        self.rcs_class_temp = 0.01
-        #############################################################
-        
-        # array of contained classes e.g. [0, 1, 2, ...]
-        self.rcs_classes = list(range(self.num_classes))
-        
-        # list storing sample idxs containing each class
-        self.file_indexes_containing_classes = [list()]*self.num_classes 
-        
-        # Relative frequency of classes (i.e. number of pixels with class c)
-        self.class_freqs = np.zeros(self.num_classes, dtype=np.float32)
-            
-        for idx in range(self.nb_slice_tot):
-        
-            with h5py.File(self.file_pth, 'r') as f:
-                if len(f['labels'].shape) == 4:
-                    vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
-                    mask = f['labels'][vol_idx, slice_idx].copy().astype('uint8')  
-                                
-                elif len(f['labels'].shape) == 3:
-                    mask = f['labels'][idx].copy().astype('uint8')                    
-                else:
-                    ValueError(f'Unsupported dataset images shape')
-               
-            
-            assert len(mask.shape)==2, f'Expected a 2D mask but got one of shape {mask.shape}'
-            
-            # Get the unique classes and their pixel counts
-            unique_classes, counts = np.unique(mask, return_counts=True)  # Read are the img indices (single channel)
-            
-            # Relative frequency (per mask)
-            freqs_per_im = counts / (mask.shape[0]*mask.shape[1])
-            
-            # Save file index to classes 
-            for class_i, count_i in zip(unique_classes, counts):
-                if count_i>self.rcs_min_pixels:
-                    self.file_indexes_containing_classes[class_i].append(idx)
-            
-            for i, class_i in enumerate(unique_classes):
-                assert freqs_per_im[i]<=1. and freqs_per_im[i]>=0., f'Class{i} freq is invlaid {freqs_per_im[i]}'
-                self.class_freqs[class_i] += freqs_per_im[i]
-            
-        # Mean over the dataset
-        self.class_freqs /= self.nb_slice_tot
-        
-        # proba of the associated classes computed via RCS
-        freq = torch.tensor(self.class_freqs, dtype=torch.float32)
-        # freq = freq / torch.sum(freq)  # TODO ASK WHY
-        freq = 1 - freq
-        self.rcs_classprob = torch.softmax(freq / self.rcs_class_temp, dim=-1).cpu().numpy()
-        print()
-            
-            
-    def get_rare_class_idx(self):
-        # Choose a random class following the RCS probability distributtion
-        c = np.random.choice(self.rcs_classes, p=self.rcs_classprob)
-        # Choose a random sample (uniform dist) index correspomding to that class
-        idx = np.random.choice(self.file_indexes_containing_classes[c])
-        return idx    
+    def get_mask(self, idx):
+        with h5py.File(self.file_pth, 'r') as f:
+            if len(f['labels'].shape) == 4:
+                vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
+                mask = f['labels'][vol_idx, slice_idx].copy().astype('uint8')  
+                            
+            elif len(f['labels'].shape) == 3:
+                mask = f['labels'][idx].copy().astype('uint8')                    
+            else:
+                ValueError(f'Unsupported dataset images shape')
+        return mask
 
     def __len__(self):
         return self.nb_slice_tot
