@@ -14,12 +14,13 @@ class ModelType(Enum):
     SEGMENTOR=1
     UNET=2
 
-def get_data_attrs(name:str, use_hdf5=None):
+def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
     attrs = {}
+    attrs['name'] = name
+    attrs['rcs_enabled'] = rcs_enabled
         
     # Brain - HCP1
     if name=='hcp1':
-        attrs['name'] = name
         attrs['available_formats'] = ["png", "hdf5"]
         if use_hdf5 is None:
             use_hdf5 = 'hdf5' in attrs['available_formats']
@@ -46,7 +47,6 @@ def get_data_attrs(name:str, use_hdf5=None):
     
     # Brain - HCP2    
     elif name=='hcp2':
-        attrs['name'] = name
         attrs['available_formats'] = ["png", "hdf5"]
         if use_hdf5 is None:
             use_hdf5 = 'hdf5' in attrs['available_formats']
@@ -73,7 +73,6 @@ def get_data_attrs(name:str, use_hdf5=None):
     
     # Brain - Abide-Caltech    
     elif name=='abide_caltech':
-        attrs['name'] = name
         attrs['available_formats'] = ["png", "hdf5"]
         if use_hdf5 is None:
             use_hdf5 = 'hdf5' in attrs['available_formats']
@@ -100,7 +99,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         attrs['weight'] = weight
         
     elif name=='abide_stanford':
-        attrs['name'] = name
         attrs['available_formats'] = ["png", "hdf5"]
         if use_hdf5 is None:
             use_hdf5 = 'hdf5' in attrs['available_formats']
@@ -135,7 +133,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
-        attrs['name'] = name
         attrs['num_classses'] = 3
         attrs['vol_depth_first'] = 15  # First val volume depth NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
@@ -164,7 +161,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
-        attrs['name'] = name
         attrs['data_path_suffix'] = 'prostate/pirad_erc'
         attrs['num_classses'] = 3
         attrs['vol_depth_first'] = 22  # First val volume depth  NOT ALL THE SAME !
@@ -195,7 +191,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
-        attrs['name'] = name
         attrs['data_path_suffix'] = 'cardiac/acdc'
         attrs['num_classses'] = 4
         attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
@@ -225,7 +220,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
-        attrs['name'] = name
         attrs['data_path_suffix'] = 'cardiac/rvsc'
         attrs['num_classses'] = 3
         attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
@@ -255,7 +249,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         if use_hdf5:
             ValueError(f'HDF5 format is not supported for {name}')
             
-        attrs['name'] = name
         attrs['data_path_suffix'] = 'lumbarspine/MRSpineSegV'
         attrs['num_classses'] = 6
         attrs['vol_depth'] = 12  
@@ -286,7 +279,6 @@ def get_data_attrs(name:str, use_hdf5=None):
         if use_hdf5:
             ValueError(f'HDF5 format is not supported for {name}')
             
-        attrs['name'] = name
         attrs['data_path_suffix'] = 'lumbarspine/VerSe'
         attrs['num_classses'] = 6
         attrs['vol_depth'] = 120  
@@ -814,6 +806,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
     data_path_suffix = data_attr['data_path_suffix']
     dataset = data_attr['name']
     num_classses = data_attr['num_classses']
+    rcs_enabled = data_attr['rcs_enabled']
     
     data_root_pth = data_root_pth / data_path_suffix
 
@@ -828,7 +821,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                             mask_suffix='_labelTrainIds',
                                             augmentations=train_procs,
                                             nz=nz,
-                                            ret_n_z=False)
+                                            ret_n_z=False, rcs_enabled=rcs_enabled)
         val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                         mask_dir=data_root_pth/'labels/val',
                                         num_classes=num_classses,
@@ -836,7 +829,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                         mask_suffix='_labelTrainIds',
                                         augmentations=val_test_procs,
                                         nz=nz,
-                                        ret_n_z=True)
+                                        ret_n_z=True, rcs_enabled=False)
         test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                         mask_dir=data_root_pth/'labels/test',
                                         num_classes=num_classses,
@@ -844,7 +837,8 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                         mask_suffix='_labelTrainIds',
                                         augmentations=val_test_procs,
                                         nz=nz,
-                                        ret_n_z=True)
+                                        ret_n_z=True,
+                                        rcs_enabled=False)
         
     elif data_attr['format']=='hdf5':
         hdf5_train_name = data_attr['hdf5_train_name']
@@ -854,7 +848,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                                 num_classes=num_classses, 
                                                 augmentations=train_procs,
-                                                ret_n_xyz=False, rcs_enabled=False)
+                                                ret_n_xyz=False, rcs_enabled=rcs_enabled)
         val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
                                                 num_classes=num_classses, 
                                                 augmentations=val_test_procs,

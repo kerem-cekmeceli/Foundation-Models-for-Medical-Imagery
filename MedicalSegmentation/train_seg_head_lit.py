@@ -61,9 +61,9 @@ from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freq
 # # No weights - random initialization
 # mdl = get_model(**cfg)
 
-cluster_paths = True
+cluster_paths = False
 save_checkpoints = True
-log_the_run = True
+log_the_run = False
 
 # Select model type
 model_type = ModelType.SEGMENTOR
@@ -84,6 +84,7 @@ if model_type == ModelType.SEGMENTOR:
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
 dataset = 'hcp1' 
+rcs_enabled = True
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
@@ -161,7 +162,7 @@ seed_everything(seed, workers=True)
 batch_sz = batch_sz // gpus  if strategy == 'ddp' else batch_sz
 
 # Data attributes
-dataset_attrs = get_data_attrs(name=dataset, use_hdf5=None)
+dataset_attrs = get_data_attrs(name=dataset, use_hdf5=None, rcs_enabled=rcs_enabled)
 
 # Init the segmentor model
 if model_type == ModelType.SEGMENTOR:

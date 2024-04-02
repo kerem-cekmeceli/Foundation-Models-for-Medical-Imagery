@@ -130,10 +130,8 @@ def get_class_rel_freqs(dataset):
     total_pixels = 0
     
     for idx in range(len(dataset)):
-        if dataset.ret_n_xyz:
-            _, mask, _ = dataset[idx]
-        else:
-             _, mask = dataset[idx]
+        tup = dataset[idx]
+        mask = tup[1]
         
         class_counts += np.bincount(mask.flatten(), minlength=dataset.num_classes)  # Update class counts
         total_pixels += mask.flatten().size()[0]  # Update total pixels
