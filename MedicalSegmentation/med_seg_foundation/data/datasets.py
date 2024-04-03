@@ -150,7 +150,7 @@ class SegDatasetRcsBase(Dataset):
                 self.class_freqs[class_i] += freqs_per_im[i]
             
         # Mean over the dataset
-        self.class_freqs /= self.nb_slice_tot
+        self.class_freqs /= self.__len__()
         
         # proba of the associated classes computed via RCS
         freq = torch.tensor(self.class_freqs, dtype=torch.float32)
