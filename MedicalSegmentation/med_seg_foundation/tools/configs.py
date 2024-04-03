@@ -711,7 +711,7 @@ def get_lr(model_type, **kwargs):
         train_bb=kwargs['train_backbone']
         dec_name=kwargs['dec_head_key']
         if bb_name=='dino':
-            return 1e-5
+            return 2e-5
         else:
             return 0.5e-4 
     elif model_type==ModelType.UNET:
