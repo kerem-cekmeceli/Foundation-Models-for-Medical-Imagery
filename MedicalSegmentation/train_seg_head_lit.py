@@ -95,7 +95,7 @@ if cluster_paths:
 else:
     nb_epochs=150
     if model_type==ModelType.SEGMENTOR:
-        if backbone_sz!="small":
+        if backbone in ["sam", "medsam"]:
             if dataset in ['hcp1', 'hcp2']:
                 nb_epochs=120
             
