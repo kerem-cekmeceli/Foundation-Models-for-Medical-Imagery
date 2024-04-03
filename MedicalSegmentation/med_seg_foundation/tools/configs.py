@@ -713,9 +713,9 @@ def get_lr(model_type, **kwargs):
         if bb_name=='dino':
             return 2e-5
         else:
-            return 0.5e-4 
+            return 5e-5 
     elif model_type==ModelType.UNET:
-        return 0.5e-4 
+        return 5e-5 
     else:
         ValueError(f'Unknown model type {model_type}')
 

@@ -83,16 +83,22 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'spine_verse' 
-rcs_enabled = False
+dataset = 'abide_caltech' 
+rcs_enabled = True
 
 # Select loss
 loss_cfg_key = 'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
-nb_epochs = 150 if cluster_paths else 2
-
-
+if cluster_paths:
+    nb_epochs = 2
+else:
+    nb_epochs=150
+    if model_type==ModelType.SEGMENTOR:
+        if backbone_sz!="small":
+            if dataset in ['hcp1', 'hcp2']:
+                nb_epochs=120
+            
 # Config the batch size and lr for training
 batch_sz = 4#8 
 # lr = 0.5e-4 
