@@ -130,7 +130,7 @@ class SegDatasetRcsBase(Dataset):
         # Relative frequency of classes (i.e. number of pixels with class c)
         self.class_freqs = np.zeros(self.num_classes, dtype=np.float32)
             
-        for idx in range(self.nb_slice_tot):
+        for idx in range(self.__len__()):
             mask = self.get_mask(idx) 
             assert len(mask.shape)==2, f'Expected a 2D mask but got one of shape {mask.shape}'
             
