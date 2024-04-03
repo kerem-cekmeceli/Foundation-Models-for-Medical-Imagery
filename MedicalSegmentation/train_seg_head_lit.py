@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'abide_caltech' 
+dataset = 'prostate_usz' 
 rcs_enabled = True
 
 # Select loss
