@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'prostate_nci'  
+dataset = 'spine_mrspinesegv'  
 rcs_enabled = True
 
 # Select loss
