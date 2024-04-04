@@ -70,7 +70,7 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, sam, medsam, resnet
+    backbone = 'dino'  # dino, sam, medsam, resnet
     train_backbone = True
     backbone_sz = "base" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
     
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'spine_verse'  
+dataset = 'abide_stanford'  
 rcs_enabled = True
 
 # Select loss
@@ -98,6 +98,8 @@ else:
         if backbone in ["sam", "medsam"]:
             if dataset in ['hcp1', 'hcp2']:
                 nb_epochs=120
+            elif dataset in ['spine_verse']:
+                nb_epochs=50
             
 # Config the batch size and lr for training
 batch_sz = 4#8 
