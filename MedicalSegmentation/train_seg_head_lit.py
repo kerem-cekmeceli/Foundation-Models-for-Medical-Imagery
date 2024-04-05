@@ -100,6 +100,12 @@ else:
                 nb_epochs=120
             elif dataset in ['spine_verse']:
                 nb_epochs=50
+        else:
+            if dataset in ['spine_verse']:
+                if backbone_sz != 'small':
+                    nb_epochs=90
+                else:
+                    nb_epochs=100
             
 # Config the batch size and lr for training
 batch_sz = 4#8 
