@@ -99,7 +99,10 @@ else:
             if dataset in ['hcp1', 'hcp2']:
                 nb_epochs=120
             elif dataset in ['spine_verse']:
-                nb_epochs=50
+                if backbone=="sam":
+                    nb_epochs=50
+                else:
+                    nb_epochs=85
         else:
             if dataset in ['spine_verse']:
                 if backbone_sz != 'small':
