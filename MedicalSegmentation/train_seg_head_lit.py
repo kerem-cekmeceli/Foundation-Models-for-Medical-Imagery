@@ -66,11 +66,11 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.UNET
+model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'medsam'  # dino, sam, medsam, resnet
+    backbone = 'sam'  # dino, sam, medsam, resnet
     train_backbone = True
     backbone_sz = "small" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
     
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'hcp2'  
+dataset = 'hcp1'  
 rcs_enabled = True
 
 # Select loss
