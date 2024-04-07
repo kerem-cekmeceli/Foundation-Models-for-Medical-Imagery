@@ -710,7 +710,10 @@ def get_lr(model_type, **kwargs):
         bb_size=kwargs['backbone_sz'] 
         train_bb=kwargs['train_backbone']
         dec_name=kwargs['dec_head_key']
+        dataset_attrs = kwargs['dataset_attrs']
         if bb_name=='dino':
+            if dataset_attrs['name']=='spine_verse':
+                return 1e-5
             return 2e-5
         else:
             return 5e-5 
@@ -725,6 +728,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
 
     
     if model_type==ModelType.SEGMENTOR:
+        kwargs['dataset_attrs'] = dataset_attrs
         lr = get_lr(model_type=model_type, **kwargs)
         
         # Backbone config
