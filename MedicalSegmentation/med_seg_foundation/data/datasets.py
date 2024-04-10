@@ -115,10 +115,10 @@ class SegDatasetRcsBase(Dataset):
     def init_rcs(self):
         assert self.rcs_enabled, 'RCS flag should be enabled !'
         # An image should contain at least this many pixels from a class to be considered as it has that class 
-        self.rcs_min_pixels = 30
+        self.rcs_min_pixels = 4
         
         # smoothing of RCS proba dist - higher T = more uniform distribution, lower T = stronger focus on rare classes 
-        self.rcs_class_temp = 0.01
+        self.rcs_class_temp = 0.1
         #############################################################
         
         # array of contained classes e.g. [0, 1, 2, ...]
@@ -154,7 +154,7 @@ class SegDatasetRcsBase(Dataset):
         
         # proba of the associated classes computed via RCS
         freq = torch.tensor(self.class_freqs, dtype=torch.float32)
-        # freq = freq / torch.sum(freq)  # TODO ASK WHY
+        freq = freq / torch.sum(freq)  
         freq = 1 - freq
         self.rcs_classprob = torch.softmax(freq / self.rcs_class_temp, dim=-1).cpu().numpy()
 
