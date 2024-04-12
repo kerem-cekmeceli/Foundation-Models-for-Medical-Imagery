@@ -75,7 +75,7 @@ if model_type == ModelType.SEGMENTOR:
     backbone_sz = "base" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
+    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet'
     
 
 # Select dataset
