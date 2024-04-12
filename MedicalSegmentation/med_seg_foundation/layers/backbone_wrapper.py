@@ -313,26 +313,34 @@ class SamBackBone(BackBoneBase):
             
 class ResNetBackBone(BackBoneBase): 
     def __init__(self, 
-                 
                  name,
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
+                 nb_layers:int=50,
+                 skip_last_layer:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
         
+        assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
+        self._nb_layers = nb_layers
+        self._expected_inp_size = 224
         self._hw_shrink_fac = 32
         self._nb_outs=1
+        self._skip_last_layer = skip_last_layer
         
         # Turn off gradient computation for the final FC and avg pooling layers of the resnet model (Required for DDP)
-        for layer in [self.backbone.avgpool, self.backbone.fc]:
+        params_no_train = [self.backbone.avgpool, self.backbone.fc]
+        if self._skip_last_layer:
+            params_no_train.append(self.backbone.layer4)
+        for layer in params_no_train:
             for param in layer.parameters():
                 param.requires_grad = False
         
     
     def _get_bb_from_cfg(self, cfg:dict):
-        cfg = dict(name='resnet50', weights='ResNet50_Weights.IMAGENET1K_V2')
+        cfg = dict(name=f'resnet{self._nb_layers}', weights=f'ResNet{self._nb_layers}_Weights.DEFAULT')
         # No weights - random initialization
         return get_model(**cfg)
         
@@ -345,7 +353,8 @@ class ResNetBackBone(BackBoneBase):
         x = self.backbone.layer1(x)
         x = self.backbone.layer2(x)
         x = self.backbone.layer3(x)
-        x = self.backbone.layer4(x)
+        if not self._skip_last_layer:
+            x = self.backbone.layer4(x)
         return x
     
     @property
@@ -354,7 +363,15 @@ class ResNetBackBone(BackBoneBase):
     
     @property  
     def out_feat_channels(self):
-        return self.backbone.layer4[-1].conv3.out_channels
+        if self._skip_last_layer:
+            last_layer = self.backbone.layer3[-1]
+        else:
+            last_layer = self.backbone.layer4[-1]
+            
+        if self._nb_layers>34:
+            return last_layer.conv3.out_channels
+        else:
+            return last_layer.conv2.out_channels
     
     @property
     def hw_shrink_fac(self):
@@ -364,7 +381,7 @@ class ResNetBackBone(BackBoneBase):
         processing = []
       
         processing.append(dict(type='Resize2',
-                            scale=224, #HW
+                            scale=self._expected_inp_size, #HW
                             keep_ratio=True))
     
         # ImageNet values    
@@ -377,6 +394,36 @@ class ResNetBackBone(BackBoneBase):
         processing.append(dict(type='CentralCrop',  
                                size_divisor=self._hw_shrink_fac))
         return processing
+    
+    
+class LadderBackbone(BackBoneBase):
+    def __init__(self, 
+                 name: str, 
+                 bb_model: Optional[nn.Module] = None, 
+                 cfg: Optional[dict] = None, 
+                 train: bool = False, 
+                 *args: Any, **kwargs: Any) -> None:
+        super().__init__(name, bb_model, cfg, train=train, *args, **kwargs)
+        assert isinstance(self.backbone, BackBoneBase), 'backbone should be an instance of BackBoneBase'
+        
+    @property
+    def hw_shrink_fac(self):
+        return self.backbone.hw_shrink_fac()
+    
+    @property  
+    def out_feat_channels(self):
+        return self.backbone.out_feat_channels()
+    
+    @property
+    def nb_outs(self):
+        return self.backbone.nb_outs()
+    
+    def _get_bb_from_cfg(self, cfg:dict):
+        pass  #@TODO return backbone base class
+        #@TODO assign self.backbone2
+    
+    def forward_backbone(self, x):
+        pass
     
     
 implemented_backbones = [DinoBackBone.__class__.__name__,
