@@ -11,6 +11,7 @@ class ImageEncoderViTFeats(nn.Module):
                  patch_embed:PatchEmbed,
                  pos_embed: Optional[nn.Parameter],
                  blocks:nn.ModuleList,
+                 neck:Optional[nn.Sequential]=None
                  ) -> None:
         super().__init__()
         self.img_size = img_size
@@ -18,6 +19,7 @@ class ImageEncoderViTFeats(nn.Module):
         self.pos_embed = pos_embed
         self.blocks = blocks
         self.n_blocks = len(self.blocks)
+        self.neck=neck
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.patch_embed(x)
@@ -26,16 +28,19 @@ class ImageEncoderViTFeats(nn.Module):
 
         for blk in self.blocks:
             x = blk(x)
+        
+        x = x.permute(0, 3, 1, 2) 
+        
+        if self.neck is not None:
+            x = self.neck(x)
             
-        return x.permute(0, 3, 1, 2)
+        return x
         
     
     def get_intermediate_layers(
         self,
         x: torch.Tensor,
         n: Union[int, Sequence] = 1,  
-        # norm=True,
-        reshape=True,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]]]:
         
         x = self.patch_embed(x)
@@ -48,8 +53,9 @@ class ImageEncoderViTFeats(nn.Module):
         assert max(blocks_to_take)<total_block_len
         for i, blk in enumerate(self.blocks):
             x = blk(x)
+            x =  x.permute(0, 3, 1, 2).contiguous()
             if i in blocks_to_take:
-                output.append(x if not reshape else x.permute(0, 3, 1, 2).contiguous())
+                output.append(x if self.neck is None else self.neck(x))
         # output: [B, C, H, W] C = 1280 ViTH and 256 after the neck (if used)
         assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
         
@@ -59,7 +65,7 @@ class ImageEncoderViTFeats(nn.Module):
         return tuple(output)
     
     
-def get_sam_vit_backbone(bb_size, sam_checkpoint=None):
+def get_sam_vit_backbone(bb_size, sam_checkpoint=None, apply_neck=False):
     if bb_size == 'base':
         model_type = 'vit_b'
     elif bb_size == 'large':
@@ -74,7 +80,8 @@ def get_sam_vit_backbone(bb_size, sam_checkpoint=None):
     bb_model = ImageEncoderViTFeats(img_size=sam.image_encoder.img_size,
                                     patch_embed=sam.image_encoder.patch_embed,
                                     pos_embed=sam.image_encoder.pos_embed,
-                                    blocks=sam.image_encoder.blocks)
+                                    blocks=sam.image_encoder.blocks,
+                                    neck=sam.image_encoder.neck if apply_neck else None)
     return bb_model
                         
     

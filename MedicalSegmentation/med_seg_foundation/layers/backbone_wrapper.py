@@ -11,32 +11,20 @@ from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 from abc import abstractmethod
 from typing import Union, Optional, Tuple, Callable, Any
 
+
 class BackBoneBase(nn.Module):
     def __init__(self, 
                  name:str,
-                 bb_model:Optional[nn.Module]=None,
-                 cfg:Optional[dict]=None,
-                 train: bool = False, 
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(*args, **kwargs)
         
         self.name = name
-        
-        assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
-        
-        # Assign the backbone
-        if cfg is not None:
-            # config is given
-            self.backbone = self._get_bb_from_cfg(cfg)
-        else:
-            # Model is given
-            self.backbone = bb_model
-            
-        self.cfg = cfg
-        self.__train_backbone = None
-        self.__store_trainable_params_n_cfg_bb(train_bb=train)
-        
         self._input_sz_multiple = 1
+        
+    @property  
+    @abstractmethod    
+    def train_backbone(self):
+        pass
         
     @property
     @abstractmethod    
@@ -56,6 +44,43 @@ class BackBoneBase(nn.Module):
     @abstractmethod
     def get_pre_processing_cfg_list():
         pass
+    
+     
+    @property        
+    def input_sz_multiple(self):
+        """Returns the constriaint, nb of pixels that the input must be amultiple of on height and width"""
+        return self._input_sz_multiple
+    
+    @abstractmethod
+    def forward(self, x):
+        pass
+    
+
+class BackBoneBase1(BackBoneBase):
+    def __init__(self, 
+                 name:str,
+                 bb_model:Optional[nn.Module]=None,
+                 cfg:Optional[dict]=None,
+                 train: bool = False, 
+                 *args: torch.Any, **kwargs: torch.Any) -> None:
+        super().__init__(name=name, *args, **kwargs)
+                
+        assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
+        
+        # Assign the backbone
+        if cfg is not None:
+            # config is given
+            self.backbone = self._get_bb_from_cfg(cfg)
+        else:
+            # Model is given
+            self.backbone = bb_model
+            
+        self.cfg = cfg
+        self.__train_backbone = None
+        self.__store_trainable_params_n_cfg_bb(train_bb=train)
+        
+        self._input_sz_multiple = 1
+        
         
     def __store_trainable_params_n_cfg_bb(self, train_bb:bool):
         assert hasattr(self, 'backbone'), 'Must first set a backbone'
@@ -112,10 +137,7 @@ class BackBoneBase(nn.Module):
     def _get_bb_from_cfg(self, cfg:dict):
         pass
     
-    @abstractmethod
-    def get_out_nb_ch(self):
-        pass
-        
+
     def forward(self, x):
         if self.train_backbone:
             return self.forward_backbone(x)
@@ -123,13 +145,9 @@ class BackBoneBase(nn.Module):
             with torch.no_grad():
                 return self.forward_backbone(x)
      
-    @property        
-    def input_sz_multiple(self):
-        """Returns the constriaint, nb of pixels that the input must be amultiple of on height and width"""
-        return self._input_sz_multiple
             
     
-class DinoBackBone(BackBoneBase):
+class DinoBackBone(BackBoneBase1):
     def __init__(self, 
                  nb_outs:int,
                  name:str,
@@ -203,7 +221,7 @@ class DinoBackBone(BackBoneBase):
         return self.backbone.patch_size
         
 
-class SamBackBone(BackBoneBase):
+class SamBackBone(BackBoneBase1):
     def __init__(self, 
                  nb_outs:int,
                  name,
@@ -304,14 +322,18 @@ class SamBackBone(BackBoneBase):
     
     @property  
     def out_feat_channels(self):
-        return self.backbone.patch_embed.proj.out_channels
+        if not self.backbone.neck is None:
+            return self.backbone.patch_embed.proj.out_channels
+        else:
+            return self.backbone.neck[-2].out_channels
+        
     
     @property
     def hw_shrink_fac(self):
         return self.backbone.patch_embed.proj.kernel_size[0]
     
             
-class ResNetBackBone(BackBoneBase): 
+class ResNetBackBone(BackBoneBase1): 
     def __init__(self, 
                  name,
                  bb_model:Optional[nn.Module]=None,
@@ -340,7 +362,7 @@ class ResNetBackBone(BackBoneBase):
         
     
     def _get_bb_from_cfg(self, cfg:dict):
-        cfg = dict(name=f'resnet{self._nb_layers}', weights=f'ResNet{self._nb_layers}_Weights.DEFAULT')
+        # cfg = dict(name=f'resnet{self._nb_layers}', weights=f'ResNet{self._nb_layers}_Weights.DEFAULT')
         # No weights - random initialization
         return get_model(**cfg)
         
@@ -395,16 +417,16 @@ class ResNetBackBone(BackBoneBase):
                                size_divisor=self._hw_shrink_fac))
         return processing
     
+
+
     
 class LadderBackbone(BackBoneBase):
     def __init__(self, 
-                 name: str, 
-                 bb_model: Optional[nn.Module] = None, 
-                 cfg: Optional[dict] = None, 
-                 train: bool = False, 
+                 name: str,
+                  
                  *args: Any, **kwargs: Any) -> None:
-        super().__init__(name, bb_model, cfg, train=train, *args, **kwargs)
-        assert isinstance(self.backbone, BackBoneBase), 'backbone should be an instance of BackBoneBase'
+        super().__init__(name, *args, **kwargs)
+ 
         
     @property
     def hw_shrink_fac(self):
@@ -418,11 +440,42 @@ class LadderBackbone(BackBoneBase):
     def nb_outs(self):
         return self.backbone.nb_outs()
     
-    def _get_bb_from_cfg(self, cfg:dict):
-        pass  #@TODO return backbone base class
-        #@TODO assign self.backbone2
     
-    def forward_backbone(self, x):
+    def forward(self, x):
+        pass
+    
+    @property  
+    @abstractmethod    
+    def train_backbone(self):
+        pass
+        
+    @property
+    @abstractmethod    
+    def hw_shrink_fac(self):
+        pass
+    
+    @property
+    @abstractmethod    
+    def nb_outs(self):
+        pass
+    
+    @property
+    @abstractmethod    
+    def out_feat_channels(self):
+        pass
+    
+    @abstractmethod
+    def get_pre_processing_cfg_list():
+        pass
+    
+     
+    @property        
+    def input_sz_multiple(self):
+        """Returns the constriaint, nb of pixels that the input must be amultiple of on height and width"""
+        return self._input_sz_multiple
+    
+    @abstractmethod
+    def forward(self, x):
         pass
     
     

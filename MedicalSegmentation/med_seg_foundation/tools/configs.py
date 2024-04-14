@@ -375,6 +375,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         else:
             n_out = 4
         last_out_first = True
+        apply_neck = False
         
         if pretrained:
             if bb_name == 'sam':
@@ -401,7 +402,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       name=f'{prefix}sam_enc_vit_{bb_size}',
                       last_out_first=last_out_first,
                       bb_model=None,
-                      cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path),
+                      cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path, apply_neck=apply_neck),
                       train=train_bb,
                       interp_to_inp_shape=True)
         
@@ -419,14 +420,14 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
             ValueError(f'Size is not defined for resnet {bb_size}')
         backbone_name = f'resnet{layers}'    
         
-        weights = f'ResNet{layers}_Weights.IMAGENET1K_V2' if pretrained else None
+        weights = f'ResNet{layers}_Weights.DEFAULT' if pretrained else None
         
         name = ResNetBackBone.__name__
         params = dict(name=backbone_name,
                       bb_model=None,
                       cfg=dict(name=backbone_name, weights=weights),
                       train=train_bb,
-                      )   
+                      nb_layers=layers)   
         
     else:
         ValueError(f'Undefined backbone: {bb_name}')
