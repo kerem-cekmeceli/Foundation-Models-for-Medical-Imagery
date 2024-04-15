@@ -263,11 +263,11 @@ class LitSegmentor(LitBaseModule):
             
         assert len(imgs) % nb_rows == 0
         
-        imgs = make_grid(imgs, nrow=nb_rows, padding=0).permute([1, 2, 0]).flip(-1)
+        imgs = make_grid(imgs, nrow=nb_rows, padding=0).permute([1, 2, 0]).flip(-1) # CHW -> HWC and BGR -> RGB
         masks_pred = make_grid(masks_pred, nrow=nb_rows, padding=0)[0]
         masks_gt = make_grid(masks_gt, nrow=nb_rows, padding=0)[0]
             
-        log_img = wandb.Image(data_or_path=imgs.cpu().numpy(), # CHW -> HWC and BGR -> RGB
+        log_img = wandb.Image(data_or_path=imgs.cpu().numpy(), 
                                 masks={
                                     'predictions': {'mask_data': masks_pred.cpu().numpy(),
                                                     },

@@ -5,7 +5,7 @@ import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone
+from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderResNetBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
@@ -367,7 +367,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb_model=None,
                       cfg=dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path),
                       train=train_bb,
-                      disable_mask_tokens=True)
+                      disable_mask_tokens=True,
+                      pre_normalize=False)
         
     elif bb_name == 'sam' or bb_name == 'medsam':
         if dec_name=='unet':
@@ -404,7 +405,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb_model=None,
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path, apply_neck=apply_neck),
                       train=train_bb,
-                      interp_to_inp_shape=True)
+                      interp_to_inp_shape=True,
+                      pre_normalize=False)
         
     elif bb_name == 'resnet':
         if dec_name=='unet':
@@ -427,7 +429,26 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb_model=None,
                       cfg=dict(name=backbone_name, weights=weights),
                       train=train_bb,
-                      nb_layers=layers)   
+                      nb_layers=layers,
+                      pre_normalize=False)   
+        
+    elif 'ladder' in bb_name:
+        name = LadderResNetBackbone.__name__
+        
+        bb1_name_params = get_bb_cfg(bb_name=bb_name.split('_')[-1], 
+                                     bb_size=bb_size, 
+                                     train_bb=False, 
+                                     dec_name=dec_name, 
+                                     main_pth=main_pth, 
+                                     pretrained=pretrained)
+        
+        bb1_name_params['params']['nb_outs'] = 1
+        params = dict(name=bb_name,
+                      bb1_name_params=bb1_name_params,
+                      resnet_layers=18,
+                      train_bb2=train_bb)
+        
+        
         
     else:
         ValueError(f'Undefined backbone: {bb_name}')
@@ -713,7 +734,7 @@ def get_lr(model_type, **kwargs):
         dec_name=kwargs['dec_head_key']
         dataset_attrs = kwargs['dataset_attrs']
         if bb_name=='dino':
-            if dataset_attrs['name']=='spine_verse':
+            if dataset_attrs['name'] in ['spine_verse', 'hcp1']:
                 return 1e-5
             return 2e-5
         else:
@@ -736,6 +757,8 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
         bb_cfg = get_bb_cfg(bb_name=kwargs['backbone'], bb_size=kwargs['backbone_sz'], train_bb=kwargs['train_backbone'], 
                             dec_name=kwargs['dec_head_key'], main_pth=kwargs['main_pth'], pretrained=True)
         # Decoder config
+        if kwargs['backbone']=='resnet':
+            assert kwargs['dec_head_key'] != 'unet'
         dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs)
         
         segmentor_cfg = dict(name=Segmentor.__name__,

@@ -10,6 +10,7 @@ from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from abc import abstractmethod
 from typing import Union, Optional, Tuple, Callable, Any
+from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 
 
 class BackBoneBase(nn.Module):
@@ -24,6 +25,11 @@ class BackBoneBase(nn.Module):
     @property  
     @abstractmethod    
     def train_backbone(self):
+        pass
+    
+    @train_backbone.setter  
+    @abstractmethod 
+    def train_backbone(self, val):
         pass
         
     @property
@@ -44,7 +50,6 @@ class BackBoneBase(nn.Module):
     @abstractmethod
     def get_pre_processing_cfg_list():
         pass
-    
      
     @property        
     def input_sz_multiple(self):
@@ -54,7 +59,7 @@ class BackBoneBase(nn.Module):
     @abstractmethod
     def forward(self, x):
         pass
-    
+
 
 class BackBoneBase1(BackBoneBase):
     def __init__(self, 
@@ -62,6 +67,9 @@ class BackBoneBase1(BackBoneBase):
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
+                 pre_normalize:bool=False,
+                 pix_mean:Optional[list]=None,
+                 pix_std:Optional[list]=None,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, *args, **kwargs)
                 
@@ -81,6 +89,27 @@ class BackBoneBase1(BackBoneBase):
         
         self._input_sz_multiple = 1
         
+        self.pre_normalize = pre_normalize
+        if not pre_normalize:
+            assert pix_mean is not None
+            assert pix_std is not None
+            self.register_buffer("pixel_mean", torch.Tensor(pix_mean).view(-1, 1, 1), False)
+            self.register_buffer("pixel_std", torch.Tensor(pix_std).view(-1, 1, 1), False)
+        else:
+            self.pixel_mean = pix_mean
+            self.pixel_std = pix_std
+            
+    def _norm(self, x):
+        # [B, C, H, W]
+        
+        # Order BGR -> RGB
+        x = torch.flip(x, dims=[1])
+        
+        # Normalize colors
+        x = (x - self.pixel_mean) / self.pixel_std
+        
+        return x
+            
         
     def __store_trainable_params_n_cfg_bb(self, train_bb:bool):
         assert hasattr(self, 'backbone'), 'Must first set a backbone'
@@ -139,6 +168,9 @@ class BackBoneBase1(BackBoneBase):
     
 
     def forward(self, x):
+        if not self.pre_normalize:
+            x = self._norm(x)
+            
         if self.train_backbone:
             return self.forward_backbone(x)
         else:
@@ -156,8 +188,10 @@ class DinoBackBone(BackBoneBase1):
                  cfg:Optional[dict]=None,
                  train: bool = False, 
                  disable_mask_tokens=True,
+                 pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
-        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
+        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
@@ -175,24 +209,25 @@ class DinoBackBone(BackBoneBase1):
     def get_pre_processing_cfg_list(self, central_crop=True):
         processing = []
         
-        img_scale_fac = 1  # Keep at 1 
-        if img_scale_fac != 1:
-            processing.append(dict(type='Resize2',
-                                scale_factor=float(img_scale_fac), #HW
-                                keep_ratio=True))
+        # img_scale_fac = 1  # Keep at 1 
+        # if img_scale_fac != 1:
+        #     processing.append(dict(type='Resize2',
+        #                         scale_factor=float(img_scale_fac), #HW
+        #                         keep_ratio=True))
         
-        # ImageNet values      
-        processing.append(dict(type='Normalize', 
-                               mean=[123.675, 116.28, 103.53],  #RGB
-                               std=[58.395, 57.12, 57.375],  #RGB
-                               to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        if self.pre_normalize:
+            # ImageNet values      
+            processing.append(dict(type='Normalize', 
+                                mean=self.pixel_mean,  #RGB
+                                std=self.pixel_std,  #RGB
+                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
         
         if central_crop:
             processing.append(dict(type='CentralCrop',  
-                                    size_divisor=self.backbone.patch_size))
+                                    size_divisor=self.hw_shrink_fac))
         else:
             processing.append(dict(type='CentralPad',  
-                                    size_divisor=self.backbone.patch_size,
+                                    size_divisor=self.hw_shrink_fac,
                                     pad_val=0, seg_pad_val=0))
             
         return processing
@@ -230,9 +265,11 @@ class SamBackBone(BackBoneBase1):
                  cfg:Optional[dict]=None,
                  train: bool = False, 
                  interp_to_inp_shape:bool=True,
+                 pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
-        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
+        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
@@ -283,11 +320,12 @@ class SamBackBone(BackBoneBase1):
             processing.append(dict(type='ResizeLongestSide',
                                 long_side_length=self.backbone.img_size))
         
-        # ImageNet values  
-        processing.append(dict(type='Normalize', 
-                               mean=[123.675, 116.28, 103.53],  #RGB
-                               std=[58.395, 57.12, 57.375],  #RGB
-                               to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        if self.pre_normalize:
+            # ImageNet values      
+            processing.append(dict(type='Normalize', 
+                                mean=self.pixel_mean,  #RGB
+                                std=self.pixel_std,  #RGB
+                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
         
         #  Pad to a square input
         processing.append(dict(type='CentralPad',  
@@ -341,14 +379,16 @@ class ResNetBackBone(BackBoneBase1):
                  train: bool = False, 
                  nb_layers:int=50,
                  skip_last_layer:bool=False,
+                 pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
-        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, *args, **kwargs)
+        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], *args, **kwargs)
         
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers
         self._expected_inp_size = 224
-        self._hw_shrink_fac = 32
+        self._hw_shrink_fac = 32 if not skip_last_layer else 16
         self._nb_outs=1
         self._skip_last_layer = skip_last_layer
         
@@ -377,7 +417,7 @@ class ResNetBackBone(BackBoneBase1):
         x = self.backbone.layer3(x)
         if not self._skip_last_layer:
             x = self.backbone.layer4(x)
-        return x
+        return (x,)
     
     @property
     def nb_outs(self):
@@ -401,85 +441,161 @@ class ResNetBackBone(BackBoneBase1):
     
     def get_pre_processing_cfg_list(self):
         processing = []
+        
+        #  Crop to a square input
+        processing.append(dict(type='CentralCrop',  
+                               size_divisor=self._hw_shrink_fac))
       
         processing.append(dict(type='Resize2',
                             scale=self._expected_inp_size, #HW
                             keep_ratio=True))
     
-        # ImageNet values    
-        processing.append(dict(type='Normalize', 
-                               mean=[123.675, 116.28, 103.53],  #RGB
-                               std=[58.395, 57.12, 57.375],  #RGB
-                               to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        if self.pre_normalize:
+            # ImageNet values      
+            processing.append(dict(type='Normalize', 
+                                mean=self.pixel_mean,  #RGB
+                                std=self.pixel_std,  #RGB
+                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
         
-        #  Pad to a square input
-        processing.append(dict(type='CentralCrop',  
-                               size_divisor=self._hw_shrink_fac))
         return processing
     
-
-
     
 class LadderBackbone(BackBoneBase):
     def __init__(self, 
                  name: str,
-                  
+                 bb1_name_params:dict, 
+                 bb2_name_params:dict, 
+                 train_bb2:bool=False,
                  *args: Any, **kwargs: Any) -> None:
         super().__init__(name, *args, **kwargs)
- 
         
+        bb1_name = bb1_name_params['name']
+        bb1_params = bb1_name_params['params']
+        self.bb1 = globals()[bb1_name](**bb1_params)
+        assert isinstance(self.bb1, BackBoneBase)
+        
+        bb2_name = bb2_name_params['name']
+        bb2_params = bb2_name_params['params']
+        self.bb2 = globals()[bb2_name](**bb2_params)
+        assert isinstance(self.bb2, BackBoneBase)
+        self.bb2.train_backbone = train_bb2
+
+        
+        assert self.bb1.nb_outs == self.bb2.nb_outs
+        assert self.bb2.train_backbone
+        
+        self._input_sz_multiple = self.bb1.input_sz_multiple
+        
+        if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
+            self.neck = nn.Sequential(
+                            nn.Conv2d(
+                                self.bb1.out_feat_channels,
+                                self.bb2.out_feat_channels,
+                                kernel_size=1,
+                                bias=False,
+                            ),
+                            LayerNorm2d(self.bb2.out_feat_channels),
+                            nn.Conv2d(
+                                self.bb2.out_feat_channels,
+                                self.bb2.out_feat_channels,
+                                kernel_size=3,
+                                padding=1,
+                                bias=False,
+                            ),
+                            LayerNorm2d(self.bb2.out_feat_channels),
+                        )
+        else:
+            self.neck = None
+            
+        self.alpha = nn.Parameter(torch.zeros(self.bb1.nb_outs))
+        self.Sigmoid = nn.Sigmoid()
+ 
     @property
     def hw_shrink_fac(self):
-        return self.backbone.hw_shrink_fac()
+        return self.bb1.hw_shrink_fac
     
     @property  
     def out_feat_channels(self):
-        return self.backbone.out_feat_channels()
+        return self.bb2.out_feat_channels
     
     @property
     def nb_outs(self):
-        return self.backbone.nb_outs()
-    
-    
-    def forward(self, x):
-        pass
+        return self.bb1.nb_outs
     
     @property  
     @abstractmethod    
     def train_backbone(self):
-        pass
-        
-    @property
-    @abstractmethod    
-    def hw_shrink_fac(self):
-        pass
+        return self.bb1.train_backbone
     
-    @property
-    @abstractmethod    
-    def nb_outs(self):
-        pass
+    @train_backbone.setter  
+    @abstractmethod 
+    def train_backbone(self, val):
+        self.bb1.train_backbone = val
     
-    @property
-    @abstractmethod    
-    def out_feat_channels(self):
-        pass
     
-    @abstractmethod
-    def get_pre_processing_cfg_list():
-        pass
+    def get_pre_processing_cfg_list(self):
+        return self.bb2.get_pre_processing_cfg_list()
     
-     
-    @property        
-    def input_sz_multiple(self):
-        """Returns the constriaint, nb of pixels that the input must be amultiple of on height and width"""
-        return self._input_sz_multiple
+    def check_size(self, x):
+        assert x.shape[-2]%self.bb2.hw_shrink_fac==0, 'bb2, H is not evenly divisible'
+        assert x.shape[-2]%self.bb1.hw_shrink_fac==0, 'bb1, H is not evenly divisible'
+        assert x.shape[-1]%self.bb2.hw_shrink_fac==0, 'bb2, W is not evenly divisible'
+        assert x.shape[-1]%self.bb1.hw_shrink_fac==0, 'bb1, W is not evenly divisible'
     
-    @abstractmethod
     def forward(self, x):
-        pass
+        self.check_size(x)
+        
+        y1s = self.bb1(x)
+        y2s = self.bb2(x)
+        
+        assert len(y1s)==len(y2s)==self.alpha.shape[0]
+        
+        y1s = list(y1s)
+        y2s = list(y2s)
+        
+        for y1, y2, a in zip(y1s, y2s, self.alpha):        
+            if self.neck is not None:
+                y1 = self.neck(y1)
+            
+            if y1.shape[-2:] != y2.shape[-2:]:
+                up = y1.shape[-2] > y2.shape[-2] and y1.shape[-1] > y2.shape[-1]
+                # Interpolate to get pixel logits frmo patch logits
+                y2 = resize(input=y2,
+                            size=y1.shape[-2:],
+                            mode="bilinear" if up >= 1 else "area",
+                            align_corners=False if up else None)
+            
+            gate = self.Sigmoid(a)
+            
+            y = gate * y1 + (1-gate) * y2
+        return y 
+    
+    
+class LadderResNetBackbone(LadderBackbone):
+    def __init__(self, 
+                 name: str, 
+                 bb1_name_params: dict, 
+                 resnet_layers:int=18, 
+                 train_bb2: bool = False, 
+                 *args: Any, **kwargs: Any) -> None:
+        
+        backbone_name = f'resnet{resnet_layers}' 
+        bb2_name_params = dict(name=ResNetBackBone.__name__,
+                               params=dict(name=backbone_name,
+                                           bb_model=None,
+                                           cfg=dict(name=backbone_name, weights=f'ResNet{resnet_layers}_Weights.DEFAULT'),
+                                           train=True,
+                                           nb_layers=resnet_layers,
+                                           skip_last_layer=True,
+                                           pre_normalize=False))
+        super().__init__(name=name, bb1_name_params=bb1_name_params, 
+                         bb2_name_params=bb2_name_params, train_bb2=train_bb2, *args, **kwargs)
+        
     
     
 implemented_backbones = [DinoBackBone.__class__.__name__,
                          SamBackBone.__class__.__name__,
-                         ResNetBackBone.__class__.__name__,]
+                         ResNetBackBone.__class__.__name__,
+                         LadderResNetBackbone.__class__.__name__,]
+        
         

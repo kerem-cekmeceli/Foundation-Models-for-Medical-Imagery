@@ -92,7 +92,9 @@ def rm_from_res_dict(results):
 class SegDatasetRcsBase(Dataset):
     def __init__(self, 
                  num_classes:int,
-                 rcs_enabled:bool=False) -> None:
+                 rcs_enabled:bool=False,
+                 dtype=torch.float32,
+                 augmentations=None) -> None:
         super().__init__()
         
         assert num_classes>0
@@ -100,6 +102,36 @@ class SegDatasetRcsBase(Dataset):
         
         # If to apply rcs or not 
         self.rcs_enabled = rcs_enabled
+        
+        # data ret type
+        self.dtype = dtype
+        
+        # Put the must have transforms
+        transforms = []
+        transforms.append(lambda data : put_in_res_dict(data[0], data[1]))
+        
+        # Data transforms
+        # Put the optional augmentations
+        if augmentations is not None:
+            assert isinstance(augmentations, list)
+            transforms.extend(augmentations)
+                
+        # Put the rest of the mandatory transforms
+        # conv the img keys to torch.Tensor with [HWC] -> [CHW]  |  mmseg/datasets/pipelines/transforms  
+        transforms.append(dict(type='ImageToTensor', keys=['img', 'gt_seg_map']))
+        
+        # Remove the dict and keep the tensor
+        transforms.append(rm_from_res_dict)
+        
+        self.transforms = Compose(transforms)
+                
+                
+    def apply_transform(self, img, msk):
+        [image, mask] = self.transforms([img, msk])
+        image = image.to(self.dtype) # C, H, W
+        mask = mask.squeeze(0).to(torch.int64) #.reshape(image.shape[1:]) # H, W
+        return image, mask
+        
         
     def get_rare_class_idx(self):
         # Choose a random class following the RCS probability distributtion
@@ -166,7 +198,7 @@ class SegmentationDataset(SegDatasetRcsBase):
                  dtype=torch.float32,
                  ret_n_z:bool=True,
                  nz=None, rcs_enabled:bool=False):
-        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled)
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, augmentations=augmentations, dtype=dtype)
         
         if isinstance(img_dir, Path):
             img_dir = str(img_dir)
@@ -177,7 +209,6 @@ class SegmentationDataset(SegDatasetRcsBase):
         self.img_dir = img_dir
         self.mask_dir = mask_dir
         self.mask_suffix = mask_suffix
-        self.dtype = dtype
         
         if nz is not None:
             assert nz>0
@@ -189,23 +220,6 @@ class SegmentationDataset(SegDatasetRcsBase):
         if self.ret_n_z:
             assert self.nz is not None, 'Need to provide the constant vol depth nz'
         
-        # Put the must have transforms
-        transforms = []
-        transforms.append(lambda data : put_in_res_dict(data[0], data[1]))
-        
-        # Put the optional augmentations
-        if augmentations is not None:
-            transforms.extend(augmentations)
-        
-        # Put the rest of the mandatory transforms
-        # conv the img keys to torch.Tensor with [HWC] -> [CHW]  |  mmseg/datasets/pipelines/transforms  
-        transforms.append(dict(type='ImageToTensor', keys=['img', 'gt_seg_map']))
-        
-        # Remove the dict and keep the tensor
-        transforms.append(rm_from_res_dict)
-        
-        # Compose the transforms
-        self.transforms = Compose(transforms)
         
         # Only include images for which a mask is found
         if images is None:
@@ -237,9 +251,7 @@ class SegmentationDataset(SegDatasetRcsBase):
         image = Image.open(img_path).convert("RGB") # H, W, C
         mask = Image.open(mask_path)  # Read are the img indices (single channel)
         
-        [image, mask] = self.transforms([image, mask])
-        image = image.to(self.dtype) # C, H, W
-        mask = mask.squeeze(0).to(torch.int64) #.reshape(image.shape[1:]) # H, W
+        image, mask = self.apply_transform(img=image, msk=mask)
         
         if not self.ret_n_z:
             return image, mask
@@ -258,32 +270,13 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
                  dtype=torch.float32,
                  ret_n_xyz:bool=True,
                  rcs_enabled:bool=False):
-        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled)
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, augmentations=augmentations, dtype=dtype)
         
         if isinstance(file_pth, Path):
             file_pth = str(file_pth)
         
         self.file_pth = file_pth
-        self.dtype = dtype
         self.ret_n_xyz = ret_n_xyz
-        
-        # Put the must have transforms
-        transforms = []
-        transforms.append(lambda data : put_in_res_dict(data[0], data[1]))
-        
-        # Put the optional augmentations
-        if augmentations is not None:
-            transforms.extend(augmentations)
-        
-        # Put the rest of the mandatory transforms
-        # conv the img keys to torch.Tensor with [HWC] -> [CHW]  |  mmseg/datasets/pipelines/transforms  
-        transforms.append(dict(type='ImageToTensor', keys=['img', 'gt_seg_map']))
-        
-        # Remove the dict and keep the tensor
-        transforms.append(rm_from_res_dict)
-        
-        # Compose the transforms
-        self.transforms = Compose(transforms)
         
         # Dataset
         self.dataset = None
@@ -295,6 +288,7 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
             
         if self.rcs_enabled:
             self.init_rcs()
+        
     
     def get_mask(self, idx):
         with h5py.File(self.file_pth, 'r') as f:
@@ -372,9 +366,7 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
         assert len(image.shape) == 3, f'image shape = {image.shape}'
         assert image.shape[:2] == mask.shape, f'image shape={image.shape}, maks shape = {mask.shape}'
         
-        [image, mask] = self.transforms([image, mask])
-        image = image.to(self.dtype) # C, H, W
-        mask = mask.squeeze(0).to(torch.int64) 
+        image, mask = self.apply_transform(img=image, msk=mask)
         
         if not self.ret_n_xyz:            
             return image, mask
