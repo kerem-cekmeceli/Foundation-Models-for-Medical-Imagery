@@ -360,7 +360,7 @@ class SamBackBone(BackBoneBase1):
     
     @property  
     def out_feat_channels(self):
-        if not self.backbone.neck is None:
+        if self.backbone.neck is None:
             return self.backbone.patch_embed.proj.out_channels
         else:
             return self.backbone.neck[-2].out_channels

@@ -443,7 +443,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                                      pretrained=pretrained)
         
         bb1_name_params['params']['nb_outs'] = 1
-        params = dict(name=bb_name,
+        params = dict(name=bb_name+bb_size[0].upper(),
                       bb1_name_params=bb1_name_params,
                       resnet_layers=18,
                       train_bb2=train_bb)
