@@ -53,9 +53,8 @@ class ImageEncoderViTFeats(nn.Module):
         assert max(blocks_to_take)<total_block_len
         for i, blk in enumerate(self.blocks):
             x = blk(x)
-            x =  x.permute(0, 3, 1, 2).contiguous()
             if i in blocks_to_take:
-                output.append(x if self.neck is None else self.neck(x))
+                output.append(x.permute(0, 3, 1, 2).contiguous() if self.neck is None else self.neck(x.permute(0, 3, 1, 2).contiguous()))
         # output: [B, C, H, W] C = 1280 ViTH and 256 after the neck (if used)
         assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
         
