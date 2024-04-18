@@ -4,6 +4,7 @@ from OrigModels.SAM.segment_anything import sam_model_registry
 
 from OrigModels.SAM.segment_anything.modeling.image_encoder import PatchEmbed
 from typing import Optional, Union, Tuple, Sequence
+from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 
 class ImageEncoderViTFeats(nn.Module):
     def __init__(self, 
@@ -64,6 +65,25 @@ class ImageEncoderViTFeats(nn.Module):
         return tuple(output)
     
     
+def get_sam_neck(in_channels, out_channels=256):
+    return nn.Sequential(nn.Conv2d(
+                                in_channels,
+                                out_channels,
+                                kernel_size=1,
+                                bias=False,
+                            ),
+                            LayerNorm2d(out_channels),
+                            nn.Conv2d(
+                                out_channels,
+                                out_channels,
+                                kernel_size=3,
+                                padding=1,
+                                bias=False,
+                            ),
+                            LayerNorm2d(out_channels),
+                        )
+    
+    
 def get_sam_vit_backbone(bb_size, sam_checkpoint=None, apply_neck=False):
     if bb_size == 'base':
         model_type = 'vit_b'
@@ -82,6 +102,12 @@ def get_sam_vit_backbone(bb_size, sam_checkpoint=None, apply_neck=False):
                                     blocks=sam.image_encoder.blocks,
                                     neck=sam.image_encoder.neck if apply_neck else None)
     return bb_model
-                        
+
+
+
+def get_sam_prompt_enc(sam_checkpoint=None):
+    model_type = 'vit_b'  # prompt enc and mask dec are independent of backbone size (always 256)
+    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     
+    return sam.prompt_encoder
         

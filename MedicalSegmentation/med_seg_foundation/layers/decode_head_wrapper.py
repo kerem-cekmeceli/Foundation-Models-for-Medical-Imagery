@@ -93,11 +93,20 @@ class SegformerHead(DecHeadBase):
     def _get_dec_from_cfg(self):
         return seg_mmcv.SegformerHead(**self.cfg)
     
-implemented_dec_heads = [ConvHeadLinear.__class__.__name__,
-                         ResNetHead.__class__.__name__,
-                         UNetHead.__class__.__name__,
-                         FCNHead.__class__.__name__, 
-                         PSPHead.__class__.__name__,
-                         DAHead.__class__.__name__,
-                         SegformerHead.__class__.__name__,]    
+class SAMdecHead(DecHeadBase):
+    def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
+        cfg['bb_embedding_hw_shrink_fac'] = backbone.hw_shrink_fac
+        super().__init__(backbone, cfg, *args, **kwargs)
+        
+    def _get_dec_from_cfg(self):
+        return seg.SAMdecHead(**self.cfg)
+    
+implemented_dec_heads = [ConvHeadLinear.__name__,
+                         ResNetHead.__name__,
+                         UNetHead.__name__,
+                         FCNHead.__name__, 
+                         PSPHead.__name__,
+                         DAHead.__name__,
+                         SegformerHead.__name__,
+                         SAMdecHead.__name__]    
     

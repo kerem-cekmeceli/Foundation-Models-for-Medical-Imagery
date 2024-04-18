@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from mmseg.ops import resize
 from ModelSpecific.DinoMedical.prep_model import get_dino_backbone
-from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone
+from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone, get_sam_neck
 from torchvision.models import get_model
 
 from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
@@ -10,7 +10,7 @@ from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from abc import abstractmethod
 from typing import Union, Optional, Tuple, Callable, Any
-from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
+# from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 
 
 class BackBoneBase(nn.Module):
@@ -315,11 +315,6 @@ class SamBackBone(BackBoneBase1):
     def get_pre_processing_cfg_list(self):
         processing = []
         
-        if not self.interp_to_inp_shape:  
-            # sam_model.image_encoder.img_size
-            processing.append(dict(type='ResizeLongestSide',
-                                long_side_length=self.backbone.img_size))
-        
         if self.pre_normalize:
             # ImageNet values      
             processing.append(dict(type='Normalize', 
@@ -337,8 +332,7 @@ class SamBackBone(BackBoneBase1):
         return processing
         
     def forward_backbone(self, x):
-        if self.interp_to_inp_shape:
-            x = self.reshape_bb_inp(x)
+        x = self.reshape_bb_inp(x)
         out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
         
         if self.interp_to_inp_shape:
@@ -487,23 +481,7 @@ class LadderBackbone(BackBoneBase):
         self._input_sz_multiple = self.bb1.input_sz_multiple
         
         if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
-            self.neck = nn.Sequential(
-                            nn.Conv2d(
-                                self.bb1.out_feat_channels,
-                                self.bb2.out_feat_channels,
-                                kernel_size=1,
-                                bias=False,
-                            ),
-                            LayerNorm2d(self.bb2.out_feat_channels),
-                            nn.Conv2d(
-                                self.bb2.out_feat_channels,
-                                self.bb2.out_feat_channels,
-                                kernel_size=3,
-                                padding=1,
-                                bias=False,
-                            ),
-                            LayerNorm2d(self.bb2.out_feat_channels),
-                        )
+            self.neck = get_sam_neck(in_channels=self.bb1.out_feat_channels, out_channels=self.bb2.out_feat_channels)
         else:
             self.neck = None
             
@@ -549,6 +527,8 @@ class LadderBackbone(BackBoneBase):
         y2s = self.bb2(x)
         
         assert len(y1s)==len(y2s)==self.alpha.shape[0]
+        
+        #@TODO combine multiple stages
         
         y1s = list(y1s)
         y2s = list(y2s)

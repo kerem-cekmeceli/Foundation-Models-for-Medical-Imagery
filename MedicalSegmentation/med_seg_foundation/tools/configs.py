@@ -1,5 +1,5 @@
 from enum import Enum
-from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
+from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
@@ -348,6 +348,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     if bb_name == 'dino':
         if dec_name=='unet':
             n_out = 5*2
+        elif dec_name=='sam_mask_dec':
+            n_out=1
         else:
             n_out = 4
         last_out_first = True
@@ -373,10 +375,12 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     elif bb_name == 'sam' or bb_name == 'medsam':
         if dec_name=='unet':
             n_out = 5*2
+        elif dec_name=='sam_mask_dec':
+            n_out=1
         else:
             n_out = 4
         last_out_first = True
-        apply_neck = False
+        apply_neck = (dec_name=='sam_mask_dec')
         
         if pretrained:
             if bb_name == 'sam':
@@ -405,7 +409,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb_model=None,
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path, apply_neck=apply_neck),
                       train=train_bb,
-                      interp_to_inp_shape=True,
+                      interp_to_inp_shape= (dec_name!='sam_mask_dec'),
                       pre_normalize=False)
         
     elif bb_name == 'resnet':
@@ -460,19 +464,17 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     
 
 
-def get_dec_cfg(dec_name, dataset_attrs):
+def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
     num_classses = dataset_attrs['num_classses']
     
     if dec_name == 'lin':
         class_name = ConvHeadLinear.__name__
-        n_in_ch = 4
         # Linear classification of each patch + upsampling to pixel dim
         dec_head_cfg = dict(num_classses=num_classses,
                             bilinear=True,
                             dropout_rat=0.1,)
     elif dec_name == 'fcn':
         class_name = FCNHead.__name__
-        n_in_ch = 4
         # https://arxiv.org/abs/1411.4038
         dec_head_cfg = dict(num_convs=3,
                             kernel_size=3,
@@ -483,13 +485,12 @@ def get_dec_cfg(dec_name, dataset_attrs):
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
                             act_cfg=dict(type='ReLU'),
-                            # in_index=[i for i in range(n_in_ch)],
+                            in_index=[i for i in range(n_in)],
                             input_transform='resize_concat',
                             init_cfg=dict(
                                 type='Normal', std=0.01, override=dict(name='conv_seg')))
     elif dec_name == 'psp':
         class_name = PSPHead.__name__
-        n_in_ch = 4
         # https://arxiv.org/abs/1612.01105
         dec_head_cfg = dict(pool_scales=(1, 2, 3, 6),
                                 num_classes=num_classses,  # output channels
@@ -497,27 +498,25 @@ def get_dec_cfg(dec_name, dataset_attrs):
                                 conv_cfg=dict(type='Conv2d'), # None = conv2d
                                 norm_cfg=dict(type='BN'),
                                 act_cfg=dict(type='ReLU'),
-                                in_index=[i for i in range(n_in_ch)],
+                                in_index=[i for i in range(n_in)],
                                 input_transform='resize_concat',
                                 init_cfg=dict(
                                     type='Normal', std=0.01, override=dict(name='conv_seg')))
     elif dec_name == 'da':
         class_name = DAHead.__name__
-        n_in_ch = 4
         # https://arxiv.org/abs/1809.02983
         dec_head_cfg = dict(num_classes=num_classses,  # output channels
                             dropout_ratio=0.1,
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
                             act_cfg=dict(type='ReLU'),
-                            in_index=[i for i in range(n_in_ch)],
+                            in_index=[i for i in range(n_in)],
                             input_transform='resize_concat',
                             init_cfg=dict(
                                 type='Normal', std=0.01, override=dict(name='conv_seg')))
         
     elif dec_name == 'segformer':
         class_name = SegformerHead.__name__
-        n_in_ch = 4
         # https://arxiv.org/abs/2105.15203
         dec_head_cfg = dict(interpolate_mode='bilinear',
                             num_classes=num_classses,  # output channels
@@ -525,13 +524,12 @@ def get_dec_cfg(dec_name, dataset_attrs):
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
                             act_cfg=dict(type='ReLU'),
-                            in_index=[i for i in range(n_in_ch)],
+                            in_index=[i for i in range(n_in)],
                             init_cfg=dict(
                                 type='Normal', std=0.01, override=dict(name='conv_seg')))
         
     elif dec_name == 'resnet':
         class_name = ResNetHead.__name__
-        n_in_ch = 4
         # ResNet-like with recurrent convs
         dec_head_cfg = dict(num_classses=num_classses,
                             # in_index=None,
@@ -548,13 +546,11 @@ def get_dec_cfg(dec_name, dataset_attrs):
                             skip_first_res_con=False, 
                             recurrent=True,
                             recursion_steps=2,
-                            in_channels_red=384*n_in_ch)
+                            in_channels_red=384*n_in)
     elif dec_name == 'unet':
         class_name = UNetHead.__name__
-        n_in_ch=5
         # https://arxiv.org/abs/1505.04597 (unet papaer)
         input_group_cat_nb = 2
-        n_in_ch *= input_group_cat_nb
         dec_head_cfg = dict(num_classses=num_classses,
                             # in_index=None,
                             # in_resize_factors=None,
@@ -573,7 +569,25 @@ def get_dec_cfg(dec_name, dataset_attrs):
                             resnet_cat_inp_upscaling=True,
                             input_group_cat_nb=input_group_cat_nb,
                             in_channels_red=576)  # 576  |  384*input_group_cat_nb
+     
+    elif dec_name == 'sam_mask_dec':
         
+        pretrained=True
+        if pretrained:
+            assert main_path is not None
+            bb_cps_pth = 'Checkpoints/Orig/backbone'
+            if bb_name == 'sam':
+                sam_checkpoint = main_path/bb_cps_pth/'SAM'/'sam_vit_b_01ec64.pth'
+            else:
+                sam_checkpoint = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth'      
+        else:
+            sam_checkpoint = None
+        
+        class_name = SAMdecHead.__name__
+        dec_head_cfg = dict(num_classses=num_classses,
+                            sam_checkpoint=sam_checkpoint,
+                            train_prmopt_enc=False,
+                            train_mask_dec=True,)
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
         
@@ -761,7 +775,10 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
         # Decoder config
         if kwargs['backbone']=='resnet':
             assert kwargs['dec_head_key'] != 'unet'
-        dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs)
+        
+        n_out_bb = bb_cfg['params'].get('nb_outs', 1)
+        dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs, n_in=n_out_bb,
+                                   bb_name=kwargs['backbone'], main_path=kwargs['main_pth'])
         
         segmentor_cfg = dict(name=Segmentor.__name__,
                          params=dict(backbone=bb_cfg,

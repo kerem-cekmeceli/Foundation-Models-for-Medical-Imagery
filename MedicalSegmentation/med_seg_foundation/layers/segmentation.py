@@ -6,7 +6,8 @@ from typing import Sequence, Union, Optional
 # from torch import functional as F
 import math
 from copy import deepcopy
-
+from ModelSpecific.SamMedical.img_enc import get_sam_prompt_enc
+from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone, get_sam_neck
 
 class DecBase(nn.Module, ABC):
     def __init__(self, 
@@ -1013,7 +1014,154 @@ class UNetHead(UpNetHeadBase):
             x_up = up(x_up, self.in_ch_reducer[i+offset](x[i+offset]))
         return x_up
     
+
+from OrigModels.SAM.segment_anything.modeling import MaskDecoder, PromptEncoder, TwoWayTransformer
+  
+# Frozen prompt encoder, trainable mask decoder     
+class SAMdecHead(nn.Module):
+    def __init__(self, 
+                 num_classses: int, 
+                 bb_embedding_hw_shrink_fac:int,
+                 sam_checkpoint:Optional[str]=None,
+                 in_channels:Union[int, Sequence[int]]=256,
+                 image_pe_size:Union[int, Sequence[int]]=1024,
+                 img_embd_pe_size:Union[int, Sequence[int]]=64,
+                 train_prmopt_enc:bool=False,
+                 train_mask_dec:bool=True,
+                 *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         
+        self.num_classses = num_classses
+        self.bb_embedding_hw_shrink_fac = bb_embedding_hw_shrink_fac
+        
+        if not isinstance(in_channels, int):
+            assert len(in_channels)==1
+            in_channels=in_channels[0]
+        
+        self.pretrained_prompt_enc = not (sam_checkpoint is None)
+        self.neck = None
+        
+        if self.pretrained_prompt_enc:
+            assert image_pe_size==1024
+            assert img_embd_pe_size==64
+            self.sam_prompt_embd_channels = 256
+            if in_channels != self.sam_prompt_embd_channels:
+                self.neck = get_sam_neck(in_channels=in_channels, 
+                                         out_channels=self.sam_prompt_embd_channels)
+        else:
+            assert sam_checkpoint is None, "When in_channels and out_channels are given sam checkpoint must be None"
+        
+        if isinstance(image_pe_size, int):
+            image_pe_size = (image_pe_size, image_pe_size)
+        self.image_pe_size = image_pe_size 
+        
+        if isinstance(img_embd_pe_size, int):
+            img_embd_pe_size = (img_embd_pe_size, img_embd_pe_size)
+        self.img_embd_pe_size = img_embd_pe_size 
+                
+        self.embed_dim = in_channels if self.neck is None else self.sam_prompt_embd_channels
+        self.sam_checkpoint = sam_checkpoint
+        
+        self.train_prmopt_enc = train_prmopt_enc
+        self.train_mask_dec = train_mask_dec
+        
+        if self.pretrained_prompt_enc:
+            self.prompt_encoder = get_sam_prompt_enc(sam_checkpoint=sam_checkpoint)
+            
+            
+        else:
+            prompt_encoder=PromptEncoder(
+                embed_dim=self.embed_dim,
+                image_embedding_size=img_embd_pe_size,
+                input_image_size=image_pe_size,
+                mask_in_chans=16,
+                )
+            self.self.prompt_encoder = prompt_encoder
+            
+        self.mask_decoder=MaskDecoder(
+                num_multimask_outputs=self.num_classses,
+                transformer=TwoWayTransformer(
+                    depth=2,
+                    embedding_dim=self.embed_dim,
+                    mlp_dim=2048,
+                    num_heads=8,
+                ),
+                transformer_dim=self.embed_dim,
+                iou_head_depth=3,
+                iou_head_hidden_dim=256,
+            )    
+            
+        # Mask dec outputs masks that are x4 upscaled by transposed convolutions (=low res masks)
+            
+        if not self.train_prmopt_enc:
+            for p in self.prompt_encoder.parameters():
+                p.requires_grad=False
+                
+        if not self.train_mask_dec:
+            for p in self.mask_decoder.parameters():
+                p.requires_grad=False     
+        
+        # We're not using the iou predictions        
+        for p in self.mask_decoder.iou_prediction_head.parameters():
+            p.requires_grad=False
+                
+    # def post_process(self, mask, embed_size):
+    #     (h, w) = embed_size
+    #     mask_oup_shape = (h*self.bb_embedding_hw_shrink_fac, w*self.bb_embedding_hw_shrink_fac)
+    #     up = mask_oup_shape[0] > mask.shape[-2] and mask_oup_shape[1] > mask.shape[-1] 
+    #     mask_reshaped = resize(input=mask,
+    #                            size=mask_oup_shape,
+    #                            mode="bilinear" if up >= 1 else "area",
+    #                            align_corners=False if up >= 1 else None)
+        # return mask_reshaped
+        
+    def forward(self, image_embeddings):
+        
+        assert len(image_embeddings)==1
+        image_embeddings = image_embeddings[0]
+        
+        b, c, h, w = image_embeddings.shape
+        embd_size = (h, w)
+        
+        if self.neck is not None:
+            image_embeddings = self.neck(image_embeddings)
+        
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=None, boxes=None, masks=None
+        )
+        pos_enc = self.prompt_encoder.get_dense_pe()
+        
+        # interpolate pos_enc and dense embeddings
+        if embd_size != self.img_embd_pe_size:
+            up = h > self.img_embd_pe_size[0] and w > self.img_embd_pe_size[1]
+            
+            # Interpolate to get pixel logits frmo patch logits
+            pos_enc = resize(input=pos_enc,
+                             size=embd_size,
+                             mode="bilinear" if up >= 1 else "area",
+                             align_corners=False if up >= 1 else None)
+            
+            dense_embeddings = resize(input=dense_embeddings,
+                                      size=embd_size,
+                                      mode="bilinear" if up >= 1 else "area",
+                                      align_corners=False if up >= 1 else None)
+        
+        # low_res_masks is x4 smaller compared to the input size
+        low_res_masks, iou_predictions = self.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_pe=pos_enc,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=True
+        )
+        
+        # mask = self.post_process(low_res_masks, embed_size=embd_size)
+       
+        return low_res_masks  # Will be reshaped to correct size in segmentor
+
+                
+        
+                
         
 
 
