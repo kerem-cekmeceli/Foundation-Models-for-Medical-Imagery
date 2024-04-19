@@ -1247,20 +1247,31 @@ class CentralCrop(object):
 
     def __init__(self,
                  size=None,
-                 size_divisor=None,):
+                 size_divisor=None,
+                 make_square=False):
         if size is not None:
             if isinstance(size, int):
                 size = (size, size)
             else:
                 assert isinstance(size, tuple)
+        self.make_square = make_square
         self.size = size
         self.size_divisor = size_divisor
-                
-        # only one of size and size_divisor should be valid
-        assert size is not None or size_divisor is not None
-        assert size is None or size_divisor is None
+        
+        if not self.make_square:        
+            # only one of size and size_divisor should be valid
+            assert self.size is not None or self.size_divisor is not None
+            assert self.size is None or self.size_divisor is None
+        else:
+            assert self.size is None
+            assert self.size_divisor is None
+            
         
     def _get_central_crops(self, orig_sz):
+        if self.make_square:
+            short_edge = min(orig_sz[0], orig_sz[1])
+            self.size = (short_edge, short_edge)
+            
         # Orig_sz [HWC]
         if self.size is not None:
             crop_w_tot = max(orig_sz[1] - self.size[1], 0)

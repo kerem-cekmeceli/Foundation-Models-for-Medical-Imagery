@@ -393,7 +393,7 @@ class ResNetBackBone(BackBoneBase1):
         for layer in params_no_train:
             for param in layer.parameters():
                 param.requires_grad = False
-        
+                    
     
     def _get_bb_from_cfg(self, cfg:dict):
         # cfg = dict(name=f'resnet{self._nb_layers}', weights=f'ResNet{self._nb_layers}_Weights.DEFAULT')
@@ -436,7 +436,7 @@ class ResNetBackBone(BackBoneBase1):
     def get_pre_processing_cfg_list(self):
         processing = []
         
-        #  Crop to a square input
+        #  Crop 
         processing.append(dict(type='CentralCrop',  
                                size_divisor=self._hw_shrink_fac))
       
@@ -463,6 +463,8 @@ class LadderBackbone(BackBoneBase):
                  *args: Any, **kwargs: Any) -> None:
         super().__init__(name, *args, **kwargs)
         
+        self.img_size = 224
+        
         bb1_name = bb1_name_params['name']
         bb1_params = bb1_name_params['params']
         self.bb1 = globals()[bb1_name](**bb1_params)
@@ -478,11 +480,14 @@ class LadderBackbone(BackBoneBase):
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
         
+        assert self.img_size%self.bb2.hw_shrink_fac==0, f'bb2, WH is not evenly divisible by {self.img_size}'
+        assert self.img_size%self.bb1.hw_shrink_fac==0, f'bb1, WH is not evenly divisible by {self.img_size}'
+        
         # This takes care of matching the channel sizes
         if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
-            self.neck_bb1 = get_sam_neck(in_channels=self.bb1.out_feat_channels, out_channels=self.bb2.out_feat_channels)
+            self.neck_channels = get_sam_neck(in_channels=self.bb2.out_feat_channels, out_channels=self.bb1.out_feat_channels)
         else:
-            self.neck_bb1 = None
+            self.neck_channels = None
             
         # This takes care of having the same number of outputs for both backbones  
         if self.bb1.nb_outs != self.bb2.nb_outs:
@@ -503,7 +508,7 @@ class LadderBackbone(BackBoneBase):
     
     @property  
     def out_feat_channels(self):
-        return self.bb2.out_feat_channels
+        return self.bb1.out_feat_channels
     
     @property
     def nb_outs(self):
@@ -512,25 +517,35 @@ class LadderBackbone(BackBoneBase):
     @property  
     @abstractmethod    
     def train_backbone(self):
-        return self.bb1.train_backbone
+        return self.bb2.train_backbone
     
     @train_backbone.setter  
     @abstractmethod 
     def train_backbone(self, val):
-        self.bb1.train_backbone = val
+        self.bb2.train_backbone = val
     
     
     def get_pre_processing_cfg_list(self):
-        return self.bb2.get_pre_processing_cfg_list()
+        processing = []
+        
+        #  Crop to a square input
+        processing.append(dict(type='CentralCrop',  
+                               make_square=True))
+      
+        # Resize to 224x224
+        processing.append(dict(type='Resize2',
+                            scale=self.img_size, #HW
+                            keep_ratio=True))
+        return processing
     
-    def check_size(self, x):
-        assert x.shape[-2]%self.bb2.hw_shrink_fac==0, 'bb2, H is not evenly divisible'
-        assert x.shape[-2]%self.bb1.hw_shrink_fac==0, 'bb1, H is not evenly divisible'
-        assert x.shape[-1]%self.bb2.hw_shrink_fac==0, 'bb2, W is not evenly divisible'
-        assert x.shape[-1]%self.bb1.hw_shrink_fac==0, 'bb1, W is not evenly divisible'
+    # def check_size(self, x):
+    #     assert x.shape[-2]%self.bb2.hw_shrink_fac==0, 'bb2, H is not evenly divisible'
+    #     assert x.shape[-2]%self.bb1.hw_shrink_fac==0, 'bb1, H is not evenly divisible'
+    #     assert x.shape[-1]%self.bb2.hw_shrink_fac==0, 'bb2, W is not evenly divisible'
+    #     assert x.shape[-1]%self.bb1.hw_shrink_fac==0, 'bb1, W is not evenly divisible'
     
     def forward(self, x):
-        self.check_size(x)
+        # self.check_size(x)
         
         y1s = self.bb1(x)
         y2s = self.bb2(x)
@@ -550,8 +565,8 @@ class LadderBackbone(BackBoneBase):
         ys = []
         
         for y1, y2, a in zip(y1s, y2s, self.alpha):        
-            if self.neck_bb1 is not None:
-                y1 = self.neck_bb1(y1)
+            if self.neck_channels is not None:
+                y2 = self.neck_channels(y2)
             
             if y1.shape[-2:] != y2.shape[-2:]:
                 up = y1.shape[-2] > y2.shape[-2] and y1.shape[-1] > y2.shape[-1]
