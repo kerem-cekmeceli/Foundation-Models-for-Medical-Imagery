@@ -70,7 +70,7 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'ladder_sam'  # dino, sam, medsam, resnet, ladder_
+    backbone = 'ladder_medsam'  # dino, sam, medsam, resnet, ladder_
     train_backbone = False or 'ladder' in backbone
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
