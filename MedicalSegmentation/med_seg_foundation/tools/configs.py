@@ -753,6 +753,8 @@ def get_lr(model_type, **kwargs):
             if dataset_attrs['name'] in ['spine_verse', 'hcp1']:
                 return 1e-5
             return 2e-5
+        elif bb_name=='resnet' or 'ladder' in bb_name:
+            return 1e-3
         else:
             return 5e-5 
     elif model_type==ModelType.UNET:
