@@ -474,16 +474,25 @@ class LadderBackbone(BackBoneBase):
         assert isinstance(self.bb2, BackBoneBase)
         self.bb2.train_backbone = train_bb2
 
-        
-        assert self.bb1.nb_outs == self.bb2.nb_outs
         assert self.bb2.train_backbone
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
         
+        # This takes care of matching the channel sizes
         if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
-            self.neck = get_sam_neck(in_channels=self.bb1.out_feat_channels, out_channels=self.bb2.out_feat_channels)
+            self.neck_bb1 = get_sam_neck(in_channels=self.bb1.out_feat_channels, out_channels=self.bb2.out_feat_channels)
         else:
-            self.neck = None
+            self.neck_bb1 = None
+            
+        # This takes care of having the same number of outputs for both backbones  
+        if self.bb1.nb_outs != self.bb2.nb_outs:
+            assert self.bb2.nb_outs == 1
+            self.necks_bb2 = nn.ModuleList([nn.Sequential(nn.Conv2d(self.bb2.out_feat_channels, self.bb2.out_feat_channels, 3, padding='same'),
+                                                          nn.ReLU(),
+                                                          nn.SyncBatchNorm(self.bb2.out_feat_channels)) 
+                                            for i in range(self.bb1.nb_outs)])
+        else:
+            self.necks_bb2 = None
             
         self.alpha = nn.Parameter(torch.zeros(self.bb1.nb_outs))
         self.Sigmoid = nn.Sigmoid()
@@ -526,16 +535,23 @@ class LadderBackbone(BackBoneBase):
         y1s = self.bb1(x)
         y2s = self.bb2(x)
         
-        assert len(y1s)==len(y2s)==self.alpha.shape[0]
-        
-        #@TODO combine multiple stages
-        
+        if self.necks_bb2 is None:
+            assert len(y1s)==len(y2s)==self.alpha.shape[0]
+        else:
+            assert len(y2s)==1
+            y2s_n = []
+            for neck2 in self.necks_bb2:
+                y2s_n.append(neck2(y2s[0]))    
+            y2s = y2s_n
+                
+        # Tuple to list
         y1s = list(y1s)
         y2s = list(y2s)
+        ys = []
         
         for y1, y2, a in zip(y1s, y2s, self.alpha):        
-            if self.neck is not None:
-                y1 = self.neck(y1)
+            if self.neck_bb1 is not None:
+                y1 = self.neck_bb1(y1)
             
             if y1.shape[-2:] != y2.shape[-2:]:
                 up = y1.shape[-2] > y2.shape[-2] and y1.shape[-1] > y2.shape[-1]
@@ -547,8 +563,8 @@ class LadderBackbone(BackBoneBase):
             
             gate = self.Sigmoid(a)
             
-            y = gate * y1 + (1-gate) * y2
-        return y 
+            ys.append(gate * y1 + (1-gate) * y2)
+        return tuple(ys)
     
     
 class LadderResNetBackbone(LadderBackbone):

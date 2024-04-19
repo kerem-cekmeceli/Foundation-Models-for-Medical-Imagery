@@ -446,7 +446,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                                      main_pth=main_pth, 
                                      pretrained=pretrained)
         
-        bb1_name_params['params']['nb_outs'] = 1
+        # bb1_name_params['params']['nb_outs'] = 1
         if 'sam' in bb_name.split('_')[-1]:
             bb1_name_params['params']['cfg']['apply_neck']=True
         params = dict(name=bb_name+bb_size[0].upper(),

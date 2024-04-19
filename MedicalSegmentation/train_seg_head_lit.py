@@ -70,12 +70,12 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, sam, medsam, resnet, ladder_
-    train_backbone = False
-    backbone_sz = "base" if backbone not in ['sam', 'medsam'] else "base" # in ("small", "base", "large" or "giant")
+    backbone = 'ladder_sam'  # dino, sam, medsam, resnet, ladder_
+    train_backbone = False or 'ladder' in backbone
+    backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'sam_mask_dec'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
+    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
     
 
 # Select dataset
