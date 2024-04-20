@@ -459,7 +459,6 @@ class LadderBackbone(BackBoneBase):
                  name: str,
                  bb1_name_params:dict, 
                  bb2_name_params:dict, 
-                 train_bb2:bool=False,
                  *args: Any, **kwargs: Any) -> None:
         super().__init__(name, *args, **kwargs)
         
@@ -474,8 +473,6 @@ class LadderBackbone(BackBoneBase):
         bb2_params = bb2_name_params['params']
         self.bb2 = globals()[bb2_name](**bb2_params)
         assert isinstance(self.bb2, BackBoneBase)
-        self.bb2.train_backbone = train_bb2
-
         assert self.bb2.train_backbone
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
@@ -499,8 +496,9 @@ class LadderBackbone(BackBoneBase):
         else:
             self.necks_bb2 = None
             
-        self.alpha = nn.Parameter(torch.zeros(self.bb1.nb_outs))
+        self.alpha = nn.ParameterList([nn.Parameter(torch.zeros(1)) for i in range(self.bb1.nb_outs)])
         self.Sigmoid = nn.Sigmoid()
+        
  
     @property
     def hw_shrink_fac(self):
@@ -517,12 +515,12 @@ class LadderBackbone(BackBoneBase):
     @property  
     @abstractmethod    
     def train_backbone(self):
-        return self.bb2.train_backbone
+        return self.bb1.train_backbone
     
     @train_backbone.setter  
     @abstractmethod 
     def train_backbone(self, val):
-        self.bb2.train_backbone = val
+        self.bb1.train_backbone = val
     
     
     def get_pre_processing_cfg_list(self):
@@ -577,8 +575,9 @@ class LadderBackbone(BackBoneBase):
                             align_corners=False if up else None)
             
             gate = self.Sigmoid(a)
+            y = gate * y1 + (1-gate) * y2
+            ys.append(y)
             
-            ys.append(gate * y1 + (1-gate) * y2)
         return tuple(ys)
     
     
@@ -587,7 +586,6 @@ class LadderResNetBackbone(LadderBackbone):
                  name: str, 
                  bb1_name_params: dict, 
                  resnet_layers:int=18, 
-                 train_bb2: bool = False, 
                  *args: Any, **kwargs: Any) -> None:
         
         backbone_name = f'resnet{resnet_layers}' 
@@ -600,7 +598,7 @@ class LadderResNetBackbone(LadderBackbone):
                                            skip_last_layer=True,
                                            pre_normalize=False))
         super().__init__(name=name, bb1_name_params=bb1_name_params, 
-                         bb2_name_params=bb2_name_params, train_bb2=train_bb2, *args, **kwargs)
+                         bb2_name_params=bb2_name_params, *args, **kwargs)
         
     
     

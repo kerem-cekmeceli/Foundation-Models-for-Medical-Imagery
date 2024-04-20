@@ -441,7 +441,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         
         bb1_name_params = get_bb_cfg(bb_name=bb_name.split('_')[-1], 
                                      bb_size=bb_size, 
-                                     train_bb=False, 
+                                     train_bb=train_bb, 
                                      dec_name=dec_name, 
                                      main_pth=main_pth, 
                                      pretrained=pretrained)
@@ -451,8 +451,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
             bb1_name_params['params']['cfg']['apply_neck']=True
         params = dict(name=bb_name+bb_size[0].upper(),
                       bb1_name_params=bb1_name_params,
-                      resnet_layers=18,
-                      train_bb2=train_bb)
+                      resnet_layers=18)
         
         
         

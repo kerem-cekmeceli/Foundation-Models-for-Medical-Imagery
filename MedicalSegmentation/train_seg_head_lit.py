@@ -71,7 +71,7 @@ model_type = ModelType.SEGMENTOR
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'ladder_dino'  # dino, sam, medsam, resnet, ladder_
-    train_backbone = False or 'ladder' in backbone
+    train_backbone = False and not ('ladder' in backbone)
     backbone_sz = "small" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
