@@ -5,7 +5,7 @@ import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderResNetBackbone
+from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
@@ -415,8 +415,11 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     elif bb_name == 'resnet':
         if dec_name=='unet':
             ValueError(f'Decoder {dec_name} is not supported for {bb_name} backbone')
-        
-        if bb_size=='small':
+        if bb_size=='smallest':
+            layers=18
+        elif bb_size=='tiny':
+            layers=34
+        elif bb_size=='small':
             layers=50
         elif bb_size=='base':
             layers=101
@@ -437,23 +440,48 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       pre_normalize=False)   
         
     elif 'ladder' in bb_name:
-        name = LadderResNetBackbone.__name__
+        name = LadderBackbone.__name__
         
+        ## BB1
         bb1_name_params = get_bb_cfg(bb_name=bb_name.split('_')[-1], 
                                      bb_size=bb_size, 
                                      train_bb=train_bb, 
                                      dec_name=dec_name, 
                                      main_pth=main_pth, 
-                                     pretrained=pretrained)
-        
-        # bb1_name_params['params']['nb_outs'] = 1
+                                     pretrained=True)
         if 'sam' in bb_name.split('_')[-1]:
             bb1_name_params['params']['cfg']['apply_neck']=True
+            
+        ## BB2    
+        if 'ladderR' in bb_name:
+            # Resnet18 (excluding the last block) as ladder bb 
+            bb2_name_params = get_bb_cfg(bb_name='resnet', 
+                                         bb_size='smallest', 
+                                         train_bb=True, 
+                                         dec_name=dec_name, 
+                                         main_pth=main_pth, 
+                                         pretrained=True)
+            bb2_name_params['params']['skip_last_layer']=True
+        
+        elif 'ladderD' in bb_name:
+            # DinoS as ladder bb 
+            bb2_name_params = get_bb_cfg(bb_name='dino', 
+                                         bb_size='small', 
+                                         train_bb=True, 
+                                         dec_name=dec_name, 
+                                         main_pth=main_pth, 
+                                         pretrained=True)
+            bb2_name_params['params']['nb_outs']=bb1_name_params['params'].get('nb_outs', 1)
+            
+        else:
+            ValueError(f'Undefined ladder backbone type: {bb_name}')
+        
+        
+        # Ladder backbone parameters
+        bb2_name_params['train'] = True
         params = dict(name=bb_name+bb_size[0].upper(),
                       bb1_name_params=bb1_name_params,
-                      resnet_layers=18)
-        
-        
+                      bb2_name_params=bb2_name_params)
         
     else:
         ValueError(f'Undefined backbone: {bb_name}')

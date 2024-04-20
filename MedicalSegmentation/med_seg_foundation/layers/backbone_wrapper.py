@@ -13,6 +13,7 @@ from typing import Union, Optional, Tuple, Callable, Any
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 
 
+
 class BackBoneBase(nn.Module):
     def __init__(self, 
                  name:str,
@@ -575,37 +576,15 @@ class LadderBackbone(BackBoneBase):
                             align_corners=False if up else None)
             
             gate = self.Sigmoid(a)
-            # y = gate * y1 + (1-gate) * y2
-            y = y1
+            y = gate * y1 + (1-gate) * y2
             ys.append(y)
             
         return tuple(ys)
-    
-    
-class LadderResNetBackbone(LadderBackbone):
-    def __init__(self, 
-                 name: str, 
-                 bb1_name_params: dict, 
-                 resnet_layers:int=18, 
-                 *args: Any, **kwargs: Any) -> None:
         
-        backbone_name = f'resnet{resnet_layers}' 
-        bb2_name_params = dict(name=ResNetBackBone.__name__,
-                               params=dict(name=backbone_name,
-                                           bb_model=None,
-                                           cfg=dict(name=backbone_name, weights=f'ResNet{resnet_layers}_Weights.DEFAULT'),
-                                           train=True,
-                                           nb_layers=resnet_layers,
-                                           skip_last_layer=True,
-                                           pre_normalize=False))
-        super().__init__(name=name, bb1_name_params=bb1_name_params, 
-                         bb2_name_params=bb2_name_params, *args, **kwargs)
-        
-    
     
 implemented_backbones = [DinoBackBone.__class__.__name__,
                          SamBackBone.__class__.__name__,
                          ResNetBackBone.__class__.__name__,
-                         LadderResNetBackbone.__class__.__name__,]
+                         LadderBackbone.__class__.__name__,]
         
         
