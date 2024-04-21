@@ -579,8 +579,8 @@ class LadderBackbone(BackBoneBase):
             
             gate = self.Sigmoid(a)
             y = gate * y1 + (1-gate) * y2
-            # ys.append(y)
-            ys.append(y1)
+            ys.append(y)
+            # ys.append(y1)
             
         return tuple(ys)
         
