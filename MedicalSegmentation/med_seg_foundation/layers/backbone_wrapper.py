@@ -135,6 +135,8 @@ class BackBoneBase1(BackBoneBase):
         assert isinstance(val, bool), f'has to be a boolean type but got {type(val)}'
         assert hasattr(self, 'backbone_req_grad'), "Should only be called from a child class after init !"
         
+        self.__train_backbone = val
+        
         if val:
             self.train()
         else:
@@ -147,17 +149,17 @@ class BackBoneBase1(BackBoneBase):
                 # Restore parameter training flags to the original state 
                 p.requires_grad = self.backbone_req_grad[i]
                 
-        self.__train_backbone = val
         
     def train(self, mode: bool = True):
         assert len(list(self.parameters()))==len(list(self.backbone.parameters())),\
             "This wrapper should not contain any additional parameters other than the backbone"
+            
+        super().train(mode=mode)
         
-        if self.train_backbone:
-            return super().train(mode=mode)
-        else:
-            self.backbone.eval()
-            return self
+        if not self.train_backbone:
+           self.backbone.eval()
+           
+        return self
         
     @abstractmethod    
     def forward_backbone(self, x):
@@ -176,10 +178,10 @@ class BackBoneBase1(BackBoneBase):
             return self.forward_backbone(x)
         else:
             with torch.no_grad():
-                return self.forward_backbone(x)
+                feats = self.forward_backbone(x)
+            return feats
      
             
-    
 class DinoBackBone(BackBoneBase1):
     def __init__(self, 
                  nb_outs:int,
@@ -550,7 +552,7 @@ class LadderBackbone(BackBoneBase):
         y2s = self.bb2(x)
         
         if self.necks_bb2 is None:
-            assert len(y1s)==len(y2s)==self.alpha.shape[0]
+            assert len(y1s)==len(y2s)==len(self.alpha)
         else:
             assert len(y2s)==1
             y2s_n = []
@@ -577,7 +579,8 @@ class LadderBackbone(BackBoneBase):
             
             gate = self.Sigmoid(a)
             y = gate * y1 + (1-gate) * y2
-            ys.append(y)
+            # ys.append(y)
+            ys.append(y1)
             
         return tuple(ys)
         

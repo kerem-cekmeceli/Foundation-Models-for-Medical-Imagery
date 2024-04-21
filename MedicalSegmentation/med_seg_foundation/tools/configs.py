@@ -776,11 +776,11 @@ def get_lr(model_type, **kwargs):
         train_bb=kwargs['train_backbone']
         dec_name=kwargs['dec_head_key']
         dataset_attrs = kwargs['dataset_attrs']
-        if bb_name=='dino':
+        if 'dino' in bb_name:
             if dataset_attrs['name'] in ['spine_verse', 'hcp1']:
                 return 1e-5
             return 2e-5
-        elif bb_name=='resnet' or 'ladder' in bb_name:
+        elif 'resnet' in bb_name: #or 'ladder' in bb_name:
             return 1e-3
         else:
             return 5e-5 
