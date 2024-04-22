@@ -527,6 +527,7 @@ class LadderBackbone(BackBoneBase):
     
     
     def get_pre_processing_cfg_list(self):
+        return self.bb1.get_pre_processing_cfg_list()
         processing = []
         
         #  Crop to a square input
@@ -579,8 +580,8 @@ class LadderBackbone(BackBoneBase):
             
             gate = self.Sigmoid(a)
             y = gate * y1 + (1-gate) * y2
-            ys.append(y)
-            # ys.append(y1)
+            # ys.append(y)
+            ys.append(y1)
             
         return tuple(ys)
         

@@ -316,8 +316,8 @@ class LitSegmentor(LitBaseModule):
                         metric_key = f'val_{metric_n}{k}_vol' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_{metric_n}{k}_vol'
                         self.log(metric_key, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
         
-        # save the segmentation result
-        if batch_idx in self.seg_log_batch_idxs and self._test_dataset_name!='':
+        # save the segmentation result (during training only)
+        if batch_idx in self.seg_log_batch_idxs and self._test_dataset_name=='':
             if (self.current_epoch+1)%self.seg_val_intv==0:
                 self.log_seg(batch_idx, x_batch, y_batch, y_pred, 'val')
                 
