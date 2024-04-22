@@ -38,7 +38,7 @@ class DecHeadBase(nn.Module):
 
 class ConvHeadLinear(DecHeadBase):
     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
-        cfg['out_upsample_fac'] = backbone.hw_shrink_fac
+        # cfg['out_upsample_fac'] = backbone.hw_shrink_fac
         super().__init__(backbone, cfg, *args, **kwargs)
         
     def _get_dec_from_cfg(self):
@@ -96,7 +96,7 @@ class SegformerHead(DecHeadBase):
     
 class SAMdecHead(DecHeadBase):
     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
-        cfg['bb_embedding_hw_shrink_fac'] = backbone.hw_shrink_fac
+        # cfg['bb_embedding_hw_shrink_fac'] = backbone.hw_shrink_fac
         super().__init__(backbone, cfg, *args, **kwargs)
         
     def _get_dec_from_cfg(self):

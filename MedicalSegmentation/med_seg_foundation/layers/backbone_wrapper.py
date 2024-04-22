@@ -60,7 +60,7 @@ class BackBoneBase(nn.Module):
     @abstractmethod
     def forward(self, x):
         pass
-
+    
 
 class BackBoneBase1(BackBoneBase):
     def __init__(self, 
@@ -71,6 +71,8 @@ class BackBoneBase1(BackBoneBase):
                  pre_normalize:bool=False,
                  pix_mean:Optional[list]=None,
                  pix_std:Optional[list]=None,
+                 target_size:Optional[Union[int, Tuple[int]]]=None,
+                 interp_feats_to_orig_inp_size:Optional[bool]=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, *args, **kwargs)
                 
@@ -89,6 +91,12 @@ class BackBoneBase1(BackBoneBase):
         self.__store_trainable_params_n_cfg_bb(train_bb=train)
         
         self._input_sz_multiple = 1
+        
+        if isinstance(target_size, int):
+            target_size = (target_size, target_size)
+        self.target_size = target_size
+        
+        self.interp_feats_to_orig_inp_size = interp_feats_to_orig_inp_size
         
         self.pre_normalize = pre_normalize
         if not pre_normalize:
@@ -161,24 +169,95 @@ class BackBoneBase1(BackBoneBase):
            
         return self
         
-    @abstractmethod    
-    def forward_backbone(self, x):
-        pass
     
     @abstractmethod 
     def _get_bb_from_cfg(self, cfg:dict):
         pass
     
-
-    def forward(self, x):
+    @abstractmethod 
+    def _get_pre_processing_cfg_list(self, cfg:dict):
+        pass
+    
+    def get_pre_processing_cfg_list(self):
+        processing = []
+        if self.pre_normalize:
+            # ImageNet values      
+            processing.append(dict(type='Normalize', 
+                                mean=self.pixel_mean,  #RGB
+                                std=self.pixel_std,  #RGB
+                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+        
+        processing.extend(self._get_pre_processing_cfg_list())
+        return processing
+    
+    
+    def interp_bb_inp(self, x):
+        """Interpolates the input to the target size """
+        assert hasattr(self, 'target_size')
+        
+        oldh, oldw = x.shape[-2:]
+        (newh, neww) = self.target_size 
+        
+        # Interpolate to the supported image shape
+        up = newh > oldh and neww > oldw
+        x_new = resize(x, size=self.target_size, mode="bilinear" if up else 'area')
+        
+        if self.interp_feats_to_orig_inp_size:
+            # target BB oup feat shape
+            out_feat_h = oldh // self.hw_shrink_fac
+            out_feat_w = oldw // self.hw_shrink_fac
+            self.bb_target_oup_feat_shape = (out_feat_h, out_feat_w)
+        
+        return x_new
+    
+    
+    def interp_bb_oup(self, out_feat): 
+        """Interpolates the output features as if the original input size was used passing through the backbone"""
+        
+        assert self.interp_feats_to_orig_inp_size
+        assert hasattr(self, 'bb_target_oup_feat_shape')
+        
+        # Interpolate the oup feats 
+        up = self.bb_target_oup_feat_shape[0] > out_feat.shape[-2] and self.bb_target_oup_feat_shape[1] > out_feat.shape[-1]
+        reshaped_feats = resize(out_feat,
+                                size=self.bb_target_oup_feat_shape,
+                                mode="bilinear" if up else "area",
+                                )
+        # [B, N_class, H', W']
+        return reshaped_feats   
+    
+    
+    @abstractmethod    
+    def forward_backbone(self, x):
+        pass
+    
+    def _forward_backbone(self, x):
+        # Normalize if no pre-normalizing is applied from the dataset
         if not self.pre_normalize:
             x = self._norm(x)
+        
+        # Interpolate the input to the target shape (if given)    
+        if not self.target_size is None:
+            x = self.interp_bb_inp(x)
+        
+        out_feats = self.forward_backbone(x)
+        
+        # Interpolate the output features as if no input interpolation was performed (if requested)
+        if self.interp_feats_to_orig_inp_size:
+            out_feats = list(out_feats)
+            for i in range(len(out_feats)):
+                out_feats[i] = self.interp_bb_oup(out_feats[i])
+            out_feats = tuple(out_feats)
+        
+        return out_feats
             
+
+    def forward(self, x):    
         if self.train_backbone:
-            return self.forward_backbone(x)
+            return self._forward_backbone(x)
         else:
             with torch.no_grad():
-                feats = self.forward_backbone(x)
+                feats = self._forward_backbone(x)
             return feats
      
             
@@ -194,7 +273,8 @@ class DinoBackBone(BackBoneBase1):
                  pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
-                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], *args, **kwargs)
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
+                         target_size=None, interp_feats_to_orig_inp_size=False, *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
@@ -209,22 +289,9 @@ class DinoBackBone(BackBoneBase1):
     def _get_bb_from_cfg(self, cfg:dict):
         return get_dino_backbone(**cfg)
     
-    def get_pre_processing_cfg_list(self, central_crop=True):
+    def _get_pre_processing_cfg_list(self, central_crop=True):
         processing = []
-        
-        # img_scale_fac = 1  # Keep at 1 
-        # if img_scale_fac != 1:
-        #     processing.append(dict(type='Resize2',
-        #                         scale_factor=float(img_scale_fac), #HW
-        #                         keep_ratio=True))
-        
-        if self.pre_normalize:
-            # ImageNet values      
-            processing.append(dict(type='Normalize', 
-                                mean=self.pixel_mean,  #RGB
-                                std=self.pixel_std,  #RGB
-                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
-        
+
         if central_crop:
             processing.append(dict(type='CentralCrop',  
                                     size_divisor=self.hw_shrink_fac))
@@ -272,77 +339,30 @@ class SamBackBone(BackBoneBase1):
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
-                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], *args, **kwargs)
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
+                         target_size=1024, interp_feats_to_orig_inp_size=interp_to_inp_shape, *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
         self._nb_outs = nb_outs
         self.last_out_first = last_out_first
-        self.interp_to_inp_shape = interp_to_inp_shape
-        
-    def reshape_bb_inp(self, x):
-        oldh, oldw = x.shape[-2:]
-        scale = self.backbone.img_size * 1.0 / max(oldh, oldw)
-        newh, neww = oldh * scale, oldw * scale
-        neww = int(neww + 0.5)
-        newh = int(newh + 0.5)
-        target_size = (newh, neww)
-        
-        # Interpolate to the supported image shape
-        up = newh > oldh and neww > oldw
-        x_new = resize(x, size=target_size, mode="bilinear" if up else 'area')
-        
-        # BB oup feat shape
-        out_feat_h = oldh // self.hw_shrink_fac
-        out_feat_w = oldw // self.hw_shrink_fac
-        self.bb_oup_feat_shape = (out_feat_h, out_feat_w)
-        
-        return x_new
-        
-    def reshape_bb_oup(self, out_feat): 
-        assert hasattr(self, 'bb_oup_feat_shape')
-        
-        # Interpolate the oup feats 
-        up = self.bb_oup_feat_shape[0] > out_feat.shape[-2] and self.bb_oup_feat_shape[1] > out_feat.shape[-1]
-        reshaped_feats = resize(out_feat,
-                                size=self.bb_oup_feat_shape,
-                                mode="bilinear" if up else "area",
-                                )
-        # [B, N_class, H', W']
-        return reshaped_feats    
         
     
     def _get_bb_from_cfg(self, cfg:dict):
         return get_sam_vit_backbone(**cfg)
     
-    def get_pre_processing_cfg_list(self):
+    def _get_pre_processing_cfg_list(self):
         processing = []
         
-        if self.pre_normalize:
-            # ImageNet values      
-            processing.append(dict(type='Normalize', 
-                                mean=self.pixel_mean,  #RGB
-                                std=self.pixel_std,  #RGB
-                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
-        
         #  Pad to a square input
-        processing.append(dict(type='CentralPad',  
-                            #    size=self.backbone.img_size if not self.interp_to_inp_shape else None,
-                            #    make_square=self.interp_to_inp_shape,
+        processing.append(dict(type='CentralPad', 
                                make_square=True,
                                pad_val=0, seg_pad_val=0))
             
         return processing
         
     def forward_backbone(self, x):
-        x = self.reshape_bb_inp(x)
         out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
-        
-        if self.interp_to_inp_shape:
-            out_patch_feats = list(out_patch_feats)
-            for i in range(len(out_patch_feats)):
-                out_patch_feats[i] = self.reshape_bb_oup(out_patch_feats[i])
-            out_patch_feats = tuple(out_patch_feats)
            
         if self.last_out_first:
             # Output of the last ViT block first in the tuple
@@ -380,11 +400,11 @@ class ResNetBackBone(BackBoneBase1):
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
-                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], *args, **kwargs)
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
+                         target_size=224, interp_feats_to_orig_inp_size=False, *args, **kwargs)
         
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers
-        self._expected_inp_size = 224
         self._hw_shrink_fac = 32 if not skip_last_layer else 16
         self._nb_outs=1
         self._skip_last_layer = skip_last_layer
@@ -439,21 +459,12 @@ class ResNetBackBone(BackBoneBase1):
     def get_pre_processing_cfg_list(self):
         processing = []
         
-        #  Crop 
-        processing.append(dict(type='CentralCrop',  
-                               size_divisor=self._hw_shrink_fac))
-      
-        processing.append(dict(type='Resize2',
-                            scale=self._expected_inp_size, #HW
-                            keep_ratio=True))
-    
-        if self.pre_normalize:
-            # ImageNet values      
-            processing.append(dict(type='Normalize', 
-                                mean=self.pixel_mean,  #RGB
-                                std=self.pixel_std,  #RGB
-                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
-        
+        #  Pad to a square input
+        processing.append(dict(type='CentralPad', 
+                               make_square=True,
+                               pad_val=0, seg_pad_val=0))
+       
+
         return processing
     
     
@@ -464,9 +475,7 @@ class LadderBackbone(BackBoneBase):
                  bb2_name_params:dict, 
                  *args: Any, **kwargs: Any) -> None:
         super().__init__(name, *args, **kwargs)
-        
-        self.img_size = 224
-        
+                
         bb1_name = bb1_name_params['name']
         bb1_params = bb1_name_params['params']
         self.bb1 = globals()[bb1_name](**bb1_params)
@@ -480,8 +489,6 @@ class LadderBackbone(BackBoneBase):
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
         
-        assert self.img_size%self.bb2.hw_shrink_fac==0, f'bb2, WH is not evenly divisible by {self.img_size}'
-        assert self.img_size%self.bb1.hw_shrink_fac==0, f'bb1, WH is not evenly divisible by {self.img_size}'
         
         # This takes care of matching the channel sizes
         if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
@@ -527,28 +534,22 @@ class LadderBackbone(BackBoneBase):
     
     
     def get_pre_processing_cfg_list(self):
-        return self.bb1.get_pre_processing_cfg_list()
         processing = []
         
-        #  Crop to a square input
-        processing.append(dict(type='CentralCrop',  
-                               make_square=True))
-      
-        # Resize to 224x224
-        processing.append(dict(type='Resize2',
-                            scale=self.img_size, #HW
-                            keep_ratio=True))
+        if isinstance(self.bb1, DinoBackBone):
+            multiple = self.bb1.hw_shrink_fac
+        elif isinstance(self.bb2, DinoBackBone):
+            multiple = self.bb2.hw_shrink_fac
+        else:
+            multiple = None
+        
+        if not multiple is None:
+            processing.append(dict(type='CentralCrop',  
+                                    size_divisor=multiple))
         return processing
     
-    # def check_size(self, x):
-    #     assert x.shape[-2]%self.bb2.hw_shrink_fac==0, 'bb2, H is not evenly divisible'
-    #     assert x.shape[-2]%self.bb1.hw_shrink_fac==0, 'bb1, H is not evenly divisible'
-    #     assert x.shape[-1]%self.bb2.hw_shrink_fac==0, 'bb2, W is not evenly divisible'
-    #     assert x.shape[-1]%self.bb1.hw_shrink_fac==0, 'bb1, W is not evenly divisible'
     
     def forward(self, x):
-        # self.check_size(x)
-        
         y1s = self.bb1(x)
         y2s = self.bb2(x)
         
