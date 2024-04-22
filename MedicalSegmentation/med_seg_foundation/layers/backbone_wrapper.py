@@ -415,7 +415,24 @@ class ResNetBackBone(BackBoneBase1):
             params_no_train.append(self.backbone.layer4)
         for layer in params_no_train:
             for param in layer.parameters():
-                param.requires_grad = False
+                param.requires_grad = False        
+                
+        pass
+    
+    def get_inter_res_from_layer(self, layer, n, x):
+        """ layer: layer to take the blocks from,
+            n: number of blocks (from the end) to take,
+            x: input """
+            
+        output, total_block_len = [], len(layer)
+        blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
+        assert max(blocks_to_take)<total_block_len
+        for i, blk in enumerate(layer):
+            x = blk(x)
+            if i in blocks_to_take:
+                output.append(x)
+        assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
+        return x
                     
     
     def _get_bb_from_cfg(self, cfg:dict):
@@ -581,8 +598,7 @@ class LadderBackbone(BackBoneBase):
             
             gate = self.Sigmoid(a)
             y = gate * y1 + (1-gate) * y2
-            # ys.append(y)
-            ys.append(y1)
+            ys.append(y)
             
         return tuple(ys)
         

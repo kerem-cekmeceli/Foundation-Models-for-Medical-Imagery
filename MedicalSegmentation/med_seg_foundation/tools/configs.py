@@ -805,7 +805,11 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
         if kwargs['backbone']=='resnet':
             assert kwargs['dec_head_key'] != 'unet'
         
-        n_out_bb = bb_cfg['params'].get('nb_outs', 1)
+        if bb_cfg['name'] != LadderBackbone.__name__:
+            n_out_bb = bb_cfg['params'].get('nb_outs', 1)
+        else:
+            n_out_bb = bb_cfg['params']['bb1_name_params']['params'].get('nb_outs', 1)
+        
         dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs, n_in=n_out_bb,
                                    bb_name=kwargs['backbone'], main_path=kwargs['main_pth'])
         
