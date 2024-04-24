@@ -9,10 +9,10 @@ from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from abc import abstractmethod
-from typing import Union, Optional, Tuple, Callable, Any
+from typing import Union, Optional, Tuple, Callable, Sequence, Any
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 from math import ceil, floor
-
+from ModelSpecific.Reins.reins import Reins
 
 
 class BackBoneBase(nn.Module):
@@ -74,10 +74,12 @@ class BackBoneBase1(BackBoneBase):
                  pix_std:Optional[list]=None,
                  target_size:Optional[Union[int, Tuple[int]]]=None,
                  interp_feats_to_orig_inp_size:Optional[bool]=False,
+                 last_out_first:bool=True,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, *args, **kwargs)
                 
         assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
+        self.last_out_first = last_out_first
         
         # Assign the backbone
         if cfg is not None:
@@ -247,8 +249,13 @@ class BackBoneBase1(BackBoneBase):
                 out_feats[i] = self.interp_bb_oup(out_feats[i])
             out_feats = tuple(out_feats)
         
-        return out_feats
-            
+        # Order of the output features    
+        if self.last_out_first:
+            # Output of the last ViT block first in the tuple
+            return out_feats[::-1]
+        else:
+            # Output of the last ViT block last in the tuple
+            return out_feats            
 
     def forward(self, x):    
         if self.train_backbone:
@@ -272,12 +279,12 @@ class DinoBackBone(BackBoneBase1):
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
-                         target_size=None, interp_feats_to_orig_inp_size=False, *args, **kwargs)
+                         target_size=None, interp_feats_to_orig_inp_size=False, 
+                         last_out_first=last_out_first, *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
         self._nb_outs = nb_outs
-        self.last_out_first = last_out_first
         self._input_sz_multiple = self.backbone.patch_size
         
         if disable_mask_tokens:
@@ -303,13 +310,7 @@ class DinoBackBone(BackBoneBase1):
     
     def forward_backbone(self, x):
         out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs, reshape=True)
-           
-        if self.last_out_first:
-            # Output of the last ViT block first in the tuple
-            return out_patch_feats[::-1]
-        else:
-            # Output of the last ViT block last in the tuple
-            return out_patch_feats
+        return out_patch_feats
         
     @property
     def nb_outs(self):
@@ -322,6 +323,73 @@ class DinoBackBone(BackBoneBase1):
     @property
     def hw_shrink_fac(self):
         return self.backbone.patch_size
+        
+
+class DinoReinBackbone(DinoBackBone):
+    def __init__(self, 
+                 nb_outs: int, 
+                 name: str, 
+                 last_out_first: bool = True, 
+                 bb_model: Optional[nn.Module] = None, 
+                 cfg: Optional[dict] = None, 
+                 disable_mask_tokens=True, 
+                 pre_normalize: bool = False, 
+                 *args: Any, **kwargs: Any) -> None:
+        
+        super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
+                         cfg=cfg, train=False, disable_mask_tokens=disable_mask_tokens, pre_normalize=pre_normalize, 
+                         *args, **kwargs)
+        
+        self.reins: Reins = Reins(num_layers=len(self.backbone.blocks),
+                                  embed_dims=self.backbone.embed_dim,
+                                  patch_size=self.backbone.patch_size)
+        
+    def get_intermediate_layers(self, 
+                                x: torch.Tensor,
+                                n: Union[int, Sequence] = 1, 
+                                reshape: bool = True,
+                                return_class_token: bool = False,
+                                norm=True,):
+        B, _, h, w = x.shape 
+        x = self.backbone.prepare_tokens_with_masks(x)
+        # If n is an int, take the n last blocks. If it's a list, take them
+        outputs, total_block_len = [], len(self.backbone.blocks)
+        blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
+        for i, blk in enumerate(self.backbone.blocks):
+            # Dino ViT block
+            x = blk(x)
+            
+            # Apply Rein
+            x = self.reins.forward(
+                x,
+                i,
+                batch_first=True,
+                has_cls_token=True,
+            )
+            if i in blocks_to_take:
+                outputs.append(x)
+        assert len(outputs) == len(blocks_to_take), f"only {len(outputs)} / {len(blocks_to_take)} blocks found"
+        
+        # Normalize the outputs
+        if norm:
+            outputs = [self.backbone.norm(out) for out in outputs]
+            
+        class_tokens = [out[:, 0] for out in outputs]  # list of cls_token outputs (of length n)
+        outputs = [out[:, 1 + self.backbone.num_register_tokens:] for out in outputs]  # Discard register tokens
+        
+        # Each oup is of shape: [B, N, embed_dim] --reshape--> [B, embed_dim, h_patches, w_patches]
+        if reshape:
+            outputs = [
+                out.reshape(B, h // self.backbone.patch_size, w // self.backbone.patch_size, -1).permute(0, 3, 1, 2).contiguous()
+                for out in outputs
+            ]
+        if return_class_token:
+            return tuple(zip(outputs, class_tokens))
+        return tuple(outputs)
+        
+    def forward_backbone(self, x):
+        out_patch_feats = self.get_intermediate_layers(x, n=self._nb_outs)
+        return out_patch_feats
         
 
 class SamBackBone(BackBoneBase1):
@@ -338,12 +406,12 @@ class SamBackBone(BackBoneBase1):
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
-                         target_size=1024, interp_feats_to_orig_inp_size=interp_to_inp_shape, *args, **kwargs)
+                         target_size=1024, interp_feats_to_orig_inp_size=interp_to_inp_shape, 
+                         last_out_first=last_out_first, *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
         self._nb_outs = nb_outs
-        self.last_out_first = last_out_first
         
     
     def _get_bb_from_cfg(self, cfg:dict):
@@ -361,13 +429,7 @@ class SamBackBone(BackBoneBase1):
         
     def forward_backbone(self, x):
         out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
-           
-        if self.last_out_first:
-            # Output of the last ViT block first in the tuple
-            return out_patch_feats[::-1]
-        else:
-            # Output of the last ViT block last in the tuple
-            return out_patch_feats
+        return out_patch_feats
     
     @property
     def nb_outs(self):
@@ -402,7 +464,8 @@ class ResNetBackBone(BackBoneBase1):
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
-                         target_size=224, interp_feats_to_orig_inp_size=False, *args, **kwargs)
+                         target_size=224, interp_feats_to_orig_inp_size=False, 
+                         last_out_first=last_out_first, *args, **kwargs)
         
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers
@@ -418,7 +481,6 @@ class ResNetBackBone(BackBoneBase1):
         self.backbone.fc = None     
         
         self.nb_conv_layers = 3 if skip_last_layer else 4
-        self.last_out_first = last_out_first
         self.assign_nb_outs_per_layer()
         self.uniform_oup_size = uniform_oup_size
         
@@ -439,15 +501,7 @@ class ResNetBackBone(BackBoneBase1):
                             necks.append(nn.Identity())
             assert len(necks) == self.nb_outs
             self.necks_per_out = nn.ModuleList(necks)
-                
-        
-        # # Turn off gradient computation for the final FC and avg pooling layers of the resnet model (Required for DDP)
-        # params_no_train = [self.backbone.avgpool, self.backbone.fc]
-        # if self._skip_last_layer:
-        #     params_no_train.append(self.backbone.layer4)
-        # for layer in params_no_train:
-        #     for param in layer.parameters():
-        #         param.requires_grad = False        
+                 
     
     def get_inter_out_neck(self, nb_out_channels, factor):
         simple = True
@@ -529,10 +583,7 @@ class ResNetBackBone(BackBoneBase1):
                 outputs[i] = neck(outputs[i])
                 assert outputs[i].shape == outputs[0].shape
             
-        if self.last_out_first:
-            return outputs[::-1]
-        else:
-            return outputs
+        return outputs
                     
     
     def _get_bb_from_cfg(self, cfg:dict):
@@ -697,9 +748,10 @@ class LadderBackbone(BackBoneBase):
         return tuple(ys)
         
     
-implemented_backbones = [DinoBackBone.__class__.__name__,
-                         SamBackBone.__class__.__name__,
-                         ResNetBackBone.__class__.__name__,
-                         LadderBackbone.__class__.__name__,]
+implemented_backbones = [DinoBackBone.__name__,
+                         SamBackBone.__name__,
+                         ResNetBackBone.__name__,
+                         LadderBackbone.__name__,
+                         DinoReinBackbone.__name__]
         
         

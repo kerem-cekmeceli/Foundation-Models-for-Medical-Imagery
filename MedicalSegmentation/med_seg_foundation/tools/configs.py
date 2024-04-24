@@ -5,7 +5,7 @@ import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone
+from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, DinoReinBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
@@ -372,6 +372,15 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       train=train_bb,
                       disable_mask_tokens=True,
                       pre_normalize=False)
+        
+    if bb_name == 'rein_dino':
+        assert pretrained
+        assert not train_bb
+        dino_name_params = get_bb_cfg('dino', bb_size, train_bb, dec_name, main_pth, pretrained)
+        name = DinoReinBackbone.__name__
+        params = dino_name_params['params']
+        del params['train']
+        params['name'] = bb_name+bb_size[0].upper()
         
     elif bb_name == 'sam' or bb_name == 'medsam':
         apply_neck = (dec_name=='sam_mask_dec')
