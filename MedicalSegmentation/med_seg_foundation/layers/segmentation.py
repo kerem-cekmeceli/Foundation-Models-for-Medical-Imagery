@@ -807,7 +807,8 @@ class UpNetHeadBase(DecBase):
         if isinstance(self.in_channels_red, list):
             in_ch_reducer = []
             for in_ch, in_ch_red in zip(self.in_channels, self.in_channels_red):
-                in_ch_reducer.append(nn.Conv2d(in_ch, in_ch_red, kernel_size=1, padding='same'))
+                # in_ch_reducer.append(nn.Conv2d(in_ch, in_ch_red, kernel_size=1, padding='same'))
+                in_ch_reducer.append(get_sam_neck(in_channels=in_ch, out_channels=in_ch_red))
             self.in_ch_reducer = nn.ModuleList(in_ch_reducer)
             
         else:

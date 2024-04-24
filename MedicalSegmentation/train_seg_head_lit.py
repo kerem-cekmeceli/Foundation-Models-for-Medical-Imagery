@@ -61,21 +61,21 @@ from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freq
 # # No weights - random initialization
 # mdl = get_model(**cfg)
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_paths = False
+save_checkpoints = False
+log_the_run = False
 
 # Select model type
 model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'resnet'  # dino, sam, medsam, resnet, ladderR_, ladderD_
+    backbone = 'dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_
     train_backbone = False and not ('ladder' in backbone)
-    backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
+    backbone_sz = "small" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'resnet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
+    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
     
 
 # Select dataset

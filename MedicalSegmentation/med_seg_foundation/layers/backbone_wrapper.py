@@ -11,6 +11,7 @@ from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 from abc import abstractmethod
 from typing import Union, Optional, Tuple, Callable, Any
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
+from math import ceil, floor
 
 
 
@@ -397,6 +398,9 @@ class ResNetBackBone(BackBoneBase1):
                  nb_layers:int=50,
                  skip_last_layer:bool=False,
                  pre_normalize:bool=False,
+                 nb_outs:int=1,
+                 last_out_first:bool=True,
+                 uniform_oup_size:bool=True,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
@@ -406,8 +410,31 @@ class ResNetBackBone(BackBoneBase1):
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers
         self._hw_shrink_fac = 32 if not skip_last_layer else 16
-        self._nb_outs=1
+        assert nb_outs>1
+        self._nb_outs=nb_outs
         self._skip_last_layer = skip_last_layer
+        self.last_out_first = last_out_first
+        self.assign_nb_outs_per_layer()
+        self.uniform_oup_size = uniform_oup_size
+        
+        if self.uniform_oup_size:
+            necks = []
+            for layer_i, nb_outs_i in enumerate(self.nb_outs_per_l):
+                if nb_outs_i>0:
+                    layer_i_out_ch = self.get_out_channels(getattr(self.backbone, f'layer{layer_i+1}'))
+                    assert self.out_feat_channels >= layer_i_out_ch
+                    assert self.out_feat_channels % layer_i_out_ch == 0
+                    factor =  self.out_feat_channels // layer_i_out_ch
+        
+                    for j in range(nb_outs_i):
+                        if factor>1:
+                            assert factor%2==0
+                            necks.append(self.get_inter_out_neck(layer_i_out_ch, factor))
+                        else:
+                            necks.append(nn.Identity())
+            assert len(necks) == self.nb_outs
+            self.necks_per_out = nn.ModuleList(necks)
+                
         
         # Turn off gradient computation for the final FC and avg pooling layers of the resnet model (Required for DDP)
         params_no_train = [self.backbone.avgpool, self.backbone.fc]
@@ -416,31 +443,103 @@ class ResNetBackBone(BackBoneBase1):
         for layer in params_no_train:
             for param in layer.parameters():
                 param.requires_grad = False        
-                
-        pass
     
-    def get_inter_res_from_layer(self, layer, n, x):
+    def get_inter_out_neck(self, nb_out_channels, factor):
+        # Bottleneck blocks
+        if self._nb_layers>34:
+            assert nb_out_channels%2==0
+            return nn.Sequential(nn.Conv2d(nb_out_channels , nb_out_channels//2, kernel_size=1),
+                                nn.SyncBatchNorm(nb_out_channels//2),
+                                nn.ReLU(),
+                                nn.Conv2d(nb_out_channels//2, nb_out_channels//2, 
+                                          kernel_size=3, stride=factor, dilation=factor//2, padding=factor//2),
+                                nn.SyncBatchNorm(nb_out_channels//2),
+                                nn.ReLU(),
+                                nn.Conv2d(nb_out_channels//2, self.out_feat_channels, kernel_size=1),
+                                nn.SyncBatchNorm(self.out_feat_channels),
+                                nn.ReLU())
+        
+        # Basic blocks
+        else:
+            return nn.Sequential(nn.Conv2d(nb_out_channels, self.out_feat_channels, 
+                                          kernel_size=3, stride=factor, dilation=factor//2, padding=factor//2),
+                                 nn.SyncBatchNorm(nb_out_channels//2),
+                                 nn.ReLU())
+    
+    def assign_nb_outs_per_layer(self):
+        assert hasattr(self, '_nb_outs')
+        assert hasattr(self, '_skip_last_layer')
+        self.nb_conv_layers = 4
+        self.nb_outs_per_l = [0]*self.nb_conv_layers
+        nb_outs = self._nb_outs
+        
+        for i in range(self.nb_conv_layers-1, -1, -1):
+            if nb_outs>0:
+                if i==self.nb_conv_layers-1 and not self._skip_last_layer:    
+                    self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
+                else:
+                    self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
+            nb_outs -= self.nb_outs_per_l[i]
+        
+        assert nb_outs<=0, f'Requested nb_outs={self._nb_outs}, but only {self._nb_outs+nb_outs} available'    
+        assert sum(self.nb_outs_per_l) == self._nb_outs
+        assert len(self.nb_outs_per_l)==self.nb_conv_layers
+                
+    
+    def get_inter_res_from_layer(layer, n, x):
         """ layer: layer to take the blocks from,
             n: number of blocks (from the end) to take,
             x: input """
             
         output, total_block_len = [], len(layer)
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
-        assert max(blocks_to_take)<total_block_len
+        if len(blocks_to_take)>0:
+            assert max(blocks_to_take)<total_block_len
         for i, blk in enumerate(layer):
             x = blk(x)
             if i in blocks_to_take:
                 output.append(x)
-        assert len(output) == len(blocks_to_take), f"only {len(output)} / {len(blocks_to_take)} blocks found"
-        return x
+        assert len(output) == len(blocks_to_take) == n, f"only {len(output)} / {len(blocks_to_take)} blocks found"
+        return x, output
+        
+    
+    def get_inter_res(self, x):
+        # Initial convolutions
+        x = self.backbone.conv1(x)
+        x = self.backbone.bn1(x)
+        x = self.backbone.relu(x)
+        x = self.backbone.maxpool(x)
+        
+        # 4 Consecutive layers
+        outputs = []
+        for i in range(self.nb_conv_layers):
+            if i==self.nb_conv_layers-1 and self._skip_last_layer:
+                continue
+            
+            layer = getattr(self.backbone, f'layer{i+1}')
+            x, out_i = ResNetBackBone.get_inter_res_from_layer(layer, self.nb_outs_per_l[i], x)
+            outputs.extend(out_i)
+            
+        if self.uniform_oup_size:
+            for i, neck in enumerate(self.necks_per_out):
+                outputs[i] = neck(outputs[i])
+                assert outputs[i].shape == outputs[0].shape
+            
+        if self.last_out_first:
+            return outputs[::-1]
+        else:
+            return outputs
                     
     
     def _get_bb_from_cfg(self, cfg:dict):
         # cfg = dict(name=f'resnet{self._nb_layers}', weights=f'ResNet{self._nb_layers}_Weights.DEFAULT')
         # No weights - random initialization
         return get_model(**cfg)
-        
+    
     def forward_backbone(self, x):
+        return self.get_inter_res(x)
+        
+    def forward_no_inter(self, x):
         x = self.backbone.conv1(x)
         x = self.backbone.bn1(x)
         x = self.backbone.relu(x)
@@ -457,17 +556,20 @@ class ResNetBackBone(BackBoneBase1):
     def nb_outs(self):
         return self._nb_outs
     
+    
+    def get_out_channels(self, layer):
+        if self._nb_layers>34:
+            return layer[-1].conv3.out_channels
+        else:
+            return layer[-1].conv2.out_channels
+        
+    
     @property  
     def out_feat_channels(self):
         if self._skip_last_layer:
-            last_layer = self.backbone.layer3[-1]
+            return self.get_out_channels(self.backbone.layer3)
         else:
-            last_layer = self.backbone.layer4[-1]
-            
-        if self._nb_layers>34:
-            return last_layer.conv3.out_channels
-        else:
-            return last_layer.conv2.out_channels
+            return self.get_out_channels(self.backbone.layer4)
     
     @property
     def hw_shrink_fac(self):

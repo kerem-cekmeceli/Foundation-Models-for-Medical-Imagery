@@ -345,7 +345,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
 def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     bb_cps_pth = 'Checkpoints/Orig/backbone'
     
-    if bb_name == 'dino':
+    if bb_name in ["dino", "sam", "medsam", "resnet"]:
         if dec_name=='unet':
             n_out = 5*2
         elif dec_name=='sam_mask_dec':
@@ -353,7 +353,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         else:
             n_out = 4
         last_out_first = True
-        
+    
+    if bb_name == 'dino':
         assert bb_size in ["small", "base", "large", "giant"]
         backbone_name = get_bb_name(bb_size)
         
@@ -373,13 +374,6 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       pre_normalize=False)
         
     elif bb_name == 'sam' or bb_name == 'medsam':
-        if dec_name=='unet':
-            n_out = 5*2
-        elif dec_name=='sam_mask_dec':
-            n_out=1
-        else:
-            n_out = 4
-        last_out_first = True
         apply_neck = (dec_name=='sam_mask_dec')
         
         if pretrained:
@@ -437,7 +431,9 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       cfg=dict(name=backbone_name, weights=weights),
                       train=train_bb,
                       nb_layers=layers,
-                      pre_normalize=False)   
+                      pre_normalize=False,
+                      nb_outs=n_out,
+                      last_out_first=last_out_first,)   
         
     elif 'ladder' in bb_name:
         name = LadderBackbone.__name__
@@ -456,7 +452,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         if 'ladderR' in bb_name:
             # Resnet18 (excluding the last block) as ladder bb 
             bb2_name_params = get_bb_cfg(bb_name='resnet', 
-                                         bb_size='smallest', 
+                                         bb_size='tiny', 
                                          train_bb=True, 
                                          dec_name=dec_name, 
                                          main_pth=main_pth, 
@@ -801,9 +797,6 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
         # Backbone config
         bb_cfg = get_bb_cfg(bb_name=kwargs['backbone'], bb_size=kwargs['backbone_sz'], train_bb=kwargs['train_backbone'], 
                             dec_name=kwargs['dec_head_key'], main_pth=kwargs['main_pth'], pretrained=True)
-        # Decoder config
-        if kwargs['backbone']=='resnet':
-            assert kwargs['dec_head_key'] != 'unet'
         
         if bb_cfg['name'] != LadderBackbone.__name__:
             n_out_bb = bb_cfg['params'].get('nb_outs', 1)
