@@ -159,10 +159,7 @@ class BackBoneBase1(BackBoneBase):
                 p.requires_grad = self.backbone_req_grad[i]
                 
         
-    def train(self, mode: bool = True):
-        assert len(list(self.parameters()))==len(list(self.backbone.parameters())),\
-            "This wrapper should not contain any additional parameters other than the backbone"
-            
+    def train(self, mode: bool = True):            
         super().train(mode=mode)
         
         if not self.train_backbone:
