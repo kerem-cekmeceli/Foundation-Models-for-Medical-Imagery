@@ -413,6 +413,14 @@ class ResNetBackBone(BackBoneBase1):
         assert nb_outs>1
         self._nb_outs=nb_outs
         self._skip_last_layer = skip_last_layer
+        
+        if self._skip_last_layer:
+            self.backbone.layer4 = None
+            
+        self.backbone.avgpool = None 
+        self.backbone.fc = None     
+        
+        self.nb_conv_layers = 3 if skip_last_layer else 4
         self.last_out_first = last_out_first
         self.assign_nb_outs_per_layer()
         self.uniform_oup_size = uniform_oup_size
@@ -436,49 +444,51 @@ class ResNetBackBone(BackBoneBase1):
             self.necks_per_out = nn.ModuleList(necks)
                 
         
-        # Turn off gradient computation for the final FC and avg pooling layers of the resnet model (Required for DDP)
-        params_no_train = [self.backbone.avgpool, self.backbone.fc]
-        if self._skip_last_layer:
-            params_no_train.append(self.backbone.layer4)
-        for layer in params_no_train:
-            for param in layer.parameters():
-                param.requires_grad = False        
+        # # Turn off gradient computation for the final FC and avg pooling layers of the resnet model (Required for DDP)
+        # params_no_train = [self.backbone.avgpool, self.backbone.fc]
+        # if self._skip_last_layer:
+        #     params_no_train.append(self.backbone.layer4)
+        # for layer in params_no_train:
+        #     for param in layer.parameters():
+        #         param.requires_grad = False        
     
     def get_inter_out_neck(self, nb_out_channels, factor):
-        # Bottleneck blocks
-        if self._nb_layers>34:
-            assert nb_out_channels%2==0
-            return nn.Sequential(nn.Conv2d(nb_out_channels , nb_out_channels//2, kernel_size=1),
-                                nn.SyncBatchNorm(nb_out_channels//2),
-                                nn.ReLU(),
-                                nn.Conv2d(nb_out_channels//2, nb_out_channels//2, 
-                                          kernel_size=3, stride=factor, dilation=factor//2, padding=factor//2),
-                                nn.SyncBatchNorm(nb_out_channels//2),
-                                nn.ReLU(),
-                                nn.Conv2d(nb_out_channels//2, self.out_feat_channels, kernel_size=1),
-                                nn.SyncBatchNorm(self.out_feat_channels),
-                                nn.ReLU())
-        
-        # Basic blocks
+        simple = True
+        if simple:
+            return nn.Sequential(nn.Conv2d(nb_out_channels, self.out_feat_channels, kernel_size=1),
+                                 nn.Upsample(scale_factor=1/factor, mode='bilinear' if (1/factor)>1 else 'area'))
         else:
-            return nn.Sequential(nn.Conv2d(nb_out_channels, self.out_feat_channels, 
-                                          kernel_size=3, stride=factor, dilation=factor//2, padding=factor//2),
-                                 nn.SyncBatchNorm(nb_out_channels//2),
-                                 nn.ReLU())
+            # Bottleneck blocks
+            if self._nb_layers>34:
+                assert nb_out_channels%2==0
+                return nn.Sequential(nn.Conv2d(nb_out_channels , nb_out_channels//2, kernel_size=1),
+                                    nn.SyncBatchNorm(nb_out_channels//2),
+                                    nn.ReLU(),
+                                    nn.Conv2d(nb_out_channels//2, nb_out_channels//2, 
+                                            kernel_size=3, stride=factor, dilation=factor//2, padding=factor//2),
+                                    nn.SyncBatchNorm(nb_out_channels//2),
+                                    nn.ReLU(),
+                                    nn.Conv2d(nb_out_channels//2, self.out_feat_channels, kernel_size=1),
+                                    nn.SyncBatchNorm(self.out_feat_channels),
+                                    nn.ReLU())
+        
+            
+            # Basic blocks
+            else:
+                return nn.Sequential(nn.Conv2d(nb_out_channels, self.out_feat_channels, 
+                                            kernel_size=3, stride=factor, dilation=factor//2, padding=factor//2),
+                                    nn.SyncBatchNorm(self.out_feat_channels),
+                                    nn.ReLU())
     
     def assign_nb_outs_per_layer(self):
         assert hasattr(self, '_nb_outs')
         assert hasattr(self, '_skip_last_layer')
-        self.nb_conv_layers = 4
         self.nb_outs_per_l = [0]*self.nb_conv_layers
         nb_outs = self._nb_outs
         
         for i in range(self.nb_conv_layers-1, -1, -1):
             if nb_outs>0:
-                if i==self.nb_conv_layers-1 and not self._skip_last_layer:    
-                    self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
-                else:
-                    self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
+                self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
             nb_outs -= self.nb_outs_per_l[i]
         
         assert nb_outs<=0, f'Requested nb_outs={self._nb_outs}, but only {self._nb_outs+nb_outs} available'    
@@ -513,9 +523,6 @@ class ResNetBackBone(BackBoneBase1):
         # 4 Consecutive layers
         outputs = []
         for i in range(self.nb_conv_layers):
-            if i==self.nb_conv_layers-1 and self._skip_last_layer:
-                continue
-            
             layer = getattr(self.backbone, f'layer{i+1}')
             x, out_i = ResNetBackBone.get_inter_res_from_layer(layer, self.nb_outs_per_l[i], x)
             outputs.extend(out_i)
@@ -608,22 +615,17 @@ class LadderBackbone(BackBoneBase):
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
         
+        # same number of outputs for both backbones  
+        assert self.bb1.nb_outs == self.bb2.nb_outs
         
         # This takes care of matching the channel sizes
-        if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
-            self.neck_channels = get_sam_neck(in_channels=self.bb2.out_feat_channels, out_channels=self.bb1.out_feat_channels)
-        else:
-            self.neck_channels = None
-            
-        # This takes care of having the same number of outputs for both backbones  
-        if self.bb1.nb_outs != self.bb2.nb_outs:
-            assert self.bb2.nb_outs == 1
-            self.necks_bb2 = nn.ModuleList([nn.Sequential(nn.Conv2d(self.bb2.out_feat_channels, self.bb2.out_feat_channels, 3, padding='same'),
-                                                          nn.ReLU(),
-                                                          nn.SyncBatchNorm(self.bb2.out_feat_channels)) 
-                                            for i in range(self.bb1.nb_outs)])
-        else:
-            self.necks_bb2 = None
+        necks_ch = []
+        for i in range(self.bb1.nb_outs):
+            if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
+                necks_ch.append(nn.Conv2d(self.bb2.out_feat_channels, self.bb1.out_feat_channels, kernel_size=1))
+            else:
+                necks_ch.append(nn.Identity())
+        self.necks_y2_ch = nn.ModuleList(necks_ch)
             
         self.alpha = nn.ParameterList([nn.Parameter(torch.zeros(1)) for i in range(self.bb1.nb_outs)])
         self.Sigmoid = nn.Sigmoid()
@@ -672,23 +674,16 @@ class LadderBackbone(BackBoneBase):
         y1s = self.bb1(x)
         y2s = self.bb2(x)
         
-        if self.necks_bb2 is None:
-            assert len(y1s)==len(y2s)==len(self.alpha)
-        else:
-            assert len(y2s)==1
-            y2s_n = []
-            for neck2 in self.necks_bb2:
-                y2s_n.append(neck2(y2s[0]))    
-            y2s = y2s_n
+        assert len(y1s)==len(y2s)==len(self.alpha)
                 
         # Tuple to list
         y1s = list(y1s)
         y2s = list(y2s)
         ys = []
         
-        for y1, y2, a in zip(y1s, y2s, self.alpha):        
-            if self.neck_channels is not None:
-                y2 = self.neck_channels(y2)
+        for y1, y2, a, neck_y2_ch in zip(y1s, y2s, self.alpha, self.necks_y2_ch):        
+            # Same ch dim
+            y2 = neck_y2_ch(y2)
             
             if y1.shape[-2:] != y2.shape[-2:]:
                 up = y1.shape[-2] > y2.shape[-2] and y1.shape[-1] > y2.shape[-1]
