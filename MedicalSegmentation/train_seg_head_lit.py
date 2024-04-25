@@ -70,7 +70,7 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'rein_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_
+    backbone = 'ladderR_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
@@ -305,10 +305,10 @@ logger = WandbLogger(project='FoundationModels_MedDino',
                      settings=wandb.Settings(_service_wait=300),  # Can increase timeout
                      tags=tags)
 # log gradients, parameter histogram and model topology
-logger.watch(model, log="all")
+# logger.watch(model, log="all")
 
 n_best = 1 if save_checkpoints else 0
-models_pth = main_pth / f'Checkpoints/{group_name}'
+models_pth = main_pth / f'Checkpoints/{dataset}/{group_name}'
 if model_type == ModelType.SEGMENTOR:
     models_pth = models_pth / model.segmentor.decode_head.__class__.__name__
     
@@ -316,7 +316,8 @@ models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
 checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
                      val_dice_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
-                     val_mIoU_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
+                    )
+                    #  val_mIoU_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
 
 # Create the trainer object
 trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)

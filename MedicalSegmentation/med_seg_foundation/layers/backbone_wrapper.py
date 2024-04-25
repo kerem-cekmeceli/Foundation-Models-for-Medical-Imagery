@@ -75,11 +75,15 @@ class BackBoneBase1(BackBoneBase):
                  target_size:Optional[Union[int, Tuple[int]]]=None,
                  interp_feats_to_orig_inp_size:Optional[bool]=False,
                  last_out_first:bool=True,
+                 to_bgr:bool=False,
+                 to_0_1:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, *args, **kwargs)
                 
         assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
         self.last_out_first = last_out_first
+        self._to_bgr = to_bgr
+        self._to_0_1 = to_0_1
         
         # Assign the backbone
         if cfg is not None:
@@ -113,9 +117,6 @@ class BackBoneBase1(BackBoneBase):
             
     def _norm(self, x):
         # [B, C, H, W]
-        
-        # Order BGR -> RGB
-        x = torch.flip(x, dims=[1])
         
         # Normalize colors
         x = (x - self.pixel_mean) / self.pixel_std
@@ -183,9 +184,9 @@ class BackBoneBase1(BackBoneBase):
         if self.pre_normalize:
             # ImageNet values      
             processing.append(dict(type='Normalize', 
-                                mean=self.pixel_mean,  #RGB
-                                std=self.pixel_std,  #RGB
-                                to_rgb=True))  # Converts BGR (prev steps) to RGB initially
+                                mean=torch.squeeze(self.pixel_mean).tolist(),  #RGB
+                                std=torch.squeeze(self.pixel_std).tolist(),  #RGB
+                                to_rgb=False))  # No need the chenge the order, already RGB from dataset
         
         processing.extend(self._get_pre_processing_cfg_list())
         return processing
@@ -232,9 +233,19 @@ class BackBoneBase1(BackBoneBase):
         pass
     
     def _forward_backbone(self, x):
+        # [0, 255] --> [0, 1]
+        if self._to_0_1:
+            x = x/255.0
+            assert 0<=torch.min(x) and torch.max(x)<=255.0
+        
         # Normalize if no pre-normalizing is applied from the dataset
         if not self.pre_normalize:
             x = self._norm(x)
+        
+        # [B, C, H, W]    
+        if self._to_bgr:
+            x = x[:, [2, 1, 0], ...]
+            
         
         # Interpolate the input to the target shape (if given)    
         if not self.target_size is None:
@@ -265,7 +276,7 @@ class BackBoneBase1(BackBoneBase):
                 feats = self._forward_backbone(x)
             return feats
      
-            
+             
 class DinoBackBone(BackBoneBase1):
     def __init__(self, 
                  nb_outs:int,
@@ -280,7 +291,8 @@ class DinoBackBone(BackBoneBase1):
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
                          target_size=None, interp_feats_to_orig_inp_size=False, 
-                         last_out_first=last_out_first, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=True, to_0_1=False, *args, **kwargs)
+        # DINO NEEDS BGR ORDER !
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
@@ -391,7 +403,7 @@ class DinoReinBackbone(DinoBackBone):
         out_patch_feats = self.get_intermediate_layers(x, n=self._nb_outs)
         return out_patch_feats
         
-
+  
 class SamBackBone(BackBoneBase1):
     def __init__(self, 
                  nb_outs:int,
@@ -407,7 +419,7 @@ class SamBackBone(BackBoneBase1):
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
                          target_size=1024, interp_feats_to_orig_inp_size=interp_to_inp_shape, 
-                         last_out_first=last_out_first, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=False, to_0_1=False, *args, **kwargs)
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
@@ -447,7 +459,7 @@ class SamBackBone(BackBoneBase1):
     def hw_shrink_fac(self):
         return self.backbone.patch_embed.proj.kernel_size[0]
     
-            
+# ResNet NEEDS RGB ORDER !              
 class ResNetBackBone(BackBoneBase1): 
     def __init__(self, 
                  name,
@@ -463,9 +475,9 @@ class ResNetBackBone(BackBoneBase1):
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
-                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
+                         pix_mean=[0.485, 0.456, 0.406], pix_std=[0.229, 0.224, 0.225], 
                          target_size=224, interp_feats_to_orig_inp_size=False, 
-                         last_out_first=last_out_first, *args, **kwargs)
+                         last_out_first=last_out_first,  to_bgr=False, to_0_1=True, *args, **kwargs)
         
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers

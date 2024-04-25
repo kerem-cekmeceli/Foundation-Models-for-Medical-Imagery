@@ -63,17 +63,15 @@ def get_file_list(fld_pth, start_idx=0, num_img=None, extension=None,
     return imgs_sel 
 
 def put_in_res_dict(img, mask=None):
-    # if pil img : Convert PIL img (RGB) --> ndarray (BGR)
-    get_nd_arr = lambda img: np.array(img).copy() if isinstance(img, Image.Image) else img
-    # if ndarray convert RGB to BGR
-    rgb_2_bgr = lambda img: img[..., ::-1].copy() if isinstance(img, np.ndarray) else img
+    # if pil img : PIL image ==> rgb order | if path do not touch
+    pil_to_nd = lambda img: np.array(img).copy() if isinstance(img, Image.Image) else img
     
-    img = rgb_2_bgr(get_nd_arr(img))
-    result = dict(img=mmcv.imread(img, flag='color', channel_order='bgr'),
+    img = pil_to_nd(img)
+    result = dict(img=mmcv.imread(img, flag='color', channel_order='rgb'),
                   seg_fields=[])
 
     if mask is not None:
-        mask = get_nd_arr(mask)
+        mask = pil_to_nd(mask)
         key = 'gt_seg_map'
         result[key]=mmcv.imread(mask, flag='grayscale')
         result['seg_fields'].append(key)
