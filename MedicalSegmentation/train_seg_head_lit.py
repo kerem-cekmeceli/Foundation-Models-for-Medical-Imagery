@@ -87,7 +87,7 @@ dataset = 'hcp1'
 rcs_enabled = True
 
 # Select loss
-loss_cfg_key = 'ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
+loss_cfg_key = 'dice_ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
 if not cluster_paths:
