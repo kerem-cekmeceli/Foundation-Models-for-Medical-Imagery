@@ -638,23 +638,23 @@ def get_loss_cfg(loss_key, data_attr):
 
     # Dice Loss
     epsilon = 1  # smoothing factor 
-    k=1  # power
+    k=2  # power
     loss_cfg_dice = dict(prob_inputs=False, 
-                        bg_ch_to_rm=ignore_idx_loss, # not removing results in better segmentation
+                        ignore_idxs=ignore_idx_loss, # not removing results in better segmentation
                         reduction='mean',
                         epsilon=epsilon,
                         k=k,
                         weight=weight)
 
     # CE-Dice Loss
-    loss_cfg_dice_ce=dict(loss1=dict(name='CE',
-                                    params=loss_cfg_ce),
-                        loss2=dict(name='Dice', 
+    loss_cfg_dice_ce=dict(loss1=dict(name='Dice',
                                     params=loss_cfg_dice),
-                        comp_rat=0.5)
+                        loss2=dict(name='CE', 
+                                    params=loss_cfg_ce),
+                        comp_rat=0.8)
 
     # Focal Loss
-    loss_cfg_focal = dict(bg_ch_to_rm=ignore_idx_loss,
+    loss_cfg_focal = dict(ignore_idxs=ignore_idx_loss,
                         gamma=2,
                         weight=weight)
 
@@ -667,11 +667,8 @@ def get_loss_cfg(loss_key, data_attr):
     
     if loss_key=='ce':
         return dict(name=CrossEntropyLoss.__name__, params=loss_cfg_ce)
-
+     
     elif loss_key=='dice_ce':
-        return dict(name=DiceLoss.__name__, params=loss_cfg_dice)
-        
-    if loss_key=='dice_ce':
         return dict(name=CompositionLoss.__name__, params=loss_cfg_dice_ce)
 
     elif loss_key=='focal':
