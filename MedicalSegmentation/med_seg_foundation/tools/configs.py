@@ -373,7 +373,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       disable_mask_tokens=True,
                       pre_normalize=False)
         
-    if bb_name == 'rein_dino':
+    if bb_name in ['rein_dino', 'reinL_dino'] :
         assert pretrained
         assert not train_bb
         dino_name_params = get_bb_cfg('dino', bb_size, train_bb, dec_name, main_pth, pretrained)
@@ -381,6 +381,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         params = dino_name_params['params']
         del params['train']
         params['name'] = bb_name+bb_size[0].upper()
+        params['lora_reins'] = bb_name=='reinL_dino'
         
     elif bb_name == 'sam' or bb_name == 'medsam':
         apply_neck = (dec_name=='sam_mask_dec')

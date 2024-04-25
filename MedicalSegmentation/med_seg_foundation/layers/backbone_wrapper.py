@@ -12,7 +12,7 @@ from abc import abstractmethod
 from typing import Union, Optional, Tuple, Callable, Sequence, Any
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 from math import ceil, floor
-from ModelSpecific.Reins.reins import Reins
+from ModelSpecific.Reins.reins import Reins, LoRAReins
 
 
 class BackBoneBase(nn.Module):
@@ -346,15 +346,22 @@ class DinoReinBackbone(DinoBackBone):
                  cfg: Optional[dict] = None, 
                  disable_mask_tokens=True, 
                  pre_normalize: bool = False, 
+                 lora_reins:bool=False,
                  *args: Any, **kwargs: Any) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
                          cfg=cfg, train=False, disable_mask_tokens=disable_mask_tokens, pre_normalize=pre_normalize, 
                          *args, **kwargs)
         
-        self.reins: Reins = Reins(num_layers=len(self.backbone.blocks),
-                                  embed_dims=self.backbone.embed_dim,
-                                  patch_size=self.backbone.patch_size)
+        self.lora_reins = lora_reins
+        
+        lora_params = dict(num_layers=len(self.backbone.blocks),
+                           embed_dims=self.backbone.embed_dim,
+                           patch_size=self.backbone.patch_size)
+        if not self.lora_reins:
+            self.reins: Reins = Reins(**lora_params)
+        else:
+            self.reins: LoRAReins = LoRAReins(**lora_params)
         
     def get_intermediate_layers(self, 
                                 x: torch.Tensor,

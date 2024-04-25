@@ -70,7 +70,7 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'rein_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_
+    backbone = 'reinL_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
@@ -87,7 +87,7 @@ dataset = 'hcp1'
 rcs_enabled = True
 
 # Select loss
-loss_cfg_key = 'dice_ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
+loss_cfg_key = 'ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
 if not cluster_paths:
