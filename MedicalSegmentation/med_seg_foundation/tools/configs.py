@@ -694,12 +694,15 @@ def get_optimizer_cfg(lr):
 
 
 def get_scheduler_cfg(nb_epochs):
-    warmup_iters = max(1, int(nb_epochs*0.2))  # try *0.25
+    warmup_iters = max(1, int(nb_epochs*0.05))  # try *0.25
     
     scheduler_configs = []
     scheduler_configs.append(\
         dict(name='LinearLR',
             params=dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)))
+    
+    return scheduler_configs[0]
+    
     scheduler_configs.append(\
         dict(name='PolynomialLR',
             params=dict(power=1.0, total_iters=(nb_epochs-warmup_iters)*2)))
@@ -781,13 +784,22 @@ def get_lr(model_type, **kwargs):
         train_bb=kwargs['train_backbone']
         dec_name=kwargs['dec_head_key']
         dataset_attrs = kwargs['dataset_attrs']
-        if 'dino' in bb_name:
+        if bb_name=='dino':
             if dataset_attrs['name'] in ['spine_verse', 'hcp1']:
                 return 1e-5
             return 2e-5
-        elif 'resnet' in bb_name: #or 'ladder' in bb_name:
+        
+        elif bb_name =='resnet': #or 'ladder' in bb_name:
             return 1e-3
-        else:
+        
+        elif 'reins' in bb_name:
+            return 1e-4
+        
+        elif 'ladder' in bb_name:
+            return 1e-3
+        
+        # SAM and MedSAM
+        else: 
             return 5e-5 
     elif model_type==ModelType.UNET:
         return 5e-5 
