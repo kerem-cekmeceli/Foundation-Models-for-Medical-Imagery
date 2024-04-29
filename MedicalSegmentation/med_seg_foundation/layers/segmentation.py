@@ -1021,7 +1021,7 @@ from OrigModels.SAM.segment_anything.modeling import MaskDecoder, PromptEncoder,
 # Frozen prompt encoder, trainable mask decoder     
 class SAMdecHead(nn.Module):
     def __init__(self, 
-                 num_classses: int, 
+                 num_classes: int, 
                 #  bb_embedding_hw_shrink_fac:int,
                  sam_checkpoint:Optional[str]=None,
                  in_channels:Union[int, Sequence[int]]=256,
@@ -1032,7 +1032,7 @@ class SAMdecHead(nn.Module):
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         
-        self.num_classses = num_classses
+        self.num_classses = num_classes
         # self.bb_embedding_hw_shrink_fac = bb_embedding_hw_shrink_fac
         
         if not isinstance(in_channels, int):
