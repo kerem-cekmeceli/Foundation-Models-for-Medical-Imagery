@@ -19,7 +19,7 @@ class DecHeadBase(nn.Module):
         
         self.cfg = cfg
         self.cfg['in_channels'] = [in_feat_chs]*nb_ins
-        self.num_classes = cfg['num_classses']
+        self.num_classes = cfg['num_classes']
         
         self.decoder = self._get_dec_from_cfg()
         
