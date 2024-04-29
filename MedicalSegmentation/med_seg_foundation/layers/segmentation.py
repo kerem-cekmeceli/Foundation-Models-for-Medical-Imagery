@@ -843,7 +843,7 @@ class UpNetHeadBase(DecBase):
 class ResNetHead(UpNetHeadBase):
     def __init__(self, 
                  in_channels: Union[int,Sequence[int]],
-                 num_classses: int, 
+                 num_classes: int, 
                  in_index: Optional[Union[int,Sequence[int]]]=None,
                  in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
                  align_corners: bool=False,
@@ -862,7 +862,7 @@ class ResNetHead(UpNetHeadBase):
                  in_channels_red:Optional[int]=None) -> None:
         
         super().__init__(in_channels,
-                         num_classses, 
+                         num_classes, 
                          in_index,
                          in_resize_factors,
                          align_corners,
@@ -917,7 +917,7 @@ class ResNetHead(UpNetHeadBase):
 class UNetHead(UpNetHeadBase):
     def __init__(self, 
                  in_channels: Sequence[int],
-                 num_classses: int, 
+                 num_classes: int, 
                  in_index: Optional[Union[int,Sequence[int]]]=None,
                  in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
                  align_corners: bool=False,
@@ -943,7 +943,7 @@ class UNetHead(UpNetHeadBase):
         self.resnet_cat_inp_upscaling = [resnet_cat_inp_upscaling]*nb_up_blocks
         
         super().__init__(in_channels,
-                         num_classses, 
+                         num_classes, 
                          in_index,
                          in_resize_factors,
                          align_corners,
