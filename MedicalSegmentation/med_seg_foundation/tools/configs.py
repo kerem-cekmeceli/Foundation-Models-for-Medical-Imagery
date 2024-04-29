@@ -504,6 +504,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
         class_name = ConvHeadLinear.__name__
         # Linear classification of each patch + upsampling to pixel dim
         dec_head_cfg = dict(num_classses=num_classses,
+                            in_channels=[i for i in range(n_in)],
                             bilinear=True,
                             dropout_rat=0.1,)
     elif dec_name == 'fcn':
@@ -639,7 +640,7 @@ def get_loss_cfg(loss_key, data_attr):
 
     # Dice Loss
     epsilon = 1  # smoothing factor 
-    k=2  # power
+    k=1  # power
     loss_cfg_dice = dict(prob_inputs=False, 
                         ignore_idxs=ignore_idx_loss, # not removing results in better segmentation
                         reduction='mean',
@@ -699,7 +700,7 @@ def get_scheduler_cfg(nb_epochs):
         dict(name='LinearLR',
             params=dict(start_factor=1/3, end_factor=1.0, total_iters=warmup_iters)))
     
-    return scheduler_configs[0]
+    # return scheduler_configs[0]
     
     scheduler_configs.append(\
         dict(name='PolynomialLR',
@@ -788,14 +789,17 @@ def get_lr(model_type, **kwargs):
             return 2e-5
         
         elif bb_name =='resnet': #or 'ladder' in bb_name:
-            return 1e-3
+            return 5e-4
         
         elif 'reins' in bb_name:
             return 1e-4
         
-        elif 'ladder' in bb_name:
-            return 1e-3
+        elif 'ladderR' in bb_name:
+            return 2e-4
         
+        elif 'ladderD' in bb_name:
+            return 2e-5
+                
         # SAM and MedSAM
         else: 
             return 5e-5 

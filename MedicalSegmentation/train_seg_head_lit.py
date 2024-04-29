@@ -70,12 +70,12 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'reinL_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
-    backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
+    backbone_sz = "small" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
+    dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
     
 
 # Select dataset
@@ -83,11 +83,11 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'hcp1'  
+dataset = 'abide_caltech'  
 rcs_enabled = True
 
 # Select loss
-loss_cfg_key = 'dice_ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
+loss_cfg_key = 'ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
 
 # Training hyperparameters
 if not cluster_paths:

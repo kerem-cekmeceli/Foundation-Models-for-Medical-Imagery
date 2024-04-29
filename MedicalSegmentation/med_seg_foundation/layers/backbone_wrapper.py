@@ -275,7 +275,67 @@ class BackBoneBase1(BackBoneBase):
             with torch.no_grad():
                 feats = self._forward_backbone(x)
             return feats
-     
+        
+        
+class BlockBackboneBase(BackBoneBase1):
+    def __init__(self, 
+                 name: str,
+                 bb_model: Optional[nn.Module] = None, 
+                 cfg: Optional[dict] = None, 
+                 train: bool = False,
+                 pre_normalize: bool = False, 
+                 pix_mean: Optional[list] = None, 
+                 pix_std: Optional[list] = None, 
+                 target_size: Optional[Union[int, Tuple[int]]] = None, 
+                 interp_feats_to_orig_inp_size: Optional[bool] = False, 
+                 last_out_first: bool = True, 
+                 to_bgr: bool = False, 
+                 to_0_1: bool = False, 
+                 *args: Any, **kwargs: Any) -> None:
+        super().__init__(name, bb_model, cfg, train, pre_normalize, pix_mean, pix_std, 
+                         target_size, interp_feats_to_orig_inp_size, last_out_first, to_bgr, to_0_1, *args, **kwargs)
+        
+    
+    @property
+    @abstractmethod
+    def blocks(self):
+        """returns the transformer blocks"""
+        pass
+    
+    def prep_pre_hook(self, x):
+        """ Preperation step before starting running the blocks"""
+        return x
+    
+    def blk_pre_hook(self, x):
+        return x
+    
+    def blk_post_hook(self, x):
+        return x
+    
+    def oups_end_hook(self, x):
+        return x
+    
+    def get_inter_layers(self, x, n=1, reshape = True):
+        # Save the shape
+        B, _, h, w = x.shape
+        
+        # prep pre-hook 
+        x = self.prep_pre_hook(x)
+        
+        # Run the blocks and sace the outputs
+        outputs, total_block_len = [], len(self.blocks)
+        blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
+        for i, blk in enumerate(self.blocks):
+            self.blk_pre_hook(x)
+            x = blk(x)
+            self.blk_post_hook(x)
+            
+            # Save the oup
+            if i in blocks_to_take:
+                outputs.append(x)
+        assert len(outputs) == len(blocks_to_take), f"only {len(outputs)} / {len(blocks_to_take)} blocks found"
+           
+        return self.oups_end_hook(outputs)          
              
 class DinoBackBone(BackBoneBase1):
     def __init__(self, 
@@ -465,6 +525,25 @@ class SamBackBone(BackBoneBase1):
     @property
     def hw_shrink_fac(self):
         return self.backbone.patch_embed.proj.kernel_size[0]
+    
+    
+class SamReinBackBone(SamBackBone):
+    def __init__(self, 
+                 nb_outs: int, 
+                 name, 
+                 last_out_first: bool = True, 
+                 bb_model: Optional[nn.Module]= None, 
+                 cfg: Optional[dict] = None, 
+                 train: bool = False, 
+                 interp_to_inp_shape: bool = True, 
+                 pre_normalize: bool = False, 
+                 *args: Any, **kwargs: Any) -> None:
+        
+        super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
+                         cfg=cfg, train=train, interp_to_inp_shape=interp_to_inp_shape, 
+                         pre_normalize=pre_normalize, *args, **kwargs)
+        
+        
     
 # ResNet NEEDS RGB ORDER !              
 class ResNetBackBone(BackBoneBase1): 
