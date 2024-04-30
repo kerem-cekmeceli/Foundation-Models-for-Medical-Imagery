@@ -75,7 +75,7 @@ if model_type == ModelType.SEGMENTOR:
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'unet'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
+    dec_head_key = 'lin'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'sam_mask_dec'
     
 
 # Select dataset
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'spine_mrspinesegv'  if cluster_paths else 'hcp1'
+dataset = 'abide_caltech'  if cluster_paths else 'hcp1'
 rcs_enabled = True
 
 # Select loss
@@ -279,7 +279,7 @@ else:
 wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     dataset=dataset_attrs,
                     batch_sz=batch_sz,
-                    num_classes=dataset_attrs['num_classses'],
+                    num_classes=dataset_attrs['num_classes'],
                     augmentations=augmentations,
                     nb_epochs=nb_epochs,
                     timestamp=time_str(),

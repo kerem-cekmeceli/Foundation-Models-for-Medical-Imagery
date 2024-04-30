@@ -13,6 +13,7 @@ from typing import Union, Optional, Tuple, Callable, Sequence, Any
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 from math import ceil, floor
 from ModelSpecific.Reins.reins import Reins, LoRAReins
+from mmseg.models.backbones.mae import MAE
 
 
 class BackBoneBase(nn.Module):
@@ -66,6 +67,7 @@ class BackBoneBase(nn.Module):
 class BackBoneBase1(BackBoneBase):
     def __init__(self, 
                  name:str,
+                 nb_outs:int,
                  bb_model:Optional[nn.Module]=None,
                  cfg:Optional[dict]=None,
                  train: bool = False, 
@@ -79,7 +81,7 @@ class BackBoneBase1(BackBoneBase):
                  to_0_1:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, *args, **kwargs)
-                
+        self._nb_outs = nb_outs
         assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
         self.last_out_first = last_out_first
         self._to_bgr = to_bgr
@@ -115,14 +117,17 @@ class BackBoneBase1(BackBoneBase):
             self.pixel_mean = pix_mean
             self.pixel_std = pix_std
             
+            
+    @property
+    def nb_outs(self):
+        return self._nb_outs 
+    
     def _norm(self, x):
         # [B, C, H, W]
         
         # Normalize colors
         x = (x - self.pixel_mean) / self.pixel_std
-        
         return x
-            
         
     def __store_trainable_params_n_cfg_bb(self, train_bb:bool):
         assert hasattr(self, 'backbone'), 'Must first set a backbone'
@@ -218,21 +223,28 @@ class BackBoneBase1(BackBoneBase):
         assert self.interp_feats_to_orig_inp_size
         assert hasattr(self, 'bb_target_oup_feat_shape')
         
-        # Interpolate the oup feats 
-        up = self.bb_target_oup_feat_shape[0] > out_feat.shape[-2] and self.bb_target_oup_feat_shape[1] > out_feat.shape[-1]
-        reshaped_feats = resize(out_feat,
-                                size=self.bb_target_oup_feat_shape,
-                                mode="bilinear" if up else "area",
-                                )
-        # [B, N_class, H', W']
-        return reshaped_feats   
+        h, w = out_feat.shape[-2:]
+        h_t, w_t = self.bb_target_oup_feat_shape
+        
+        if self.bb_target_oup_feat_shape[0] != out_feat.shape[-2] or \
+            self.bb_target_oup_feat_shape[1] != out_feat.shape[-1]:
+            # Interpolate the oup feats 
+            up = self.bb_target_oup_feat_shape[0] > out_feat.shape[-2] and self.bb_target_oup_feat_shape[1] > out_feat.shape[-1]
+            reshaped_feats = resize(out_feat,
+                                    size=self.bb_target_oup_feat_shape,
+                                    mode="bilinear" if up else "area",
+                                    )
+            # [B, N_class, H', W']
+            return reshaped_feats   
+        else:
+            return out_feat
     
     
     @abstractmethod    
-    def forward_backbone(self, x):
+    def _forward_backbone(self, x):
         pass
     
-    def _forward_backbone(self, x):
+    def __forward_backbone(self, x):
         # [0, 255] --> [0, 1]
         if self._to_0_1:
             x = x/255.0
@@ -251,7 +263,7 @@ class BackBoneBase1(BackBoneBase):
         if not self.target_size is None:
             x = self.interp_bb_inp(x)
         
-        out_feats = self.forward_backbone(x)
+        out_feats = self._forward_backbone(x)
         
         # Interpolate the output features as if no input interpolation was performed (if requested)
         if self.interp_feats_to_orig_inp_size:
@@ -270,16 +282,17 @@ class BackBoneBase1(BackBoneBase):
 
     def forward(self, x):    
         if self.train_backbone:
-            return self._forward_backbone(x)
+            return self.__forward_backbone(x)
         else:
             with torch.no_grad():
-                feats = self._forward_backbone(x)
+                feats = self.__forward_backbone(x)
             return feats
         
         
 class BlockBackboneBase(BackBoneBase1):
     def __init__(self, 
                  name: str,
+                 nb_outs:int, 
                  bb_model: Optional[nn.Module] = None, 
                  cfg: Optional[dict] = None, 
                  train: bool = False,
@@ -292,8 +305,10 @@ class BlockBackboneBase(BackBoneBase1):
                  to_bgr: bool = False, 
                  to_0_1: bool = False, 
                  *args: Any, **kwargs: Any) -> None:
-        super().__init__(name, bb_model, cfg, train, pre_normalize, pix_mean, pix_std, 
-                         target_size, interp_feats_to_orig_inp_size, last_out_first, to_bgr, to_0_1, *args, **kwargs)
+        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize, 
+                         pix_mean=pix_mean, pix_std=pix_std, target_size=target_size, 
+                         interp_feats_to_orig_inp_size=interp_feats_to_orig_inp_size, 
+                         last_out_first=last_out_first, to_bgr=to_bgr, to_0_1=to_0_1, *args, **kwargs)
         
     
     @property
@@ -309,13 +324,16 @@ class BlockBackboneBase(BackBoneBase1):
     def blk_pre_hook(self, x):
         return x
     
-    def blk_post_hook(self, x):
+    def blk_post_hook(self, x, i):
         return x
     
-    def oups_end_hook(self, x):
+    def oup_before_append_hook(self, x):
         return x
     
-    def get_inter_layers(self, x, n=1, reshape = True):
+    def oups_end_hook(self, outputs):
+        return outputs
+    
+    def get_inter_layers(self, x, n=1):
         # Save the shape
         B, _, h, w = x.shape
         
@@ -328,16 +346,21 @@ class BlockBackboneBase(BackBoneBase1):
         for i, blk in enumerate(self.blocks):
             self.blk_pre_hook(x)
             x = blk(x)
-            self.blk_post_hook(x)
+            self.blk_post_hook(x, i)
             
             # Save the oup
             if i in blocks_to_take:
-                outputs.append(x)
+                oup = self.oup_before_append_hook(x, B, h, w)
+                outputs.append(oup)
         assert len(outputs) == len(blocks_to_take), f"only {len(outputs)} / {len(blocks_to_take)} blocks found"
            
-        return self.oups_end_hook(outputs)          
+        return self.oups_end_hook(outputs)     
+    
+    def _forward_backbone(self, x):
+        out_patch_feats = self.get_inter_layers(x, n=self.nb_outs)
+        return out_patch_feats     
              
-class DinoBackBone(BackBoneBase1):
+class DinoBackBone(BlockBackboneBase):
     def __init__(self, 
                  nb_outs:int,
                  name:str,
@@ -348,7 +371,7 @@ class DinoBackBone(BackBoneBase1):
                  disable_mask_tokens=True,
                  pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
-        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
+        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
                          target_size=None, interp_feats_to_orig_inp_size=False, 
                          last_out_first=last_out_first, to_bgr=True, to_0_1=False, *args, **kwargs)
@@ -356,11 +379,33 @@ class DinoBackBone(BackBoneBase1):
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
         assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
-        self._nb_outs = nb_outs
         self._input_sz_multiple = self.backbone.patch_size
         
         if disable_mask_tokens:
             self.backbone.mask_token.requires_grad = False
+    
+    @property
+    def blocks(self):
+        return self.backbone.blocks
+    
+    def prep_pre_hook(self, x):
+        return self.backbone.prepare_tokens_with_masks(x)
+    
+    def oup_before_append_hook(self, x, B, h, w, norm=True):
+        if norm:
+            # Normalize
+            out = self.backbone.norm(x)
+        else:
+            out = x
+        
+        # Remove cls and register tokens
+        out = out[:, 1 + self.backbone.num_register_tokens:]
+        
+        # Reshape
+        # Each oup is of shape: [B, N, embed_dim] --reshape--> [B, embed_dim, h_patches, w_patches]
+        out = out.reshape(B, h // self.backbone.patch_size, w // self.backbone.patch_size, -1).permute(0, 3, 1, 2).contiguous()
+
+        return out    
         
         
     def _get_bb_from_cfg(self, cfg:dict):
@@ -378,15 +423,6 @@ class DinoBackBone(BackBoneBase1):
                                     pad_val=0, seg_pad_val=0))
             
         return processing
-            
-    
-    def forward_backbone(self, x):
-        out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs, reshape=True)
-        return out_patch_feats
-        
-    @property
-    def nb_outs(self):
-        return self._nb_outs 
     
     @property  
     def out_feat_channels(self):
@@ -407,6 +443,7 @@ class DinoReinBackbone(DinoBackBone):
                  disable_mask_tokens=True, 
                  pre_normalize: bool = False, 
                  lora_reins:bool=False,
+                 link_token_to_query:bool=False,
                  *args: Any, **kwargs: Any) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
@@ -417,61 +454,31 @@ class DinoReinBackbone(DinoBackBone):
         
         lora_params = dict(num_layers=len(self.backbone.blocks),
                            embed_dims=self.backbone.embed_dim,
-                           patch_size=self.backbone.patch_size)
+                           patch_size=self.backbone.patch_size,
+                           link_token_to_query=link_token_to_query)
         if not self.lora_reins:
             self.reins: Reins = Reins(**lora_params)
         else:
             self.reins: LoRAReins = LoRAReins(**lora_params)
-        
-    def get_intermediate_layers(self, 
-                                x: torch.Tensor,
-                                n: Union[int, Sequence] = 1, 
-                                reshape: bool = True,
-                                return_class_token: bool = False,
-                                norm=True,):
-        B, _, h, w = x.shape 
-        x = self.backbone.prepare_tokens_with_masks(x)
-        # If n is an int, take the n last blocks. If it's a list, take them
-        outputs, total_block_len = [], len(self.backbone.blocks)
-        blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
-        for i, blk in enumerate(self.backbone.blocks):
-            # Dino ViT block
-            x = blk(x)
-            
-            # Apply Rein
-            x = self.reins.forward(
-                x,
-                i,
-                batch_first=True,
-                has_cls_token=True,
-            )
-            if i in blocks_to_take:
-                outputs.append(x)
-        assert len(outputs) == len(blocks_to_take), f"only {len(outputs)} / {len(blocks_to_take)} blocks found"
-        
-        # Normalize the outputs
-        if norm:
-            outputs = [self.backbone.norm(out) for out in outputs]
-            
-        class_tokens = [out[:, 0] for out in outputs]  # list of cls_token outputs (of length n)
-        outputs = [out[:, 1 + self.backbone.num_register_tokens:] for out in outputs]  # Discard register tokens
-        
-        # Each oup is of shape: [B, N, embed_dim] --reshape--> [B, embed_dim, h_patches, w_patches]
-        if reshape:
-            outputs = [
-                out.reshape(B, h // self.backbone.patch_size, w // self.backbone.patch_size, -1).permute(0, 3, 1, 2).contiguous()
-                for out in outputs
-            ]
-        if return_class_token:
-            return tuple(zip(outputs, class_tokens))
-        return tuple(outputs)
-        
-    def forward_backbone(self, x):
-        out_patch_feats = self.get_intermediate_layers(x, n=self._nb_outs)
-        return out_patch_feats
+    
+    def blk_post_hook(self, x, i):
+        # Apply Rein
+        x = self.reins.forward(
+            x,
+            i,
+            batch_first=True,
+            has_cls_token=True,
+        )
+        return x    
+    
+    def oups_end_hook(self, outputs):
+        return self.reins.return_auto(outputs)
+    
+    def oup_before_append_hook(self, x, B, h, w):
+        return super().oup_before_append_hook(x, B, h, w, norm=False)
         
   
-class SamBackBone(BackBoneBase1):
+class SamBackBone(BlockBackboneBase):
     def __init__(self, 
                  nb_outs:int,
                  name,
@@ -483,15 +490,17 @@ class SamBackBone(BackBoneBase1):
                  pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
-        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
+        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
                          target_size=1024, interp_feats_to_orig_inp_size=interp_to_inp_shape, 
                          last_out_first=last_out_first, to_bgr=False, to_0_1=False, *args, **kwargs)
         
-        assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
-        assert nb_outs <= self.backbone.n_blocks, f'Requested n_out={nb_outs}, but only available {self.backbone.n_blocks}'
-        self._nb_outs = nb_outs
-        
+        assert self.nb_outs >= 1, f'n_out should be at least 1, but got: {self.nb_outs}'
+        assert self.nb_outs <= self.backbone.n_blocks, f'Requested n_out={self.nb_outs}, but only available {self.backbone.n_blocks}'     
+    
+    @property
+    def blocks(self):
+        return self.backbone.blocks
     
     def _get_bb_from_cfg(self, cfg:dict):
         return get_sam_vit_backbone(**cfg)
@@ -503,16 +512,7 @@ class SamBackBone(BackBoneBase1):
         processing.append(dict(type='CentralPad', 
                                make_square=True,
                                pad_val=0, seg_pad_val=0))
-            
         return processing
-        
-    def forward_backbone(self, x):
-        out_patch_feats = self.backbone.get_intermediate_layers(x, n=self._nb_outs)
-        return out_patch_feats
-    
-    @property
-    def nb_outs(self):
-        return self._nb_outs
     
     @property  
     def out_feat_channels(self):
@@ -526,6 +526,18 @@ class SamBackBone(BackBoneBase1):
     def hw_shrink_fac(self):
         return self.backbone.patch_embed.proj.kernel_size[0]
     
+    def prep_pre_hook(self, x):
+        x = self.backbone.patch_embed(x)
+        if self.backbone.pos_embed is not None:
+            x = x + self.backbone.pos_embed
+        return x
+    
+    def oup_before_append_hook(self, x, B, h, w, norm=True):
+        out = x.permute(0, 3, 1, 2).contiguous()
+        if self.backbone.neck is not None:
+            out = self.backbone.neck(out)
+        return out    
+    
     
 class SamReinBackBone(SamBackBone):
     def __init__(self, 
@@ -537,14 +549,104 @@ class SamReinBackBone(SamBackBone):
                  train: bool = False, 
                  interp_to_inp_shape: bool = True, 
                  pre_normalize: bool = False, 
+                 lora_reins:bool=False,
+                 link_token_to_query:bool=False,
                  *args: Any, **kwargs: Any) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
                          cfg=cfg, train=train, interp_to_inp_shape=interp_to_inp_shape, 
                          pre_normalize=pre_normalize, *args, **kwargs)
         
+        self.lora_reins = lora_reins
+        lora_params = dict(num_layers=len(self.backbone.blocks),
+                           embed_dims=self.backbone.patch_embed.proj.out_channels,
+                           patch_size=self.hw_shrink_fac,
+                           link_token_to_query=link_token_to_query)
         
+        if not self.lora_reins:
+            self.reins: Reins = Reins(**lora_params)
+        else:
+            self.reins: LoRAReins = LoRAReins(**lora_params)   
+        
+        
+    def blk_post_hook(self, x, i):
+        B = x.shape[0]
+        return self.reins.forward(x.view(B,-1,self.backbone.patch_embed.proj.out_channels),
+                                         i,
+                                         batch_first=True,
+                                         has_cls_token=False)
+ 
+ 
+ 
+class MAEBackbone(BlockBackboneBase):
+    def __init__(self, 
+                 name: str, 
+                 nb_outs: int, 
+                 bb_model: Optional[nn.Module] = None, 
+                 cfg: Optional[dict] = None, 
+                 train: bool = False, 
+                 pre_normalize: bool = False, 
+                 last_out_first: bool = True, 
+                 *args: Any, **kwargs: Any) -> None:
+         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, 
+                          pre_normalize=pre_normalize,  pix_mean=[0.485, 0.456, 0.406], pix_std=[0.229, 0.224, 0.225],
+                          target_size=224, interp_feats_to_orig_inp_size=False, 
+                          last_out_first=last_out_first, to_bgr=False, to_0_1=True, 
+                          *args, **kwargs)
+         pass
+         
+    @property
+    def blocks(self):
+        return self.backbone.layers
     
+    @property
+    def hw_shrink_fac(self):
+        return self.backbone.patch_size
+    
+    @property
+    def out_feat_channels(self):
+        return self.backbone.embed_dims
+    
+    def get_pre_processing_cfg_list(self):
+        processing = []
+        processing.append(dict(type='CentralCrop',  
+                          size_divisor=self.hw_shrink_fac))
+        return processing
+    
+    def _get_bb_from_cfg(self, cfg:dict):#@TODO
+        return MAE(**cfg)
+    
+    def prep_pre_hook(self, x):
+        B = x.shape[0]
+        
+        # Embed patches
+        x, hw_shape = self.backbone.patch_embed(x)
+        self.hw_shape=hw_shape
+        
+        # Add the cls token
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+        
+        # Add the pos embeddings
+        x = x + self.pos_embed
+        return x
+    
+    def blk_post_hook(self, x, i):
+        if i == len(self.blocks) - 1:
+            if self.backbone.final_norm:
+                x = self.backbone.norm1(x)
+        return x
+    
+    def oup_before_append_hook(self, x):
+        out = x[:, 1:]
+        B, _, C = out.shape
+        out = out.reshape(B, self.hw_shape[0], self.hw_shape[1], C).permute(0, 3, 1, 2).contiguous()
+        return out
+    
+    def oups_end_hook(self, outputs):
+        return tuple(outputs)
+        
+         
 # ResNet NEEDS RGB ORDER !              
 class ResNetBackBone(BackBoneBase1): 
     def __init__(self, 
@@ -560,7 +662,7 @@ class ResNetBackBone(BackBoneBase1):
                  uniform_oup_size:bool=True,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
-        super().__init__(name=name, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
+        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[0.485, 0.456, 0.406], pix_std=[0.229, 0.224, 0.225], 
                          target_size=224, interp_feats_to_orig_inp_size=False, 
                          last_out_first=last_out_first,  to_bgr=False, to_0_1=True, *args, **kwargs)
@@ -568,8 +670,7 @@ class ResNetBackBone(BackBoneBase1):
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers
         self._hw_shrink_fac = 32 if not skip_last_layer else 16
-        assert nb_outs>1
-        self._nb_outs=nb_outs
+        assert self.nb_outs>1
         self._skip_last_layer = skip_last_layer
         
         if self._skip_last_layer:
@@ -630,18 +731,18 @@ class ResNetBackBone(BackBoneBase1):
                                     nn.ReLU())
     
     def assign_nb_outs_per_layer(self):
-        assert hasattr(self, '_nb_outs')
+        assert hasattr(self, 'nb_outs')
         assert hasattr(self, '_skip_last_layer')
         self.nb_outs_per_l = [0]*self.nb_conv_layers
-        nb_outs = self._nb_outs
+        nb_outs = self.nb_outs
         
         for i in range(self.nb_conv_layers-1, -1, -1):
             if nb_outs>0:
                 self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
             nb_outs -= self.nb_outs_per_l[i]
         
-        assert nb_outs<=0, f'Requested nb_outs={self._nb_outs}, but only {self._nb_outs+nb_outs} available'    
-        assert sum(self.nb_outs_per_l) == self._nb_outs
+        assert nb_outs<=0, f'Requested nb_outs={self.nb_outs}, but only {self.nb_outs+nb_outs} available'    
+        assert sum(self.nb_outs_per_l) == self.nb_outs
         assert len(self.nb_outs_per_l)==self.nb_conv_layers
                 
     
@@ -660,7 +761,6 @@ class ResNetBackBone(BackBoneBase1):
                 output.append(x)
         assert len(output) == len(blocks_to_take) == n, f"only {len(output)} / {len(blocks_to_take)} blocks found"
         return x, output
-        
     
     def get_inter_res(self, x):
         # Initial convolutions
@@ -689,7 +789,7 @@ class ResNetBackBone(BackBoneBase1):
         # No weights - random initialization
         return get_model(**cfg)
     
-    def forward_backbone(self, x):
+    def _forward_backbone(self, x):
         return self.get_inter_res(x)
         
     def forward_no_inter(self, x):
@@ -705,18 +805,12 @@ class ResNetBackBone(BackBoneBase1):
             x = self.backbone.layer4(x)
         return (x,)
     
-    @property
-    def nb_outs(self):
-        return self._nb_outs
-    
-    
     def get_out_channels(self, layer):
         if self._nb_layers>34:
             return layer[-1].conv3.out_channels
         else:
             return layer[-1].conv2.out_channels
         
-    
     @property  
     def out_feat_channels(self):
         if self._skip_last_layer:
@@ -850,6 +944,8 @@ implemented_backbones = [DinoBackBone.__name__,
                          SamBackBone.__name__,
                          ResNetBackBone.__name__,
                          LadderBackbone.__name__,
-                         DinoReinBackbone.__name__]
+                         DinoReinBackbone.__name__,
+                         SamReinBackBone.__name__,
+                         MAEBackbone.__name__]
         
         

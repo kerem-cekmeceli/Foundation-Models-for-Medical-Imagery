@@ -65,23 +65,27 @@ class ImageEncoderViTFeats(nn.Module):
         return tuple(output)
     
     
-def get_sam_neck(in_channels, out_channels=256):
-    return nn.Sequential(nn.Conv2d(
-                                in_channels,
-                                out_channels,
-                                kernel_size=1,
-                                bias=False,
-                            ),
-                            LayerNorm2d(out_channels),
-                            nn.Conv2d(
-                                out_channels,
-                                out_channels,
-                                kernel_size=3,
-                                padding=1,
-                                bias=False,
-                            ),
-                            LayerNorm2d(out_channels),
-                        )
+def get_sam_neck(in_channels, out_channels=256, sam_checkpoint=None):
+    if sam_checkpoint is None:
+        return nn.Sequential(nn.Conv2d(
+                                    in_channels,
+                                    out_channels,
+                                    kernel_size=1,
+                                    bias=False,
+                                ),
+                                LayerNorm2d(out_channels),
+                                nn.Conv2d(
+                                    out_channels,
+                                    out_channels,
+                                    kernel_size=3,
+                                    padding=1,
+                                    bias=False,
+                                ),
+                                LayerNorm2d(out_channels),
+                            )
+    else:
+        return sam_model_registry['vit_b'](checkpoint=sam_checkpoint).image_encoder.neck
+
     
     
 def get_sam_vit_backbone(bb_size, sam_checkpoint=None, apply_neck=False):
@@ -110,4 +114,5 @@ def get_sam_prompt_enc(sam_checkpoint=None):
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     
     return sam.prompt_encoder
+
         

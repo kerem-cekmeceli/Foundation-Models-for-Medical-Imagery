@@ -5,7 +5,8 @@ import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, DinoReinBackbone
+from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, \
+    DinoReinBackbone, SamReinBackBone, MAEBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
@@ -34,12 +35,12 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5'
             attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_from_50_to_70.hdf5'
-        attrs['num_classses'] = 15
+        attrs['num_classes'] = 15
         attrs['vol_depth'] = 256  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -60,12 +61,12 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             attrs['hdf5_train_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_0_to_20.hdf5'
             attrs['hdf5_val_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_20_to_25.hdf5'
             attrs['hdf5_test_name'] = 'data_T2_2d_size_256_256_depth_256_res_0.7_0.7_from_50_to_70.hdf5'
-        attrs['num_classses'] = 15
+        attrs['num_classes'] = 15
         attrs['vol_depth'] = 256  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -87,12 +88,12 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_0_to_10.hdf5'
             attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_10_to_15.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_256_res_0.7_0.7_0.7_from_16_to_36.hdf5'
-        attrs['num_classses'] = 15
+        attrs['num_classes'] = 15
         attrs['vol_depth'] = 256  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -113,12 +114,12 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             attrs['hdf5_train_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_0_to_10.hdf5'
             attrs['hdf5_val_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_10_to_15.hdf5'
             attrs['hdf5_test_name'] = 'data_T1_2d_size_256_256_depth_132_res_0.7_0.7_from_16_to_36.hdf5'
-        attrs['num_classses'] = 15
+        attrs['num_classes'] = 15
         attrs['vol_depth'] = 132  # volume depth (all the same)
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -133,7 +134,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         if not use_hdf5:
             ValueError('only HDF5 is supported')
             
-        attrs['num_classses'] = 3
+        attrs['num_classes'] = 3
         attrs['vol_depth_first'] = 15  # First val volume depth NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -146,7 +147,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         else:
             attrs['format'] = 'png'
             
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -162,7 +163,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             ValueError('only HDF5 is supported')
             
         attrs['data_path_suffix'] = 'prostate/pirad_erc'
-        attrs['num_classses'] = 3
+        attrs['num_classes'] = 3
         attrs['vol_depth_first'] = 22  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -176,7 +177,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         else:
             attrs['format'] = 'png'
             
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -192,7 +193,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             ValueError('only HDF5 is supported')
             
         attrs['data_path_suffix'] = 'cardiac/acdc'
-        attrs['num_classses'] = 4
+        attrs['num_classes'] = 4
         attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -205,7 +206,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         else:
             attrs['format'] = 'png'
             
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -221,7 +222,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             ValueError('only HDF5 is supported')
             
         attrs['data_path_suffix'] = 'cardiac/rvsc'
-        attrs['num_classses'] = 3
+        attrs['num_classes'] = 3
         attrs['vol_depth_first'] = 10  # First val volume depth  NOT ALL THE SAME !
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -234,7 +235,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         else:
             attrs['format'] = 'png'
             
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -250,7 +251,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             ValueError(f'HDF5 format is not supported for {name}')
             
         attrs['data_path_suffix'] = 'lumbarspine/MRSpineSegV'
-        attrs['num_classses'] = 6
+        attrs['num_classes'] = 6
         attrs['vol_depth'] = 12  
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -264,7 +265,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         else:
             attrs['format'] = 'png'
             
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -280,7 +281,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             ValueError(f'HDF5 format is not supported for {name}')
             
         attrs['data_path_suffix'] = 'lumbarspine/VerSe'
-        attrs['num_classses'] = 6
+        attrs['num_classes'] = 6
         attrs['vol_depth'] = 120  
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
@@ -294,7 +295,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         else:
             attrs['format'] = 'png'
             
-        # weight = [0.1] + [1.]*(attrs['num_classses']-1)
+        # weight = [0.1] + [1.]*(attrs['num_classes']-1)
         # weight = torch.Tensor(weight)
         weight = None
         
@@ -345,7 +346,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
 def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     bb_cps_pth = 'Checkpoints/Orig/backbone'
     
-    if bb_name in ["dino", "sam", "medsam", "resnet"]:
+    if bb_name in ["dino", "sam", "medsam", "mae", "resnet"]:
         if dec_name=='unet':
             n_out = 5*2
         elif dec_name=='sam_mask_dec':
@@ -383,6 +384,17 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         params['name'] = bb_name+bb_size[0].upper()
         params['lora_reins'] = bb_name=='reinL_dino'
         
+    if bb_name in ['rein_sam', 'reinL_sam', 'rein_medsam', 'reinL_medsam'] :
+        assert pretrained
+        assert not train_bb
+        dino_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, pretrained)
+        name = SamReinBackBone.__name__
+        params = dino_name_params['params']
+        del params['train']
+        params['name'] = bb_name+bb_size[0].upper()
+        params['lora_reins'] = 'reinL' in bb_name
+        
+        
     elif bb_name == 'sam' or bb_name == 'medsam':
         apply_neck = (dec_name=='sam_mask_dec')
         
@@ -415,6 +427,12 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       train=train_bb,
                       interp_to_inp_shape= (dec_name!='sam_mask_dec'),
                       pre_normalize=False)
+        
+    elif bb_name=='mae':    
+        name = MAEBackbone.__name__
+        params = dict(name=f'{bb_name}_{bb_size}',
+                      nb_outs=n_out,
+                      cfg=dict())
         
     elif bb_name == 'resnet':
         if dec_name=='unet':
@@ -498,12 +516,12 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
 
 
 def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
-    num_classses = dataset_attrs['num_classses']
+    num_classes = dataset_attrs['num_classes']
     
     if dec_name == 'lin':
         class_name = ConvHeadLinear.__name__
         # Linear classification of each patch + upsampling to pixel dim
-        dec_head_cfg = dict(num_classses=num_classses,
+        dec_head_cfg = dict(num_classes=num_classes,
                             in_channels=[i for i in range(n_in)],
                             bilinear=True,
                             dropout_rat=0.1,)
@@ -514,7 +532,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
                             kernel_size=3,
                             concat_input=True,
                             dilation=1,
-                            num_classes=num_classses,  # output channels
+                            num_classes=num_classes,  # output channels
                             dropout_ratio=0.1,
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
@@ -527,7 +545,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
         class_name = PSPHead.__name__
         # https://arxiv.org/abs/1612.01105
         dec_head_cfg = dict(pool_scales=(1, 2, 3, 6),
-                                num_classes=num_classses,  # output channels
+                                num_classes=num_classes,  # output channels
                                 dropout_ratio=0.1,
                                 conv_cfg=dict(type='Conv2d'), # None = conv2d
                                 norm_cfg=dict(type='BN'),
@@ -539,7 +557,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
     elif dec_name == 'da':
         class_name = DAHead.__name__
         # https://arxiv.org/abs/1809.02983
-        dec_head_cfg = dict(num_classes=num_classses,  # output channels
+        dec_head_cfg = dict(num_classes=num_classes,  # output channels
                             dropout_ratio=0.1,
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
@@ -553,7 +571,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
         class_name = SegformerHead.__name__
         # https://arxiv.org/abs/2105.15203
         dec_head_cfg = dict(interpolate_mode='bilinear',
-                            num_classes=num_classses,  # output channels
+                            num_classes=num_classes,  # output channels
                             dropout_ratio=0.1,
                             conv_cfg=dict(type='Conv2d'), # None = conv2d
                             norm_cfg=dict(type='BN'),
@@ -565,7 +583,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
     elif dec_name == 'resnet':
         class_name = ResNetHead.__name__
         # ResNet-like with recurrent convs
-        dec_head_cfg = dict(num_classes=num_classses,
+        dec_head_cfg = dict(num_classes=num_classes,
                             # in_index=None,
                             # in_resize_factors=None,
                             # align_corners=False,
@@ -585,7 +603,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
         class_name = UNetHead.__name__
         # https://arxiv.org/abs/1505.04597 (unet papaer)
         input_group_cat_nb = 2
-        dec_head_cfg = dict(num_classes=num_classses,
+        dec_head_cfg = dict(num_classes=num_classes,
                             # in_index=None,
                             # in_resize_factors=None,
                             # align_corners=False,
@@ -610,18 +628,20 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
         if pretrained:
             assert main_path is not None
             bb_cps_pth = 'Checkpoints/Orig/backbone'
-            if bb_name == 'sam':
-                sam_checkpoint = main_path/bb_cps_pth/'SAM'/'sam_vit_b_01ec64.pth'
-            else:
-                sam_checkpoint = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth'      
+            
+            sam_checkpoint = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth' 
+            # if bb_name == 'sam':
+            #     sam_checkpoint = main_path/bb_cps_pth/'SAM'/'sam_vit_b_01ec64.pth'
+            # else:
+            #     sam_checkpoint = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth'      
         else:
             sam_checkpoint = None
         
         class_name = SAMdecHead.__name__
-        dec_head_cfg = dict(num_classes=num_classses,
+        dec_head_cfg = dict(num_classes=num_classes,
                             sam_checkpoint=sam_checkpoint,
                             train_prmopt_enc=False,
-                            train_mask_dec=True,)
+                            )
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
         
@@ -840,7 +860,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
         
         segmentor_cfg = dict(name=UNet.__name__,
                          params=dict(n_channels=3, 
-                                     n_classes=dataset_attrs['num_classses'], 
+                                     n_classes=dataset_attrs['num_classes'], 
                                      bilinear=False))
         
     else:
@@ -900,7 +920,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
     
     data_path_suffix = data_attr['data_path_suffix']
     dataset = data_attr['name']
-    num_classses = data_attr['num_classses']
+    num_classes = data_attr['num_classes']
     rcs_enabled = data_attr['rcs_enabled']
     
     data_root_pth = data_root_pth / data_path_suffix
@@ -911,7 +931,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
 
         train_dataset = SegmentationDataset(img_dir=data_root_pth/'images'/train_fld,
                                             mask_dir=data_root_pth/'labels'/train_fld,
-                                            num_classes=num_classses,
+                                            num_classes=num_classes,
                                             file_extension='.png',
                                             mask_suffix='_labelTrainIds',
                                             augmentations=train_procs,
@@ -919,7 +939,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                             ret_n_z=False, rcs_enabled=rcs_enabled)
         val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                         mask_dir=data_root_pth/'labels/val',
-                                        num_classes=num_classses,
+                                        num_classes=num_classes,
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
                                         augmentations=val_test_procs,
@@ -927,7 +947,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                         ret_n_z=True, rcs_enabled=False)
         test_dataset = SegmentationDataset(img_dir=data_root_pth/'images/test',
                                         mask_dir=data_root_pth/'labels/test',
-                                        num_classes=num_classses,
+                                        num_classes=num_classes,
                                         file_extension='.png',
                                         mask_suffix='_labelTrainIds',
                                         augmentations=val_test_procs,
@@ -941,15 +961,15 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
         hdf5_test_name = data_attr['hdf5_test_name']
         
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
-                                                num_classes=num_classses, 
+                                                num_classes=num_classes, 
                                                 augmentations=train_procs,
                                                 ret_n_xyz=False, rcs_enabled=rcs_enabled)
         val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
-                                                num_classes=num_classses, 
+                                                num_classes=num_classes, 
                                                 augmentations=val_test_procs,
                                                 ret_n_xyz=True, rcs_enabled=False)
         test_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_test_name, 
-                                                num_classes=num_classses, 
+                                                num_classes=num_classes, 
                                                 augmentations=val_test_procs,
                                                 ret_n_xyz=True, rcs_enabled=False)
     else:

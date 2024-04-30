@@ -12,7 +12,7 @@ from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone, get_sam_neck
 class DecBase(nn.Module, ABC):
     def __init__(self, 
                  in_channels: Union[int,Sequence[int]],
-                 num_classses: int, 
+                 num_classes: int, 
                  cls_in_channels: Optional[int]=None,
                  in_index: Optional[Union[int,Sequence[int]]]=None,
                  input_transform: Optional[str]=None,
@@ -45,8 +45,8 @@ class DecBase(nn.Module, ABC):
         super().__init__()
         self._init_inputs(in_channels, in_index, input_transform, in_resize_factors, input_group_cat_nb, resize_for_cat_if_req)
         
-        assert num_classses > 0
-        self.num_classes=num_classses
+        assert num_classes > 0
+        self.num_classes=num_classes
         
         if cls_in_channels is None:
             assert isinstance(self.in_channels, int)
@@ -65,7 +65,7 @@ class DecBase(nn.Module, ABC):
         else:
             self.dropout = None
         
-        self.conv_seg = nn.Conv2d(self.cls_in_channels, num_classses, kernel_size=1)
+        self.conv_seg = nn.Conv2d(self.cls_in_channels, num_classes, kernel_size=1)
         
         # Upsampling / Transposed convloution shape matching
         if out_upsample_fac is not None:
@@ -77,7 +77,7 @@ class DecBase(nn.Module, ABC):
                 self.up = nn.Upsample(scale_factor=out_upsample_fac, mode='bilinear', align_corners=False)
             else:
                 assert isinstance(out_upsample_fac, int)
-                self.up = nn.ConvTranspose2d(num_classses , num_classses, kernel_size=out_upsample_fac, stride=out_upsample_fac)
+                self.up = nn.ConvTranspose2d(num_classes , num_classes, kernel_size=out_upsample_fac, stride=out_upsample_fac)
         self.out_upsample_fac = out_upsample_fac
         
     def _init_inputs(self, in_channels, in_index, input_transform, in_resize_factors, input_group_cat_nb, resize_for_cat_if_req):
@@ -275,7 +275,7 @@ class ConvHeadLinear(DecBase):
     
     def __init__(self, 
                  in_channels: Union[int,Sequence[int]],
-                 num_classses: int, 
+                 num_classes: int, 
                  in_index: Optional[Union[int,Sequence[int]]]=None,
                  in_resize_factors: Optional[Union[int,Sequence[int]]]=None,
                  align_corners: bool=False,
@@ -285,7 +285,7 @@ class ConvHeadLinear(DecBase):
                  resize_for_cat_if_req:bool=False) -> None:
         super().__init__(in_channels=in_channels,
                          cls_in_channels=None,
-                         num_classses=num_classses, 
+                         num_classes=num_classes, 
                          in_index=in_index,
                          input_transform='resize_concat',
                          in_resize_factors=in_resize_factors,
@@ -757,7 +757,7 @@ class UpNetHeadBase(DecBase):
         
         super().__init__(in_channels=in_channels,
                          cls_in_channels=last_out_ch,  # Assigned in "_init_up_layers"
-                         num_classses=num_classses, 
+                         num_classes=num_classses, 
                          in_index=in_index,
                          input_transform=inp_transform,
                          in_resize_factors=in_resize_factors,
@@ -1028,11 +1028,11 @@ class SAMdecHead(nn.Module):
                  image_pe_size:Union[int, Sequence[int]]=1024,
                  img_embd_pe_size:Union[int, Sequence[int]]=64,
                  train_prmopt_enc:bool=False,
-                 train_mask_dec:bool=True,
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         
         self.num_classses = num_classes
+        self.sam_checkpoint = sam_checkpoint
         # self.bb_embedding_hw_shrink_fac = bb_embedding_hw_shrink_fac
         
         if not isinstance(in_channels, int):
@@ -1047,8 +1047,15 @@ class SAMdecHead(nn.Module):
             assert img_embd_pe_size==64
             self.sam_prompt_embd_channels = 256
             if in_channels != self.sam_prompt_embd_channels:
-                self.neck = get_sam_neck(in_channels=in_channels, 
-                                         out_channels=self.sam_prompt_embd_channels)
+                if in_channels==768 and self.sam_prompt_embd_channels==256:
+                    # Will use MedSAM pretrained weights
+                    self.neck = get_sam_neck(in_channels=in_channels, 
+                                            out_channels=self.sam_prompt_embd_channels,
+                                            sam_checkpoint=self.sam_checkpoint)
+                else:    
+                    # Random weights
+                    self.neck = get_sam_neck(in_channels=in_channels, 
+                                            out_channels=self.sam_prompt_embd_channels)
         else:
             assert sam_checkpoint is None, "When in_channels and out_channels are given sam checkpoint must be None"
         
@@ -1061,10 +1068,9 @@ class SAMdecHead(nn.Module):
         self.img_embd_pe_size = img_embd_pe_size 
                 
         self.embed_dim = in_channels if self.neck is None else self.sam_prompt_embd_channels
-        self.sam_checkpoint = sam_checkpoint
+        
         
         self.train_prmopt_enc = train_prmopt_enc
-        self.train_mask_dec = train_mask_dec
         
         if self.pretrained_prompt_enc:
             self.prompt_encoder = get_sam_prompt_enc(sam_checkpoint=sam_checkpoint)
@@ -1098,9 +1104,6 @@ class SAMdecHead(nn.Module):
             for p in self.prompt_encoder.parameters():
                 p.requires_grad=False
                 
-        if not self.train_mask_dec:
-            for p in self.mask_decoder.parameters():
-                p.requires_grad=False     
         
         # We're not using the iou predictions        
         for p in self.mask_decoder.iou_prediction_head.parameters():
