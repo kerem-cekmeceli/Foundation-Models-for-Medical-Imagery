@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://github.com/facebookresearch/mae/tree/main?tab=readme-ov-file
+HostUrl=https://dl.fbaipublicfiles.com/mae/pretrain/mae_pretrain_vit_base.pth

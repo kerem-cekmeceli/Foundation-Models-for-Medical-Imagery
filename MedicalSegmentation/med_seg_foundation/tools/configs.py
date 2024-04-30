@@ -429,10 +429,16 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       pre_normalize=False)
         
     elif bb_name=='mae':    
+        if pretrained:
+            bb_checkpoint_path = main_pth/bb_cps_pth/f'MAE/mae_pretrain_vit_{bb_size}.pth'
+        else:
+            bb_checkpoint_path = None
+            
         name = MAEBackbone.__name__
         params = dict(name=f'{bb_name}_{bb_size}',
                       nb_outs=n_out,
-                      cfg=dict())
+                      cfg=dict(bb_size=bb_size, checkpoint=bb_checkpoint_path,
+                               enc_only=True))
         
     elif bb_name == 'resnet':
         if dec_name=='unet':

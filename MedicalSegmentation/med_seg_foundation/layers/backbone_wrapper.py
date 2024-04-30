@@ -13,7 +13,7 @@ from typing import Union, Optional, Tuple, Callable, Sequence, Any
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 from math import ceil, floor
 from ModelSpecific.Reins.reins import Reins, LoRAReins
-from mmseg.models.backbones.mae import MAE
+from ModelSpecific.MAE.prep_mae import get_mae_bb
 
 
 class BackBoneBase(nn.Module):
@@ -577,7 +577,6 @@ class SamReinBackBone(SamBackBone):
                                          has_cls_token=False)
  
  
- 
 class MAEBackbone(BlockBackboneBase):
     def __init__(self, 
                  name: str, 
@@ -593,19 +592,18 @@ class MAEBackbone(BlockBackboneBase):
                           target_size=224, interp_feats_to_orig_inp_size=False, 
                           last_out_first=last_out_first, to_bgr=False, to_0_1=True, 
                           *args, **kwargs)
-         pass
          
     @property
     def blocks(self):
-        return self.backbone.layers
+        return self.backbone.blocks
     
     @property
     def hw_shrink_fac(self):
-        return self.backbone.patch_size
+        return self.backbone.patch_embed.patch_size[0]
     
     @property
     def out_feat_channels(self):
-        return self.backbone.embed_dims
+        return self.backbone.patch_embed.proj.out_channels
     
     def get_pre_processing_cfg_list(self):
         processing = []
@@ -613,34 +611,31 @@ class MAEBackbone(BlockBackboneBase):
                           size_divisor=self.hw_shrink_fac))
         return processing
     
-    def _get_bb_from_cfg(self, cfg:dict):#@TODO
-        return MAE(**cfg)
+    def _get_bb_from_cfg(self, cfg:dict):
+        return get_mae_bb(**cfg)
     
     def prep_pre_hook(self, x):
-        B = x.shape[0]
-        
-        # Embed patches
-        x, hw_shape = self.backbone.patch_embed(x)
-        self.hw_shape=hw_shape
-        
-        # Add the cls token
-        cls_tokens = self.cls_token.expand(B, -1, -1)
+        # embed patches
+        x = self.backbone.patch_embed(x)
+
+        # add pos embed w/o cls token
+        x = x + self.backbone.pos_embed[:, 1:, :]
+
+        # append cls token
+        cls_token = self.backbone.cls_token + self.backbone.pos_embed[:, :1, :]
+        cls_tokens = cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
-        
-        # Add the pos embeddings
-        x = x + self.pos_embed
         return x
     
     def blk_post_hook(self, x, i):
         if i == len(self.blocks) - 1:
-            if self.backbone.final_norm:
-                x = self.backbone.norm1(x)
+            x = self.backbone.norm(x)
         return x
     
-    def oup_before_append_hook(self, x):
+    def oup_before_append_hook(self, x, B, h, w):
         out = x[:, 1:]
         B, _, C = out.shape
-        out = out.reshape(B, self.hw_shape[0], self.hw_shape[1], C).permute(0, 3, 1, 2).contiguous()
+        out = out.reshape(B, h//self.hw_shrink_fac, w//self.hw_shrink_fac, C).permute(0, 3, 1, 2).contiguous()
         return out
     
     def oups_end_hook(self, outputs):
