@@ -4,6 +4,7 @@ from torch import nn
 from layers.backbone_wrapper import BackBoneBase
 from layers import segmentation as seg   #import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models import decode_heads as seg_mmcv # FCNHead, PSPHead, DAHead, SegformerHead
+# from mmdet.models import dense_heads as seg_mmdet
 
 from abc import abstractmethod
 
@@ -101,6 +102,17 @@ class SAMdecHead(DecHeadBase):
         
     def _get_dec_from_cfg(self):
         return seg.SAMdecHead(**self.cfg)
+    
+# class Mask2FormerHead(DecHeadBase):
+#     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
+#         # cfg[''] = None
+#         super().__init__(backbone, cfg, *args, **kwargs)
+        
+#     def _get_dec_from_cfg(self):
+#         num_cls = self.cfg.pop('num_classes')
+#         self.cfg['num_things_classes'] = num_cls
+#         self.cfg['num_stuff_classes'] = 0
+#         return seg_mmdet.Mask2FormerHead(**self.cfg)
     
 implemented_dec_heads = [ConvHeadLinear.__name__,
                          ResNetHead.__name__,

@@ -347,7 +347,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     bb_cps_pth = 'Checkpoints/Orig/backbone'
     
     if bb_name in ["dino", "sam", "medsam", "mae", "resnet"]:
-        if dec_name=='unet':
+        if dec_name in ['unet', 'unetS']:
             n_out = 5*2
         elif dec_name=='sam_mask_dec':
             n_out=1
@@ -605,7 +605,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
                             recurrent=True,
                             recursion_steps=2,
                             in_channels_red=384*n_in)
-    elif dec_name == 'unet':
+    elif dec_name in ['unet', 'unetS']:
         class_name = UNetHead.__name__
         # https://arxiv.org/abs/1505.04597 (unet papaer)
         input_group_cat_nb = 2
@@ -626,7 +626,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
                             recursion_steps=2, # 3
                             resnet_cat_inp_upscaling=True,
                             input_group_cat_nb=input_group_cat_nb,
-                            in_channels_red=576)  # 576  |  384*input_group_cat_nb
+                            in_channels_red=576 if dec_name=='unet' else 240)  # 576  |  384*input_group_cat_nb
      
     elif dec_name == 'sam_mask_dec':
         
