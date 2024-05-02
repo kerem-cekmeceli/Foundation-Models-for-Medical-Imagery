@@ -77,8 +77,8 @@ class PSPHead(DecHeadBase):
     
 class DAHead(DecHeadBase):
     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
-        cfg['channels'] = backbone.out_feat_channels//2  # Conv channels
-        cfg['pam_channels'] = backbone.out_feat_channels//2  # Conv channels
+        cfg['channels'] = 120 # 384  # Conv channels
+        cfg['pam_channels'] = 120 # 384  # Conv channels
         super().__init__(backbone, cfg, *args, **kwargs)
         
     def _get_dec_from_cfg(self):
