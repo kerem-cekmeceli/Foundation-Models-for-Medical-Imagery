@@ -103,6 +103,12 @@ class SAMdecHead(DecHeadBase):
     def _get_dec_from_cfg(self):
         return seg.SAMdecHead(**self.cfg)
     
+    
+class HSAMdecHead(DecHeadBase):
+    def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
+        super().__init__(backbone, cfg, *args, **kwargs)
+        return seg.SAMdecHead(**self.cfg)
+    
 # class Mask2FormerHead(DecHeadBase):
 #     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
 #         # cfg[''] = None

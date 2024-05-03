@@ -646,7 +646,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
         class_name = SAMdecHead.__name__
         dec_head_cfg = dict(num_classes=num_classes,
                             sam_checkpoint=sam_checkpoint,
-                            train_prmopt_enc=False,
+                            train_prmopt_enc=True,
                             )
     else:
         ValueError(f'Decoder name {dec_name} is not defined')

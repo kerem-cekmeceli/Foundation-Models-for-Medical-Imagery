@@ -1048,7 +1048,7 @@ class SAMdecHead(nn.Module):
             self.sam_prompt_embd_channels = 256
             if in_channels != self.sam_prompt_embd_channels:
                 if in_channels==768 and self.sam_prompt_embd_channels==256:
-                    # Will use MedSAM pretrained weights
+                    # Will use pretrained weights for prompt enc
                     self.neck = get_sam_neck(in_channels=in_channels, 
                                             out_channels=self.sam_prompt_embd_channels,
                                             sam_checkpoint=self.sam_checkpoint)
@@ -1118,9 +1118,8 @@ class SAMdecHead(nn.Module):
     #                            mode="bilinear" if up >= 1 else "area",
     #                            align_corners=False if up >= 1 else None)
         # return mask_reshaped
-        
-    def forward(self, image_embeddings):
-        
+    
+    def prep_img_embds(self, image_embeddings):
         assert len(image_embeddings)==1
         image_embeddings = image_embeddings[0]
         
@@ -1130,14 +1129,14 @@ class SAMdecHead(nn.Module):
         if self.neck is not None:
             image_embeddings = self.neck(image_embeddings)
         
-        sparse_embeddings, dense_embeddings = self.prompt_encoder(
-            points=None, boxes=None, masks=None
-        )
+        return image_embeddings, embd_size
+    
+    def get_reshaped_pos_embds(self, embd_size, dense_embeddings=None):
         pos_enc = self.prompt_encoder.get_dense_pe()
         
         # interpolate pos_enc and dense embeddings
         if embd_size != self.img_embd_pe_size:
-            up = h > self.img_embd_pe_size[0] and w > self.img_embd_pe_size[1]
+            up = embd_size[0] > self.img_embd_pe_size[0] and embd_size[1] > self.img_embd_pe_size[1]
             
             # Interpolate to get pixel logits frmo patch logits
             pos_enc = resize(input=pos_enc,
@@ -1145,10 +1144,28 @@ class SAMdecHead(nn.Module):
                              mode="bilinear" if up >= 1 else "area",
                              align_corners=False if up >= 1 else None)
             
-            dense_embeddings = resize(input=dense_embeddings,
-                                      size=embd_size,
-                                      mode="bilinear" if up >= 1 else "area",
-                                      align_corners=False if up >= 1 else None)
+            if dense_embeddings is not None:
+                dense_embeddings = resize(input=dense_embeddings,
+                                        size=embd_size,
+                                        mode="bilinear" if up >= 1 else "area",
+                                        align_corners=False if up >= 1 else None)
+            
+        if dense_embeddings is not None:
+            return pos_enc, dense_embeddings
+        else:
+            return pos_enc
+        
+        
+    def forward(self, image_embeddings):
+        image_embeddings, embd_size =  self.prep_img_embds(image_embeddings)
+        
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=None, boxes=None, masks=None
+        )
+        pos_enc = self.prompt_encoder.get_dense_pe()
+        
+        # interpolate pos_enc and dense embeddings
+        pos_enc, dense_embeddings = self.get_reshaped_pos_embds(embd_size=embd_size, dense_embeddings=dense_embeddings)
         
         # low_res_masks is x4 smaller compared to the input size
         low_res_masks, iou_predictions = self.mask_decoder(
@@ -1164,8 +1181,87 @@ class SAMdecHead(nn.Module):
         return low_res_masks  # Will be reshaped to correct size in segmentor
 
                 
+from .hsam_dec.mask_decoder_224 import MaskDecoder_224, MaskDecoder2_224
+from .hsam_dec import transformer as transf_hsam
+import torch.functional as F
         
-                
+class HSAMdecHead(SAMdecHead):
+    def __init__(self, 
+                 num_classes: int, 
+                 sam_checkpoint: Optional[str] = None, 
+                 in_channels: Union[int, Sequence[int]] = 256, 
+                 image_pe_size: Union[int, Sequence[int]] = 1024, 
+                 img_embd_pe_size: Union[int, Sequence[int]] = 64, 
+                 ) -> None:
+        super().__init__(num_classes=num_classes, sam_checkpoint=sam_checkpoint, in_channels=in_channels, 
+                         image_pe_size=image_pe_size, img_embd_pe_size=img_embd_pe_size, train_prmopt_enc=True)
+        
+        
+        self.mask_decoder=MaskDecoder_224(num_multimask_outputs=num_classes,
+                                          transformer=transf_hsam.TwoWayTransformer(
+                                                depth=2,
+                                                embedding_dim=self.embed_dim,
+                                                mlp_dim=2048,
+                                                num_heads=8,
+                                            ),
+                                            transformer_dim=self.embed_dim,
+                                            iou_head_depth=3,
+                                            iou_head_hidden_dim=256,
+                                        )
+        self.mask_decoder2=MaskDecoder2_224(num_multimask_outputs=num_classes,
+                                            transformer2=transf_hsam.TwoWayTransformer2(
+                                                depth=2,
+                                                embedding_dim=self.embed_dim,
+                                                mlp_dim=2048,
+                                                num_heads=8,
+                                            ),
+                                            transformer_dim=self.embed_dim,
+                                            iou_head_depth=3,
+                                            iou_head_hidden_dim=256,
+                                        )
+        
+        
+    def forward(self, image_embeddings):
+        image_embeddings, embd_size =  self.prep_img_embds(image_embeddings)
+        
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=None, boxes=None, masks=None
+        )
+        pos_enc = self.prompt_encoder.get_dense_pe()
+        
+        # interpolate pos_enc and dense embeddings
+        pos_enc, dense_embeddings = self.get_reshaped_pos_embds(embd_size=embd_size, dense_embeddings=dense_embeddings)
+        
+        low_res_masks, iou_predictions, msk_feat, up_embed = self.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_pe=pos_enc,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=True,
+        )
+        
+        ps_mask = F.interpolate(low_res_masks,size=(int(low_res_masks.shape[-2]/4), int(low_res_masks.shape[-1]/4)),mode='bilinear')
+
+        img_noise_gaussian = torch.randn((image_embeddings.size())).cuda() * 0.2 *(image_embeddings.max()-image_embeddings.min())
+        image_embeddings = (image_embeddings + img_noise_gaussian.cuda())
+        
+        low_res_masks2, iou_predictions2, attn1 = self.mask_decoder2(
+            image_embeddings=image_embeddings,
+            image_pe=self.prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=True,
+            mask_feat = ps_mask,
+            msk_feat=msk_feat,
+            up_embed=up_embed
+        )
+       
+
+        return 
+        
+    
+        
+    
         
 
 
