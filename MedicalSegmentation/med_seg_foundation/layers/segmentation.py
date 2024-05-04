@@ -1221,6 +1221,7 @@ class HSAMdecHead(SAMdecHead):
                                         )
         
         
+    
     def forward(self, image_embeddings):
         image_embeddings, embd_size =  self.prep_img_embds(image_embeddings)
         
@@ -1242,8 +1243,9 @@ class HSAMdecHead(SAMdecHead):
         
         ps_mask = F.interpolate(low_res_masks,size=(int(low_res_masks.shape[-2]/4), int(low_res_masks.shape[-1]/4)),mode='bilinear')
 
-        img_noise_gaussian = torch.randn((image_embeddings.size())).cuda() * 0.2 *(image_embeddings.max()-image_embeddings.min())
-        image_embeddings = (image_embeddings + img_noise_gaussian.cuda())
+        if self.training:
+            img_noise_gaussian = torch.randn((image_embeddings.size())).cuda() * 0.2 *(image_embeddings.max()-image_embeddings.min())
+            image_embeddings = (image_embeddings + img_noise_gaussian.cuda())
         
         low_res_masks2, iou_predictions2, attn1 = self.mask_decoder2(
             image_embeddings=image_embeddings,
@@ -1254,11 +1256,14 @@ class HSAMdecHead(SAMdecHead):
             mask_feat = ps_mask,
             msk_feat=msk_feat,
             up_embed=up_embed
-        )
-       
-
-        return 
+        )    
         
+        if self.training:
+            return [low_res_masks, low_res_masks2]
+        else:
+            return (low_res_masks+low_res_masks2)/2
+    
+
     
         
     

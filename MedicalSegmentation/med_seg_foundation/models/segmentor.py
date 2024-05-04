@@ -62,6 +62,7 @@ class Segmentor(nn.Module):
         
             
     def reshape_dec_out(self, model_out, reshaped_size): 
+        
         up = reshaped_size[0] > model_out.shape[-2] and reshaped_size[1] > model_out.shape[-1]
         # Interpolate to get pixel logits frmo patch logits
         pix_logits = resize(input=model_out,
@@ -77,9 +78,15 @@ class Segmentor(nn.Module):
         
         if self.reshape_dec_oup:
             out = self.reshape_dec_out(out, x.shape[-2:])
-            
-        assert x.shape[-2:] == out.shape[-2:], \
-            f'input and output image shapes do not match, {x.shape[:-2]} =! {out.shape[:-2]}'
+        
+        if not isinstance(out, list):
+            out_ = [out]  
+        else:
+            out_ = out
+
+        for o in out_:
+            assert x.shape[-2:] == o.shape[-2:], \
+                f'input and output image shapes do not match, {x.shape[:-2]} =! {o.shape[:-2]}'
         return out
 
 
