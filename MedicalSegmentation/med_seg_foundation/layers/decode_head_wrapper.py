@@ -97,7 +97,8 @@ class SegformerHead(DecHeadBase):
     
 class SAMdecHead(DecHeadBase):
     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
-        # cfg['bb_embedding_hw_shrink_fac'] = backbone.hw_shrink_fac
+        cfg['patch_sz'] = backbone.hw_shrink_fac
+        cfg['image_pe_size'] = backbone.target_size
         super().__init__(backbone, cfg, *args, **kwargs)
         
     def _get_dec_from_cfg(self):
