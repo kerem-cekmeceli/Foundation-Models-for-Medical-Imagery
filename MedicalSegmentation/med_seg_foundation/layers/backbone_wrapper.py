@@ -27,6 +27,11 @@ class BackBoneBase(nn.Module):
         
     @property  
     @abstractmethod    
+    def target_size(self):
+        pass
+        
+    @property  
+    @abstractmethod    
     def train_backbone(self):
         pass
     
@@ -103,7 +108,7 @@ class BackBoneBase1(BackBoneBase):
         
         if isinstance(target_size, int):
             target_size = (target_size, target_size)
-        self.target_size = target_size
+        self._target_size = target_size
         
         self.interp_feats_to_orig_inp_size = interp_feats_to_orig_inp_size
         
@@ -115,12 +120,22 @@ class BackBoneBase1(BackBoneBase):
             self.register_buffer("pixel_std", torch.Tensor(pix_std).view(-1, 1, 1), False)
         else:
             self.pixel_mean = pix_mean
-            self.pixel_std = pix_std
-            
+            self.pixel_std = pix_std    
+    
+    @property
+    def target_size(self):
+        return self._target_size
             
     @property
     def nb_outs(self):
         return self._nb_outs 
+    
+    @property
+    def nb_patches(self):
+        if self._target_size is None:
+            return (256//self.hw_shrink_fac)**2
+        else:
+            return (self._target_size[0]//self.hw_shrink_fac) * (self._target_size[1]//self.hw_shrink_fac)
     
     def _norm(self, x):
         # [B, C, H, W]
@@ -202,11 +217,11 @@ class BackBoneBase1(BackBoneBase):
         assert hasattr(self, 'target_size')
         
         oldh, oldw = x.shape[-2:]
-        (newh, neww) = self.target_size 
+        (newh, neww) = self._target_size 
         
         # Interpolate to the supported image shape
         up = newh > oldh and neww > oldw
-        x_new = resize(x, size=self.target_size, mode="bilinear" if up else 'area')
+        x_new = resize(x, size=self._target_size, mode="bilinear" if up else 'area')
         
         if self.interp_feats_to_orig_inp_size:
             # target BB oup feat shape
@@ -260,7 +275,7 @@ class BackBoneBase1(BackBoneBase):
             
         
         # Interpolate the input to the target shape (if given)    
-        if not self.target_size is None:
+        if not self._target_size is None:
             x = self.interp_bb_inp(x)
         
         out_feats = self._forward_backbone(x)
@@ -372,8 +387,8 @@ class DinoBackBone(BlockBackboneBase):
                  pre_normalize:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
-                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
-                         target_size=None, interp_feats_to_orig_inp_size=False, 
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], target_size=224,#None,
+                         interp_feats_to_orig_inp_size=False, 
                          last_out_first=last_out_first, to_bgr=True, to_0_1=False, *args, **kwargs)
         # DINO NEEDS BGR ORDER !
         
@@ -491,8 +506,8 @@ class SamBackBone(BlockBackboneBase):
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
-                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], 
-                         target_size=1024, interp_feats_to_orig_inp_size=interp_to_inp_shape, 
+                         pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], target_size=224,#1024, 
+                         interp_feats_to_orig_inp_size=interp_to_inp_shape, 
                          last_out_first=last_out_first, to_bgr=False, to_0_1=False, *args, **kwargs)
         
         assert self.nb_outs >= 1, f'n_out should be at least 1, but got: {self.nb_outs}'
@@ -904,6 +919,9 @@ class LadderBackbone(BackBoneBase):
                                     size_divisor=multiple))
         return processing
     
+    @property
+    def target_size(self):
+        return self.bb1.target_size
     
     def forward(self, x):
         y1s = self.bb1(x)

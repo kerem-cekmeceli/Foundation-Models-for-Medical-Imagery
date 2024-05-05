@@ -138,9 +138,10 @@ def _build_sam(
                 checkpoint,
             )
             print(checkpoint.name, " is downloaded!")
-
+    
     if checkpoint is not None:
         with open(checkpoint, "rb") as f:
             state_dict = torch.load(f)
         sam.load_state_dict(state_dict)
+    
     return sam

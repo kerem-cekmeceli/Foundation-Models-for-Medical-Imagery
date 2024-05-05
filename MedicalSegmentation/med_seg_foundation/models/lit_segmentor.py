@@ -215,16 +215,25 @@ class LitSegmentor(LitBaseModule):
        
         # Forward pass
         y_pred = self.segmentor(x_batch)
-        LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
         
-        loss = self.loss_fn(y_pred, y_batch)
+        if isinstance(y_pred, list):
+            assert len(self.segmentor.decode_head.decoder.loss_weights) == len(y_pred)
+            loss = torch.zeros(1, device=y_batch.device)
+            for yp, w in zip(y_pred, self.segmentor.decode_head.decoder.loss_weights):
+                loss += w*self.loss_fn(yp, y_batch)
+            y_pred_det = torch.stack(y_pred, dim=0).detach().mean(0)
+            
+        else:
+            LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
+            loss = self.loss_fn(y_pred, y_batch)
+            y_pred_det = y_pred.detach()
+            
         LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Train loss')
                         
         # Log the loss
         self.log('loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
         
         # Log the metrics
-        y_pred_det = y_pred.detach()
         y_batch_det = y_batch.detach()
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred_det, y_batch_det)

@@ -195,6 +195,7 @@ class MaskDecoder2_224(nn.Module):
     def __init__(
         self,
         *,
+        nb_patches:int, 
         transformer_dim: int,
         transformer2: nn.Module,
         num_multimask_outputs: int = 3,
@@ -219,6 +220,8 @@ class MaskDecoder2_224(nn.Module):
             used to predict mask quality
         """
         super().__init__()
+        self.nb_patches = nb_patches
+        
         self.transformer_dim = transformer_dim
         self.transformer2 = transformer2
 
@@ -257,15 +260,23 @@ class MaskDecoder2_224(nn.Module):
             nn.Linear(self.num_mask_tokens,self.num_mask_tokens),
             nn.ReLU()
         )
+        
+        if self.nb_patches == 256:
+            num_heads=8
+        elif self.nb_patches == 196:
+            num_heads=7
+        else:
+            ValueError(f'Undefined nb of patches ! {self.nb_patches}')
+        
         self.self_attn = Attention(
-            196, num_heads=7
+            self.nb_patches, num_heads=num_heads
         )
-        self.norm1 = nn.LayerNorm(196)
+        self.norm1 = nn.LayerNorm(self.nb_patches)
         self.self_attn2 = Attention(
-            196, num_heads=7
+            self.nb_patches, num_heads=num_heads
         )
-        self.norm2 = nn.LayerNorm(196)
-        self.mlp = MLPBlock(196, 2048)
+        self.norm2 = nn.LayerNorm(self.nb_patches)
+        self.mlp = MLPBlock(self.nb_patches, 2048)
         self.med_sel = nn.Sequential(
             nn.Linear(self.num_mask_tokens,1),
             nn.ReLU()
@@ -355,28 +366,31 @@ class MaskDecoder2_224(nn.Module):
             mask_feat = mask_feat.unsqueeze(0)
         mask_feat = self.softmax(mask_feat).flatten(start_dim=2)
         flag_resize = 0
-        if msk_feat.shape[-1] != 196:
-            msk_feat = msk_feat.resize_(msk_feat.shape[-3], msk_feat.shape[-2],196)
+        
+        if msk_feat.shape[-1] != self.nb_patches:
+            msk_feat = msk_feat.resize_(msk_feat.shape[-3], msk_feat.shape[-2],self.nb_patches)
             flag_resize = 1
         
         
-        if gt is not None:
-            gt_feat = gt.clone()
+        # if gt is not None:
+        #     gt_feat = gt.clone()
 
-        if mode =='train':
-            msk_feat = torch.nn.Dropout(p=0.1, inplace=True)(msk_feat)
-            gt_feat = gt_feat.resize_(gt_feat.shape[0], h , w).int()
-            gt_feat = gt_feat.view(gt_feat.shape[0],h*w).unsqueeze(1)
-            gt_feat = gt_feat.repeat(1,9,1)
-            lab, cnts = torch.unique(gt_feat, sorted=True, return_counts=True)
-            unique = torch.stack((lab,cnts),dim=1)
-            unique_sorted, unique_ind = torch.sort(unique,dim=0)
-            noise_mean = torch.mean(msk_feat).cuda()
-            for i,cnt_ind in enumerate(unique_ind[:,1]):
-                var = noise_list[i]
-                noise = torch.randn((msk_feat.size())) * var 
-                noise = noise.cuda() + noise_mean
-                msk_feat[gt_feat==lab[cnt_ind]] = msk_feat[gt_feat==lab[cnt_ind]] + noise[gt_feat==lab[cnt_ind]]
+        # if mode =='train':
+        #     msk_feat = torch.nn.Dropout(p=0.1, inplace=True)(msk_feat)
+        #     gt_feat = gt_feat.resize_(gt_feat.shape[0], h , w).int()
+        #     gt_feat = gt_feat.view(gt_feat.shape[0],h*w).unsqueeze(1)
+        #     gt_feat = gt_feat.repeat(1,9,1)
+        #     lab, cnts = torch.unique(gt_feat, sorted=True, return_counts=True)
+        #     unique = torch.stack((lab,cnts),dim=1)
+        #     unique_sorted, unique_ind = torch.sort(unique,dim=0)
+        #     noise_mean = torch.mean(msk_feat)
+        #     for i,cnt_ind in enumerate(unique_ind[:,1]):
+        #         var = noise_list[i]
+        #         noise = torch.randn((msk_feat.size())) * var 
+        #         noise = noise + noise_mean
+        #         msk_feat[gt_feat==lab[cnt_ind]] = msk_feat[gt_feat==lab[cnt_ind]] + noise[gt_feat==lab[cnt_ind]]
+        
+        
         msk_feat = self.self_attn(q=msk_feat, k=msk_feat, v=msk_feat)         
            
 

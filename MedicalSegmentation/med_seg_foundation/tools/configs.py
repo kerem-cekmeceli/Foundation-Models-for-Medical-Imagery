@@ -1,5 +1,5 @@
 from enum import Enum
-from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead
+from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
@@ -349,7 +349,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     if bb_name in ["dino", "sam", "medsam", "mae", "resnet"]:
         if dec_name in ['unet', 'unetS']:
             n_out = 5*2
-        elif dec_name=='sam_mask_dec':
+        elif dec_name in ['sam_mask_dec', 'hsam_mask_dec']:
             n_out=1
         else:
             n_out = 4
@@ -425,7 +425,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb_model=None,
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path, apply_neck=apply_neck),
                       train=train_bb,
-                      interp_to_inp_shape= (dec_name!='sam_mask_dec'),
+                      interp_to_inp_shape= False, #(dec_name!='sam_mask_dec'),
                       pre_normalize=False)
         
     elif bb_name=='mae':    
@@ -521,7 +521,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     
 
 
-def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
+def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
     num_classes = dataset_attrs['num_classes']
     
     if dec_name == 'lin':
@@ -628,26 +628,34 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_name=None):
                             input_group_cat_nb=input_group_cat_nb,
                             in_channels_red=576 if dec_name=='unet' else 240)  # 576  |  384*input_group_cat_nb
      
-    elif dec_name == 'sam_mask_dec':
+    elif dec_name in ['sam_mask_dec', 'hsam_mask_dec']:
         
         pretrained=True
         if pretrained:
             assert main_path is not None
             bb_cps_pth = 'Checkpoints/Orig/backbone'
             
-            sam_checkpoint = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth' 
-            # if bb_name == 'sam':
-            #     sam_checkpoint = main_path/bb_cps_pth/'SAM'/'sam_vit_b_01ec64.pth'
-            # else:
-            #     sam_checkpoint = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth'      
+            sam_checkpoint_prom_enc = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth' 
+            
+            if bb_size=='base':
+                    sam_checkpoint_neck = main_path/bb_cps_pth/'SAM' / 'sam_vit_b_01ec64.pth'
+            elif bb_size=='large':
+                sam_checkpoint_neck = main_path/bb_cps_pth/'SAM' / 'sam_vit_l_0b3195.pth'
+            elif bb_size=='huge':
+                sam_checkpoint_neck = main_path/bb_cps_pth/'SAM' / 'sam_vit_h_4b8939.pth'
+            else:
+                ValueError(f'Size: {bb_size} is not available for SAM')
+               
         else:
-            sam_checkpoint = None
+            sam_checkpoint_neck = None
+            sam_checkpoint_prom_enc = None
         
-        class_name = SAMdecHead.__name__
+        class_name = SAMdecHead.__name__ if dec_name=='sam_mask_dec' else HSAMdecHead.__name__
         dec_head_cfg = dict(num_classes=num_classes,
-                            sam_checkpoint=sam_checkpoint,
-                            train_prmopt_enc=True,
-                            )
+                            sam_checkpoint_neck=sam_checkpoint_neck,
+                            sam_checkpoint_prom_enc=sam_checkpoint_prom_enc)
+        if dec_name=='sam_mask_dec':
+            dec_head_cfg['train_prmopt_enc']=True
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
         
@@ -853,7 +861,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
             n_out_bb = bb_cfg['params']['bb1_name_params']['params'].get('nb_outs', 1)
         
         dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs, n_in=n_out_bb,
-                                   bb_name=kwargs['backbone'], main_path=kwargs['main_pth'])
+                                   bb_size=kwargs['backbone_sz'], main_path=kwargs['main_pth'])
         
         segmentor_cfg = dict(name=Segmentor.__name__,
                          params=dict(backbone=bb_cfg,

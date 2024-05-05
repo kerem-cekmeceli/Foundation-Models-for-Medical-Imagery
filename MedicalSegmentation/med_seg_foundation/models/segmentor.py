@@ -10,7 +10,7 @@ from mmseg.ops import resize
 # from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 # from OrigDino.dinov2.models.vision_transformer import DinoVisionTransformer
 from layers.decode_head_wrapper import implemented_dec_heads, DecHeadBase, ConvHeadLinear,\
-    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead
+    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead, HSAMdecHead
 from layers.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBackBone, SamBackBone, ResNetBackBone,\
     LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone
 from typing import Union, Optional, Sequence, Callable, Any
@@ -76,17 +76,15 @@ class Segmentor(nn.Module):
         feats = self.backbone(x)
         out = self.decode_head(feats)
         
-        if self.reshape_dec_oup:
-            out = self.reshape_dec_out(out, x.shape[-2:])
-        
         if not isinstance(out, list):
-            out_ = [out]  
-        else:
-            out_ = out
-
-        for o in out_:
-            assert x.shape[-2:] == o.shape[-2:], \
+            out = [out]  
+      
+        for i, o in enumerate(out):
+            if self.reshape_dec_oup:
+                out[i] = self.reshape_dec_out(o, x.shape[-2:])
+            assert x.shape[-2:] == out[i].shape[-2:], \
                 f'input and output image shapes do not match, {x.shape[:-2]} =! {o.shape[:-2]}'
+                
+        if len(out)==1:
+            out = out[0]
         return out
-
-

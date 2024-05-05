@@ -22,7 +22,8 @@ class DecBase(nn.Module, ABC):
                  out_upsample_fac:Optional[int]=None,
                  bilinear:bool=True,
                  input_group_cat_nb:Optional[int]=None,
-                 resize_for_cat_if_req:bool=False) -> None:
+                 resize_for_cat_if_req:bool=False,
+                 loss_weights:Optional[list]=None) -> None:
         """_summary_
 
         Args:
@@ -44,6 +45,11 @@ class DecBase(nn.Module, ABC):
         """
         super().__init__()
         self._init_inputs(in_channels, in_index, input_transform, in_resize_factors, input_group_cat_nb, resize_for_cat_if_req)
+        
+        if loss_weights is None:
+            self.register_buffer("loss_weights", torch.Tensor([1.]), False)
+        else:
+            self.register_buffer("loss_weights", torch.Tensor(loss_weights), False)
         
         assert num_classes > 0
         self.num_classes=num_classes
@@ -1022,69 +1028,87 @@ from OrigModels.SAM.segment_anything.modeling import MaskDecoder, PromptEncoder,
 class SAMdecHead(nn.Module):
     def __init__(self, 
                  num_classes: int, 
-                #  bb_embedding_hw_shrink_fac:int,
-                 sam_checkpoint:Optional[str]=None,
+                 patch_sz:int,
+                 image_pe_size:Union[int, Sequence[int]],
+                 sam_checkpoint_neck:Optional[str]=None,
+                 sam_checkpoint_prom_enc:Optional[str]=None,
                  in_channels:Union[int, Sequence[int]]=256,
-                 image_pe_size:Union[int, Sequence[int]]=1024,
-                 img_embd_pe_size:Union[int, Sequence[int]]=64,
                  train_prmopt_enc:bool=False,
+                 loss_weights:Optional[list]=None,
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         
         self.num_classses = num_classes
-        self.sam_checkpoint = sam_checkpoint
-        # self.bb_embedding_hw_shrink_fac = bb_embedding_hw_shrink_fac
         
-        if not isinstance(in_channels, int):
-            assert len(in_channels)==1
-            in_channels=in_channels[0]
+        self.sam_checkpoint_neck = sam_checkpoint_neck
+        self.sam_checkpoint_prom_enc = sam_checkpoint_prom_enc
         
-        self.pretrained_prompt_enc = not (sam_checkpoint is None)
-        self.neck = None
-        
-        if self.pretrained_prompt_enc:
-            assert image_pe_size==1024
-            assert img_embd_pe_size==64
-            self.sam_prompt_embd_channels = 256
-            if in_channels != self.sam_prompt_embd_channels:
-                if in_channels==768 and self.sam_prompt_embd_channels==256:
-                    # Will use pretrained weights for prompt enc
-                    self.neck = get_sam_neck(in_channels=in_channels, 
-                                            out_channels=self.sam_prompt_embd_channels,
-                                            sam_checkpoint=self.sam_checkpoint)
-                else:    
-                    # Random weights
-                    self.neck = get_sam_neck(in_channels=in_channels, 
-                                            out_channels=self.sam_prompt_embd_channels)
-        else:
-            assert sam_checkpoint is None, "When in_channels and out_channels are given sam checkpoint must be None"
+        self.patch_sz = patch_sz
         
         if isinstance(image_pe_size, int):
             image_pe_size = (image_pe_size, image_pe_size)
         self.image_pe_size = image_pe_size 
         
-        if isinstance(img_embd_pe_size, int):
-            img_embd_pe_size = (img_embd_pe_size, img_embd_pe_size)
-        self.img_embd_pe_size = img_embd_pe_size 
-                
-        self.embed_dim = in_channels if self.neck is None else self.sam_prompt_embd_channels
+        assert self.image_pe_size[0]%patch_sz==0 and self.image_pe_size[1]%patch_sz==0
         
+        self.img_embd_pe_size = (self.image_pe_size[0]//self.patch_sz, self.image_pe_size[1]//self.patch_sz)
         
-        self.train_prmopt_enc = train_prmopt_enc
-        
-        if self.pretrained_prompt_enc:
-            self.prompt_encoder = get_sam_prompt_enc(sam_checkpoint=sam_checkpoint)
-            
-            
+        if loss_weights is None:
+            self.register_buffer("loss_weights", torch.Tensor([1.]), False)
         else:
+            self.register_buffer("loss_weights", torch.Tensor(loss_weights), False)
+            
+        if not isinstance(in_channels, int):
+            assert len(in_channels)==1
+            in_channels=in_channels[0]
+        
+        
+        self.sam_prompt_embd_channels = 256
+        
+        # Neck
+        self.neck = None
+        if in_channels != self.sam_prompt_embd_channels:
+            if self.sam_checkpoint_neck is not None:
+                assert self.sam_prompt_embd_channels==256, "Does not support this nb channels for neck pretrained"
+                # Will use pretrained weights for prompt enc
+                self.neck = get_sam_neck(in_channels=in_channels, 
+                                        out_channels=self.sam_prompt_embd_channels,
+                                        sam_checkpoint=self.sam_checkpoint_neck)
+                assert self.neck[0].in_channels == in_channels
+            else:    
+                # Random weights
+                self.neck = get_sam_neck(in_channels=in_channels, 
+                                        out_channels=self.sam_prompt_embd_channels)
+        
+
+        self.embed_dim = in_channels if self.neck is None else self.sam_prompt_embd_channels
+
+        # Prompt Encoder
+        self.pretrained_prompt_enc = not (sam_checkpoint_prom_enc is None)
+        if self.pretrained_prompt_enc:
+            self.prompt_encoder = get_sam_prompt_enc(sam_checkpoint=sam_checkpoint_prom_enc)    
+            self.img_embd_pe_size = self.prompt_encoder.image_embedding_size
+            assert self.embed_dim==self.prompt_encoder.embed_dim
+        else:
+            assert sam_checkpoint_prom_enc is None, "When in_channels and out_channels are given sam checkpoint must be None"
+
             prompt_encoder=PromptEncoder(
                 embed_dim=self.embed_dim,
-                image_embedding_size=img_embd_pe_size,
+                image_embedding_size=self.img_embd_pe_size,
                 input_image_size=image_pe_size,
                 mask_in_chans=16,
                 )
             self.self.prompt_encoder = prompt_encoder
-            
+        
+        self.train_prmopt_enc = train_prmopt_enc
+        
+        if not self.train_prmopt_enc:
+            for p in self.prompt_encoder.parameters():
+                p.requires_grad=False
+   
+    
+        # Mask Decoder     
+        # Mask dec outputs masks that are x4 upscaled by transposed convolutions (=low res masks)   
         self.mask_decoder=MaskDecoder(
                 num_multimask_outputs=self.num_classses,
                 transformer=TwoWayTransformer(
@@ -1097,14 +1121,7 @@ class SAMdecHead(nn.Module):
                 iou_head_depth=3,
                 iou_head_hidden_dim=256,
             )    
-            
-        # Mask dec outputs masks that are x4 upscaled by transposed convolutions (=low res masks)
-            
-        if not self.train_prmopt_enc:
-            for p in self.prompt_encoder.parameters():
-                p.requires_grad=False
-                
-        
+              
         # We're not using the iou predictions        
         for p in self.mask_decoder.iou_prediction_head.parameters():
             p.requires_grad=False
@@ -1183,20 +1200,25 @@ class SAMdecHead(nn.Module):
                 
 from .hsam_dec.mask_decoder_224 import MaskDecoder_224, MaskDecoder2_224
 from .hsam_dec import transformer as transf_hsam
-import torch.functional as F
-        
+import torch.nn.functional as F
+
+
 class HSAMdecHead(SAMdecHead):
     def __init__(self, 
                  num_classes: int, 
-                 sam_checkpoint: Optional[str] = None, 
+                 nb_patches:int,
+                 patch_sz:int,
+                 image_pe_size:Union[int, Sequence[int]],
+                 sam_checkpoint_neck:Optional[str]=None,
+                 sam_checkpoint_prom_enc:Optional[str]=None,
                  in_channels: Union[int, Sequence[int]] = 256, 
-                 image_pe_size: Union[int, Sequence[int]] = 1024, 
-                 img_embd_pe_size: Union[int, Sequence[int]] = 64, 
+
                  ) -> None:
-        super().__init__(num_classes=num_classes, sam_checkpoint=sam_checkpoint, in_channels=in_channels, 
-                         image_pe_size=image_pe_size, img_embd_pe_size=img_embd_pe_size, train_prmopt_enc=True)
-        
-        
+        super().__init__(num_classes=num_classes, sam_checkpoint_neck=sam_checkpoint_neck, patch_sz=patch_sz,
+                         sam_checkpoint_prom_enc=sam_checkpoint_prom_enc, in_channels=in_channels, 
+                         image_pe_size=image_pe_size, train_prmopt_enc=True,
+                         loss_weights=[0.4, 0.6])
+            
         self.mask_decoder=MaskDecoder_224(num_multimask_outputs=num_classes,
                                           transformer=transf_hsam.TwoWayTransformer(
                                                 depth=2,
@@ -1208,7 +1230,8 @@ class HSAMdecHead(SAMdecHead):
                                             iou_head_depth=3,
                                             iou_head_hidden_dim=256,
                                         )
-        self.mask_decoder2=MaskDecoder2_224(num_multimask_outputs=num_classes,
+        self.mask_decoder2=MaskDecoder2_224(nb_patches=nb_patches,
+                                            num_multimask_outputs=num_classes,
                                             transformer2=transf_hsam.TwoWayTransformer2(
                                                 depth=2,
                                                 embedding_dim=self.embed_dim,
@@ -1221,14 +1244,12 @@ class HSAMdecHead(SAMdecHead):
                                         )
         
         
-    
     def forward(self, image_embeddings):
         image_embeddings, embd_size =  self.prep_img_embds(image_embeddings)
         
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=None, boxes=None, masks=None
         )
-        pos_enc = self.prompt_encoder.get_dense_pe()
         
         # interpolate pos_enc and dense embeddings
         pos_enc, dense_embeddings = self.get_reshaped_pos_embds(embd_size=embd_size, dense_embeddings=dense_embeddings)
@@ -1244,12 +1265,12 @@ class HSAMdecHead(SAMdecHead):
         ps_mask = F.interpolate(low_res_masks,size=(int(low_res_masks.shape[-2]/4), int(low_res_masks.shape[-1]/4)),mode='bilinear')
 
         if self.training:
-            img_noise_gaussian = torch.randn((image_embeddings.size())).cuda() * 0.2 *(image_embeddings.max()-image_embeddings.min())
-            image_embeddings = (image_embeddings + img_noise_gaussian.cuda())
+            img_noise_gaussian = torch.randn((image_embeddings.size()), device=image_embeddings.device) * 0.2 *(image_embeddings.max()-image_embeddings.min())
+            image_embeddings = (image_embeddings + img_noise_gaussian)
         
         low_res_masks2, iou_predictions2, attn1 = self.mask_decoder2(
             image_embeddings=image_embeddings,
-            image_pe=self.prompt_encoder.get_dense_pe(),
+            image_pe=self.get_reshaped_pos_embds(embd_size=embd_size),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=True,
@@ -1257,6 +1278,8 @@ class HSAMdecHead(SAMdecHead):
             msk_feat=msk_feat,
             up_embed=up_embed
         )    
+        
+        low_res_masks = F.interpolate(low_res_masks, size=low_res_masks2.shape[-2:], mode='bilinear')
         
         if self.training:
             return [low_res_masks, low_res_masks2]

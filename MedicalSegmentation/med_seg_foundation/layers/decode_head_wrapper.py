@@ -102,12 +102,18 @@ class SAMdecHead(DecHeadBase):
         
     def _get_dec_from_cfg(self):
         return seg.SAMdecHead(**self.cfg)
-    
+
     
 class HSAMdecHead(DecHeadBase):
     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
+        cfg['nb_patches']=backbone.nb_patches
+        cfg['patch_sz'] = backbone.hw_shrink_fac
+        cfg['image_pe_size'] = backbone.target_size
         super().__init__(backbone, cfg, *args, **kwargs)
-        return seg.SAMdecHead(**self.cfg)
+        
+    def _get_dec_from_cfg(self):
+        return seg.HSAMdecHead(**self.cfg)
+    
     
 # class Mask2FormerHead(DecHeadBase):
 #     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
@@ -127,5 +133,6 @@ implemented_dec_heads = [ConvHeadLinear.__name__,
                          PSPHead.__name__,
                          DAHead.__name__,
                          SegformerHead.__name__,
-                         SAMdecHead.__name__]    
+                         SAMdecHead.__name__,
+                         HSAMdecHead.__name__]    
     
