@@ -1287,8 +1287,36 @@ class HSAMdecHead(SAMdecHead):
             return (low_res_masks+low_res_masks2)/2
     
 
+from .sam_hq_dec.mask_decoder_hq import MaskDecoderHQ
     
+class HQSAMdecHead(SAMdecHead):
+    def __init__(self, 
+                 num_classes: int, 
+                 patch_sz: int, 
+                 image_pe_size: Union[int, Sequence[int]], 
+                 sam_checkpoint_neck: Optional[str] = None, 
+                 sam_checkpoint_prom_enc: Optional[str]= None, 
+                 in_channels: Union[int, Sequence[int]] = 256, 
+                 train_prmopt_enc: bool = False, 
+                 loss_weights: Optional[list] = None, 
+                 ) -> None:
+        super().__init__(num_classes=num_classes, patch_sz=patch_sz, image_pe_size=image_pe_size, 
+                         sam_checkpoint_neck=sam_checkpoint_neck, sam_checkpoint_prom_enc=sam_checkpoint_prom_enc, 
+                         in_channels=in_channels, train_prmopt_enc=train_prmopt_enc, loss_weights=loss_weights)
         
+        
+        self.mask_decoder = MaskDecoderHQ(num_multimask_outputs=3,
+                                          transformer=TwoWayTransformer(
+                                            depth=2,
+                                            embedding_dim=self.embed_dim,
+                                            mlp_dim=2048,
+                                            num_heads=8,
+                                          ),
+                                          transformer_dim=self.embed_dim,
+                                          iou_head_depth=3,
+                                          iou_head_hidden_dim=256,
+                                          vit_dim=768#encoder_embed_dim,
+                                        )
     
         
 

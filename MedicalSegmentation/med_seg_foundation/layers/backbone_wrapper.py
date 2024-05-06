@@ -342,7 +342,7 @@ class BlockBackboneBase(BackBoneBase1):
     def blk_post_hook(self, x, i):
         return x
     
-    def oup_before_append_hook(self, x):
+    def oup_before_append_hook(self, x, B, h, w, i):
         return x
     
     def oups_end_hook(self, outputs):
@@ -365,7 +365,7 @@ class BlockBackboneBase(BackBoneBase1):
             
             # Save the oup
             if i in blocks_to_take:
-                oup = self.oup_before_append_hook(x, B, h, w)
+                oup = self.oup_before_append_hook(x, B, h, w, i)
                 outputs.append(oup)
         assert len(outputs) == len(blocks_to_take), f"only {len(outputs)} / {len(blocks_to_take)} blocks found"
            
@@ -406,7 +406,7 @@ class DinoBackBone(BlockBackboneBase):
     def prep_pre_hook(self, x):
         return self.backbone.prepare_tokens_with_masks(x)
     
-    def oup_before_append_hook(self, x, B, h, w, norm=True):
+    def oup_before_append_hook(self, x, B, h, w, i, norm=True):
         if norm:
             # Normalize
             out = self.backbone.norm(x)
@@ -489,8 +489,8 @@ class DinoReinBackbone(DinoBackBone):
     def oups_end_hook(self, outputs):
         return self.reins.return_auto(outputs)
     
-    def oup_before_append_hook(self, x, B, h, w):
-        return super().oup_before_append_hook(x, B, h, w, norm=False)
+    def oup_before_append_hook(self, x, B, h, w, i):
+        return super().oup_before_append_hook(x, B, h, w, i, norm=False)
         
   
 class SamBackBone(BlockBackboneBase):
@@ -547,7 +547,7 @@ class SamBackBone(BlockBackboneBase):
             x = x + self.backbone.pos_embed
         return x
     
-    def oup_before_append_hook(self, x, B, h, w, norm=True):
+    def oup_before_append_hook(self, x, B, h, w, i, norm=True):
         out = x.permute(0, 3, 1, 2).contiguous()
         if self.backbone.neck is not None:
             out = self.backbone.neck(out)
@@ -647,7 +647,7 @@ class MAEBackbone(BlockBackboneBase):
             x = self.backbone.norm(x)
         return x
     
-    def oup_before_append_hook(self, x, B, h, w):
+    def oup_before_append_hook(self, x, B, h, w, i):
         out = x[:, 1:]
         B, _, C = out.shape
         out = out.reshape(B, h//self.hw_shrink_fac, w//self.hw_shrink_fac, C).permute(0, 3, 1, 2).contiguous()
