@@ -84,9 +84,18 @@ class BackBoneBase1(BackBoneBase):
                  last_out_first:bool=True,
                  to_bgr:bool=False,
                  to_0_1:bool=False,
+                 out_idx:Optional[List[int]]=None,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, *args, **kwargs)
+        assert isinstance(nb_outs, int) and nb_outs>0
         self._nb_outs = nb_outs
+        
+        if out_idx is not None:
+            assert len(out_idx)==self.nb_outs
+            max(out_idx)<self.nb_outs
+            min(out_idx)>=0
+        self.out_idx = out_idx
+        
         assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
         self.last_out_first = last_out_first
         self._to_bgr = to_bgr
