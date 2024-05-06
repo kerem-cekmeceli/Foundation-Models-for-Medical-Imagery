@@ -9,7 +9,7 @@ from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from abc import abstractmethod
-from typing import Union, Optional, Tuple, Callable, Sequence, Any
+from typing import Union, Optional, Tuple, Callable, Sequence, Any, List
 # from OrigModels.SAM.segment_anything.modeling.common import LayerNorm2d
 from math import ceil, floor
 from ModelSpecific.Reins.reins import Reins, LoRAReins
@@ -319,6 +319,7 @@ class BlockBackboneBase(BackBoneBase1):
                  last_out_first: bool = True, 
                  to_bgr: bool = False, 
                  to_0_1: bool = False, 
+                 out_idx:Optional[List[int]]=None,
                  *args: Any, **kwargs: Any) -> None:
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize, 
                          pix_mean=pix_mean, pix_std=pix_std, target_size=target_size, 
@@ -358,6 +359,8 @@ class BlockBackboneBase(BackBoneBase1):
         # Run the blocks and sace the outputs
         outputs, total_block_len = [], len(self.blocks)
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
+        if -1 in blocks_to_take:
+            blocks_to_take[blocks_to_take.index(-1)] = len(self.blocks)-1
         for i, blk in enumerate(self.blocks):
             self.blk_pre_hook(x)
             x = blk(x)
