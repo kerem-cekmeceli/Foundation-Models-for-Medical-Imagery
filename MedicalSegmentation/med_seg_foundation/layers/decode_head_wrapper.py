@@ -19,7 +19,12 @@ class DecHeadBase(nn.Module):
         in_feat_chs = backbone.out_feat_channels
         
         self.cfg = cfg
-        self.cfg['in_channels'] = [in_feat_chs]*nb_ins
+        if isinstance(in_feat_chs, int):
+            self.cfg['in_channels'] = [in_feat_chs]*nb_ins
+        else:
+            nb_ins == len(in_feat_chs)
+            self.cfg['in_channels'] = in_feat_chs
+            
         self.num_classes = cfg['num_classes']
         
         self.decoder = self._get_dec_from_cfg()
@@ -105,15 +110,28 @@ class SAMdecHead(DecHeadBase):
         return seg.SAMdecHead(**self.cfg)
 
     
-class HSAMdecHead(DecHeadBase):
+class HSAMdecHead(SAMdecHead):
     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
         cfg['nb_patches']=backbone.nb_patches
-        cfg['patch_sz'] = backbone.hw_shrink_fac
-        cfg['image_pe_size'] = backbone.target_size
+        # cfg['patch_sz'] = backbone.hw_shrink_fac
+        # cfg['image_pe_size'] = backbone.target_size
         super().__init__(backbone, cfg, *args, **kwargs)
         
     def _get_dec_from_cfg(self):
         return seg.HSAMdecHead(**self.cfg)
+    
+    
+class HQSAMdecHead(SAMdecHead):
+    def __init__(self, backbone: BackBoneBase, cfg: dict) -> None:
+        assert backbone.nb_outs==2
+        assert backbone.last_out_first
+        super().__init__(backbone, cfg)
+        
+    def _get_dec_from_cfg(self):
+        [last_out_ch, first_out_ch] = self.cfg.pop('in_channels')
+        self.cfg['last_out_ch']=last_out_ch
+        self.cfg['first_out_ch']=first_out_ch
+        return seg.HQSAMdecHead(**self.cfg)
     
     
 # class Mask2FormerHead(DecHeadBase):
@@ -135,5 +153,6 @@ implemented_dec_heads = [ConvHeadLinear.__name__,
                          DAHead.__name__,
                          SegformerHead.__name__,
                          SAMdecHead.__name__,
-                         HSAMdecHead.__name__]    
+                         HSAMdecHead.__name__,
+                         HQSAMdecHead.__name__]    
     

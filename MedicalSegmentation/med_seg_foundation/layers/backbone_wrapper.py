@@ -19,11 +19,13 @@ from ModelSpecific.MAE.prep_mae import get_mae_bb
 class BackBoneBase(nn.Module):
     def __init__(self, 
                  name:str,
+                 last_out_first:bool=True,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(*args, **kwargs)
         
         self.name = name
         self._input_sz_multiple = 1
+        self.last_out_first = last_out_first
         
     @property  
     @abstractmethod    
@@ -86,7 +88,7 @@ class BackBoneBase1(BackBoneBase):
                  to_0_1:bool=False,
                  out_idx:Optional[List[int]]=None,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(name=name, last_out_first=last_out_first, *args, **kwargs)
         assert isinstance(nb_outs, int) and nb_outs>0
         self._nb_outs = nb_outs
         
@@ -97,7 +99,6 @@ class BackBoneBase1(BackBoneBase):
         self.out_idx = out_idx
         
         assert (bb_model is None) ^ (cfg is None), "Either cfg or model is mandatory and max one of them"
-        self.last_out_first = last_out_first
         self._to_bgr = to_bgr
         self._to_0_1 = to_0_1
         
@@ -333,7 +334,8 @@ class BlockBackboneBase(BackBoneBase1):
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize, 
                          pix_mean=pix_mean, pix_std=pix_std, target_size=target_size, 
                          interp_feats_to_orig_inp_size=interp_feats_to_orig_inp_size, 
-                         last_out_first=last_out_first, to_bgr=to_bgr, to_0_1=to_0_1, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=to_bgr, to_0_1=to_0_1, 
+                         out_idx=out_idx, *args, **kwargs)
         
     
     @property
@@ -384,7 +386,7 @@ class BlockBackboneBase(BackBoneBase1):
         return self.oups_end_hook(outputs)     
     
     def _forward_backbone(self, x):
-        out_patch_feats = self.get_inter_layers(x, n=self.nb_outs)
+        out_patch_feats = self.get_inter_layers(x, n=self.nb_outs if self.out_idx is None else self.out_idx)
         return out_patch_feats     
              
 class DinoBackBone(BlockBackboneBase):
@@ -397,11 +399,12 @@ class DinoBackBone(BlockBackboneBase):
                  train: bool = False, 
                  disable_mask_tokens=True,
                  pre_normalize:bool=False,
+                 out_idx:Optional[List[int]]=None,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], target_size=224,#None,
                          interp_feats_to_orig_inp_size=False, 
-                         last_out_first=last_out_first, to_bgr=True, to_0_1=False, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=True, to_0_1=False, out_idx=out_idx, *args, **kwargs)
         # DINO NEEDS BGR ORDER !
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
@@ -471,11 +474,12 @@ class DinoReinBackbone(DinoBackBone):
                  pre_normalize: bool = False, 
                  lora_reins:bool=False,
                  link_token_to_query:bool=False,
+                 out_idx:Optional[List[int]]=None,
                  *args: Any, **kwargs: Any) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
                          cfg=cfg, train=False, disable_mask_tokens=disable_mask_tokens, pre_normalize=pre_normalize, 
-                         *args, **kwargs)
+                         out_idx=out_idx, *args, **kwargs)
         
         self.lora_reins = lora_reins
         
@@ -515,12 +519,13 @@ class SamBackBone(BlockBackboneBase):
                  train: bool = False, 
                  interp_to_inp_shape:bool=True,
                  pre_normalize:bool=False,
+                 out_idx:Optional[List[int]]=None,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], target_size=224,#1024, 
                          interp_feats_to_orig_inp_size=interp_to_inp_shape, 
-                         last_out_first=last_out_first, to_bgr=False, to_0_1=False, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=False, to_0_1=False, out_idx=out_idx, *args, **kwargs)
         
         assert self.nb_outs >= 1, f'n_out should be at least 1, but got: {self.nb_outs}'
         assert self.nb_outs <= self.backbone.n_blocks, f'Requested n_out={self.nb_outs}, but only available {self.backbone.n_blocks}'     
@@ -543,11 +548,20 @@ class SamBackBone(BlockBackboneBase):
     
     @property  
     def out_feat_channels(self):
+        vit_ch = self.backbone.patch_embed.proj.out_channels
         if self.backbone.neck is None:
-            return self.backbone.patch_embed.proj.out_channels
+            return vit_ch
         else:
-            return self.backbone.neck[-2].out_channels
-        
+            neck_ch = self.backbone.neck[-2].out_channels
+            if self.nb_outs==1:
+                return neck_ch
+            else:
+                n_o = [neck_ch]
+                v_o = [vit_ch]*(self.nb_outs-1)
+                if self.last_out_first:
+                    return n_o + v_o
+                else:
+                    return v_o + n_o   
     
     @property
     def hw_shrink_fac(self):
@@ -561,7 +575,7 @@ class SamBackBone(BlockBackboneBase):
     
     def oup_before_append_hook(self, x, B, h, w, i, norm=True):
         out = x.permute(0, 3, 1, 2).contiguous()
-        if self.backbone.neck is not None:
+        if (i==len(self.blocks)-1) and self.backbone.neck is not None:
             out = self.backbone.neck(out)
         return out    
     
@@ -578,11 +592,12 @@ class SamReinBackBone(SamBackBone):
                  pre_normalize: bool = False, 
                  lora_reins:bool=False,
                  link_token_to_query:bool=False,
+                 out_idx:Optional[List[int]]=None,
                  *args: Any, **kwargs: Any) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
                          cfg=cfg, train=train, interp_to_inp_shape=interp_to_inp_shape, 
-                         pre_normalize=pre_normalize, *args, **kwargs)
+                         pre_normalize=pre_normalize, out_idx=out_idx, *args, **kwargs)
         
         self.lora_reins = lora_reins
         lora_params = dict(num_layers=len(self.backbone.blocks),
@@ -613,11 +628,12 @@ class MAEBackbone(BlockBackboneBase):
                  train: bool = False, 
                  pre_normalize: bool = False, 
                  last_out_first: bool = True, 
+                 out_idx:Optional[List[int]]=None,
                  *args: Any, **kwargs: Any) -> None:
          super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, 
                           pre_normalize=pre_normalize,  pix_mean=[0.485, 0.456, 0.406], pix_std=[0.229, 0.224, 0.225],
                           target_size=224, interp_feats_to_orig_inp_size=False, 
-                          last_out_first=last_out_first, to_bgr=False, to_0_1=True, 
+                          last_out_first=last_out_first, to_bgr=False, to_0_1=True, out_idx=out_idx,
                           *args, **kwargs)
          
     @property
@@ -682,6 +698,7 @@ class ResNetBackBone(BackBoneBase1):
                  nb_outs:int=1,
                  last_out_first:bool=True,
                  uniform_oup_size:bool=True,
+                 out_idx:Optional[List[int]]=None,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
@@ -879,6 +896,7 @@ class LadderBackbone(BackBoneBase):
         
         # same number of outputs for both backbones  
         assert self.bb1.nb_outs == self.bb2.nb_outs
+        assert self.bb1.last_out_first == self.bb2.last_out_first
         
         # This takes care of matching the channel sizes
         necks_ch = []

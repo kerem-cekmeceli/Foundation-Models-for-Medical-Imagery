@@ -132,28 +132,35 @@ class MaskDecoderHQ(nn.Module):
             hq_features=hq_features,
         )
 
-        # Select the correct mask or masks for output
-        if multimask_output:
-            # mask with highest score
-            mask_slice = slice(1,self.num_mask_tokens-1)
-            iou_pred = iou_pred[:, mask_slice]
-            iou_pred, max_iou_idx = torch.max(iou_pred,dim=1)
-            iou_pred = iou_pred.unsqueeze(1)
-            masks_multi = masks[:, mask_slice, :, :]
-            masks_sam = masks_multi[torch.arange(masks_multi.size(0)),max_iou_idx].unsqueeze(1)
-        else:
-            # singale mask output, default
-            mask_slice = slice(0, 1)
-            iou_pred = iou_pred[:,mask_slice]
-            masks_sam = masks[:,mask_slice]
+        # # Select the correct mask or masks for output
+        # if multimask_output:
+        #     # mask with highest score
+        #     mask_slice = slice(1,self.num_mask_tokens-1)
+        #     iou_pred = iou_pred[:, mask_slice]
+        #     iou_pred, max_iou_idx = torch.max(iou_pred,dim=1)
+        #     iou_pred = iou_pred.unsqueeze(1)
+        #     masks_multi = masks[:, mask_slice, :, :]
+        #     masks_sam = masks_multi[torch.arange(masks_multi.size(0)),max_iou_idx].unsqueeze(1)
+        # else:
+        #     # singale mask output, default
+        #     mask_slice = slice(0, 1)
+        #     iou_pred = iou_pred[:,mask_slice]
+        #     masks_sam = masks[:,mask_slice]
+        
+        # Remove the mask token (first) and hq token (last)
+        mask_slice = slice(1,self.num_mask_tokens-1)
+        iou_pred = iou_pred[:, mask_slice]
 
-        masks_hq = masks[:,slice(self.num_mask_tokens-1, self.num_mask_tokens)]
-        if hq_token_only:
-            masks = masks_hq
-        else:
-            masks = masks_sam + masks_hq
+        iou_pred = iou_pred.unsqueeze(1)
+        masks_multi = masks[:, mask_slice, :, :]
+
+        
+        # if hq_token_only:
+        #     masks = masks_hq
+        # else:
+        #     masks = masks_sam + masks_hq
         # Prepare output
-        return masks, iou_pred
+        return masks_multi, iou_pred
 
     def predict_masks(
         self,
@@ -184,7 +191,7 @@ class MaskDecoderHQ(nn.Module):
         src = src.transpose(1, 2).view(b, c, h, w)
 
         upscaled_embedding_sam = self.output_upscaling(src)
-        upscaled_embedding_hq = self.embedding_maskfeature(upscaled_embedding_sam) + hq_features.repeat(b,1,1,1)
+        upscaled_embedding_hq = self.embedding_maskfeature(upscaled_embedding_sam) + hq_features#.repeat(b,1,1,1)
 
         hyper_in_list: List[torch.Tensor] = []
         for i in range(self.num_mask_tokens):

@@ -1033,7 +1033,7 @@ class SAMdecHead(nn.Module):
                  sam_checkpoint_neck:Optional[str]=None,
                  sam_checkpoint_prom_enc:Optional[str]=None,
                  in_channels:Union[int, Sequence[int]]=256,
-                 train_prmopt_enc:bool=False,
+                 train_prompt_enc:bool=False,
                  loss_weights:Optional[list]=None,
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -1061,7 +1061,6 @@ class SAMdecHead(nn.Module):
         if not isinstance(in_channels, int):
             assert len(in_channels)==1
             in_channels=in_channels[0]
-        
         
         self.sam_prompt_embd_channels = 256
         
@@ -1100,9 +1099,9 @@ class SAMdecHead(nn.Module):
                 )
             self.self.prompt_encoder = prompt_encoder
         
-        self.train_prmopt_enc = train_prmopt_enc
+        self.train_prompt_enc = train_prompt_enc
         
-        if not self.train_prmopt_enc:
+        if not self.train_prompt_enc:
             for p in self.prompt_encoder.parameters():
                 p.requires_grad=False
    
@@ -1137,8 +1136,9 @@ class SAMdecHead(nn.Module):
         # return mask_reshaped
     
     def prep_img_embds(self, image_embeddings):
-        assert len(image_embeddings)==1
-        image_embeddings = image_embeddings[0]
+        if isinstance(image_embeddings, list) or isinstance(image_embeddings, tuple):
+            assert len(image_embeddings)==1
+            image_embeddings = image_embeddings[0]
         
         b, c, h, w = image_embeddings.shape
         embd_size = (h, w)
@@ -1179,7 +1179,6 @@ class SAMdecHead(nn.Module):
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=None, boxes=None, masks=None
         )
-        pos_enc = self.prompt_encoder.get_dense_pe()
         
         # interpolate pos_enc and dense embeddings
         pos_enc, dense_embeddings = self.get_reshaped_pos_embds(embd_size=embd_size, dense_embeddings=dense_embeddings)
@@ -1209,14 +1208,13 @@ class HSAMdecHead(SAMdecHead):
                  nb_patches:int,
                  patch_sz:int,
                  image_pe_size:Union[int, Sequence[int]],
+                 in_channels: Union[int, Sequence[int]], 
                  sam_checkpoint_neck:Optional[str]=None,
                  sam_checkpoint_prom_enc:Optional[str]=None,
-                 in_channels: Union[int, Sequence[int]] = 256, 
-
                  ) -> None:
         super().__init__(num_classes=num_classes, sam_checkpoint_neck=sam_checkpoint_neck, patch_sz=patch_sz,
                          sam_checkpoint_prom_enc=sam_checkpoint_prom_enc, in_channels=in_channels, 
-                         image_pe_size=image_pe_size, train_prmopt_enc=True,
+                         image_pe_size=image_pe_size, train_prompt_enc=True,
                          loss_weights=[0.4, 0.6])
             
         self.mask_decoder=MaskDecoder_224(num_multimask_outputs=num_classes,
@@ -1294,18 +1292,19 @@ class HQSAMdecHead(SAMdecHead):
                  num_classes: int, 
                  patch_sz: int, 
                  image_pe_size: Union[int, Sequence[int]], 
+                 last_out_ch:int, 
+                 first_out_ch:int,
                  sam_checkpoint_neck: Optional[str] = None, 
                  sam_checkpoint_prom_enc: Optional[str]= None, 
-                 in_channels: Union[int, Sequence[int]] = 256, 
-                 train_prmopt_enc: bool = False, 
                  loss_weights: Optional[list] = None, 
                  ) -> None:
         super().__init__(num_classes=num_classes, patch_sz=patch_sz, image_pe_size=image_pe_size, 
                          sam_checkpoint_neck=sam_checkpoint_neck, sam_checkpoint_prom_enc=sam_checkpoint_prom_enc, 
-                         in_channels=in_channels, train_prmopt_enc=train_prmopt_enc, loss_weights=loss_weights)
+                         in_channels=last_out_ch, train_prompt_enc=True, loss_weights=loss_weights)
         
+        self.first_out_ch = first_out_ch
         
-        self.mask_decoder = MaskDecoderHQ(num_multimask_outputs=3,
+        self.mask_decoder = MaskDecoderHQ(num_multimask_outputs=self.num_classses,
                                           transformer=TwoWayTransformer(
                                             depth=2,
                                             embedding_dim=self.embed_dim,
@@ -1315,8 +1314,38 @@ class HQSAMdecHead(SAMdecHead):
                                           transformer_dim=self.embed_dim,
                                           iou_head_depth=3,
                                           iou_head_hidden_dim=256,
-                                          vit_dim=768#encoder_embed_dim,
+                                          vit_dim=self.first_out_ch,
                                         )
+        
+    def forward(self, image_embeddings):
+        assert len(image_embeddings)==2
+        img_embds = image_embeddings[0]
+        first_embd = image_embeddings[1].permute(0, 2, 3, 1).contiguous()
+        
+        image_embeddings, embd_size =  self.prep_img_embds(img_embds)
+        
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=None, boxes=None, masks=None
+        )
+        
+        # interpolate pos_enc and dense embeddings
+        pos_enc, dense_embeddings = self.get_reshaped_pos_embds(embd_size=embd_size, dense_embeddings=dense_embeddings)
+        
+        # low_res_masks is x4 smaller compared to the input size
+        low_res_masks, iou_predictions = self.mask_decoder(
+            image_embeddings=image_embeddings,
+            image_pe=pos_enc,
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=True,
+            hq_token_only=self.training,
+            interm_embeddings=first_embd.unsqueeze(0)
+        )
+        
+        # mask = self.post_process(low_res_masks, embed_size=embd_size)
+       
+        return low_res_masks  # Will be reshaped to correct size in segmentor
+    
     
         
 

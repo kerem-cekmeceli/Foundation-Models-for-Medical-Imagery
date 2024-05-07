@@ -1,5 +1,5 @@
 from enum import Enum
-from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead
+from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
@@ -346,14 +346,29 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
 def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     bb_cps_pth = 'Checkpoints/Orig/backbone'
     
+    out_idx = None
     if bb_name in ["dino", "sam", "medsam", "mae", "resnet"]:
         if dec_name in ['unet', 'unetS']:
             n_out = 5*2
         elif dec_name in ['sam_mask_dec', 'hsam_mask_dec']:
             n_out=1
+        elif dec_name in ['hq_sam_mask_dec']:
+            n_out=2
+            if bb_name in ["sam", "medsam"]:
+                if bb_size=="base":
+                    first_glob_attn_i = 2
+                elif bb_size=="large":
+                    first_glob_attn_i = 5
+                elif bb_size=='huge':
+                    first_glob_attn_i = 7
+                out_idx = [first_glob_attn_i, -1]
+            else:
+                out_idx = [0, -1]
         else:
             n_out = 4
-        last_out_first = True
+    
+    last_out_first = True
+        
     
     if bb_name == 'dino':
         assert bb_size in ["small", "base", "large", "giant"]
@@ -372,7 +387,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       cfg=dict(backbone_name=backbone_name, backbone_cp=bb_checkpoint_path),
                       train=train_bb,
                       disable_mask_tokens=True,
-                      pre_normalize=False)
+                      pre_normalize=False,
+                      out_idx=out_idx)
         
     if bb_name in ['rein_dino', 'reinL_dino'] :
         assert pretrained
@@ -426,7 +442,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       cfg=dict(bb_size=bb_size, sam_checkpoint=bb_checkpoint_path, apply_neck=apply_neck),
                       train=train_bb,
                       interp_to_inp_shape= False, #(dec_name!='sam_mask_dec'),
-                      pre_normalize=False)
+                      pre_normalize=False,
+                      out_idx=out_idx)
         
     elif bb_name=='mae':    
         if pretrained:
@@ -438,7 +455,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         params = dict(name=f'{bb_name}_{bb_size}',
                       nb_outs=n_out,
                       cfg=dict(bb_size=bb_size, checkpoint=bb_checkpoint_path,
-                               enc_only=True))
+                               enc_only=True),
+                      out_idx=out_idx)
         
     elif bb_name == 'resnet':
         if dec_name=='unet':
@@ -628,7 +646,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
                             input_group_cat_nb=input_group_cat_nb,
                             in_channels_red=576 if dec_name=='unet' else 240)  # 576  |  384*input_group_cat_nb
      
-    elif dec_name in ['sam_mask_dec', 'hsam_mask_dec']:
+    elif dec_name in ['sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec']:
         
         pretrained=True
         if pretrained:
@@ -650,12 +668,20 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
             sam_checkpoint_neck = None
             sam_checkpoint_prom_enc = None
         
-        class_name = SAMdecHead.__name__ if dec_name=='sam_mask_dec' else HSAMdecHead.__name__
+        if dec_name=='sam_mask_dec':
+            class_name = SAMdecHead.__name__ 
+        elif dec_name=='sam_mask_dec':
+            class_name = HSAMdecHead.__name__
+        elif dec_name=='hq_sam_mask_dec':
+            class_name = HQSAMdecHead.__name__
+        else:
+            ValueError(f'Unknown dec name : {dec_name}')
+            
         dec_head_cfg = dict(num_classes=num_classes,
                             sam_checkpoint_neck=sam_checkpoint_neck,
                             sam_checkpoint_prom_enc=sam_checkpoint_prom_enc)
         if dec_name=='sam_mask_dec':
-            dec_head_cfg['train_prmopt_enc']=False#True
+            dec_head_cfg['train_prompt_enc']=True
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
         
