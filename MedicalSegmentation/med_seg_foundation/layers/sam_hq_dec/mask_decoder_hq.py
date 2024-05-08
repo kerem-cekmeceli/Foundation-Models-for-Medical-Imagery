@@ -124,7 +124,7 @@ class MaskDecoderHQ(nn.Module):
         vit_features = interm_embeddings[0].permute(0, 3, 1, 2) # early-layer ViT feature, after 1st global attention block in ViT
         hq_features = self.embedding_encoder(image_embeddings) + self.compress_vit_feat(vit_features)
 
-        masks, iou_pred = self.predict_masks(
+        masks_sam, masks_sam_hq, iou_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
@@ -132,6 +132,12 @@ class MaskDecoderHQ(nn.Module):
             hq_features=hq_features,
         )
 
+        if multimask_output:
+            # Remove the mask token (first) and hq token (last)
+            masks_sam = masks_sam[:, 1:]  # Remove mask token
+            masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
+        else:
+            ValueError('Not Implemented Yet')
         # # Select the correct mask or masks for output
         # if multimask_output:
         #     # mask with highest score
@@ -147,20 +153,12 @@ class MaskDecoderHQ(nn.Module):
         #     iou_pred = iou_pred[:,mask_slice]
         #     masks_sam = masks[:,mask_slice]
         
-        # Remove the mask token (first) and hq token (last)
-        mask_slice = slice(1,self.num_mask_tokens-1)
-        iou_pred = iou_pred[:, mask_slice]
-
-        iou_pred = iou_pred.unsqueeze(1)
-        masks_multi = masks[:, mask_slice, :, :]
-
+        if hq_token_only:
+            masks = masks_sam_hq
+        else:
+            masks = masks_sam + masks_sam_hq
         
-        # if hq_token_only:
-        #     masks = masks_hq
-        # else:
-        #     masks = masks_sam + masks_hq
-        # Prepare output
-        return masks_multi, iou_pred
+        return masks, iou_pred
 
     def predict_masks(
         self,
@@ -204,12 +202,12 @@ class MaskDecoderHQ(nn.Module):
         b, c, h, w = upscaled_embedding_sam.shape
 
         masks_sam = (hyper_in[:,:self.num_mask_tokens-1] @ upscaled_embedding_sam.view(b, c, h * w)).view(b, -1, h, w)
-        masks_sam_hq = (hyper_in[:,self.num_mask_tokens-1:] @ upscaled_embedding_hq.view(b, c, h * w)).view(b, -1, h, w)
-        masks = torch.cat([masks_sam,masks_sam_hq],dim=1)
+        masks_sam_hq = (hyper_in[:,1:] @ upscaled_embedding_hq.view(b, c, h * w)).view(b, -1, h, w)
+        
         # Generate mask quality predictions
         iou_pred = self.iou_prediction_head(iou_token_out)
 
-        return masks, iou_pred
+        return masks_sam, masks_sam_hq, iou_pred
 
 
 # Lightly adapted from
