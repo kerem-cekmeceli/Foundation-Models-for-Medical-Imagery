@@ -202,6 +202,7 @@ class MaskDecoder2_224(nn.Module):
         activation: Type[nn.Module] = nn.GELU,
         iou_head_depth: int = 3,
         iou_head_hidden_dim: int = 256,
+        hsam_hq_mode:bool=False,
     ) -> None:
         """
         Predicts masks given an image and prompt embeddings, using a
@@ -220,6 +221,7 @@ class MaskDecoder2_224(nn.Module):
             used to predict mask quality
         """
         super().__init__()
+        self.hsam_hq_mode=hsam_hq_mode
         self.nb_patches = nb_patches
         
         self.transformer_dim = transformer_dim

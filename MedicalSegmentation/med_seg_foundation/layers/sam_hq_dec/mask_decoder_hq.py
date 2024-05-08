@@ -133,26 +133,13 @@ class MaskDecoderHQ(nn.Module):
             hq_features=hq_features,
         )
 
-        if multimask_output:
-            # Remove the mask token (first) and hq token (last)
-            masks_sam = masks_sam[:, 1:]  # Remove mask token
-            masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
-        else:
-            ValueError('Not Implemented Yet')
-        # # Select the correct mask or masks for output
         # if multimask_output:
-        #     # mask with highest score
-        #     mask_slice = slice(1,self.num_mask_tokens-1)
-        #     iou_pred = iou_pred[:, mask_slice]
-        #     iou_pred, max_iou_idx = torch.max(iou_pred,dim=1)
-        #     iou_pred = iou_pred.unsqueeze(1)
-        #     masks_multi = masks[:, mask_slice, :, :]
-        #     masks_sam = masks_multi[torch.arange(masks_multi.size(0)),max_iou_idx].unsqueeze(1)
+        #     # Remove the mask token (first) and hq token (last)
+        #     masks_sam = masks_sam[:, 1:]  # Remove mask token
+        #     masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
         # else:
-        #     # singale mask output, default
-        #     mask_slice = slice(0, 1)
-        #     iou_pred = iou_pred[:,mask_slice]
-        #     masks_sam = masks[:,mask_slice]
+        #     ValueError('Not Implemented Yet')
+
         
         if hq_token_only:
             masks = masks_sam_hq
