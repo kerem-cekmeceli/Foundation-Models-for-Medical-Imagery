@@ -673,7 +673,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
         
         if dec_name=='sam_mask_dec':
             class_name = SAMdecHead.__name__ 
-        elif dec_name=='sam_mask_dec':
+        elif dec_name=='hsam_mask_dec':
             class_name = HSAMdecHead.__name__
         elif dec_name=='hq_sam_mask_dec':
             class_name = HQSAMdecHead.__name__

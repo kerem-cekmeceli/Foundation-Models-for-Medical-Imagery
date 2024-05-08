@@ -1193,6 +1193,7 @@ class SAMdecHead(nn.Module):
         )
         
         # mask = self.post_process(low_res_masks, embed_size=embd_size)
+        assert low_res_masks.shape[1]==self.num_classses
        
         return low_res_masks  # Will be reshaped to correct size in segmentor
 
@@ -1277,6 +1278,13 @@ class HSAMdecHead(SAMdecHead):
             up_embed=up_embed
         )    
         
+        # Remove the IoU token
+        low_res_masks = low_res_masks[:, 1:]
+        low_res_masks2 = low_res_masks2[:, 1:]
+        
+        assert low_res_masks.shape[1]==self.num_classses
+        assert low_res_masks2.shape[1]==self.num_classses
+        
         low_res_masks = F.interpolate(low_res_masks, size=low_res_masks2.shape[-2:], mode='bilinear')
         
         if self.training:
@@ -1343,6 +1351,7 @@ class HQSAMdecHead(SAMdecHead):
         )
         
         # mask = self.post_process(low_res_masks, embed_size=embd_size)
+        assert low_res_masks.shape[1]==self.num_classses
        
         return low_res_masks  # Will be reshaped to correct size in segmentor
     

@@ -105,6 +105,7 @@ class MaskDecoderHQ(nn.Module):
         multimask_output: bool,
         hq_token_only: bool,
         interm_embeddings: torch.Tensor,
+        hsam_compet_out:bool=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
