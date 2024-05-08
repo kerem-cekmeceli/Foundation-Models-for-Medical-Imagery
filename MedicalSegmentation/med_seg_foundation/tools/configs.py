@@ -354,7 +354,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
             n_out=1
         elif dec_name in ['hq_sam_mask_dec']:
             n_out=2
-            if bb_name in ["sam", "medsam"]:
+            if "sam" in bb_name:
                 if bb_size=="base":
                     first_glob_attn_i = 2
                 elif bb_size=="large":
@@ -362,6 +362,9 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                 elif bb_size=='huge':
                     first_glob_attn_i = 7
                 out_idx = [first_glob_attn_i, -1]
+                
+            elif "dino" in  bb_name:
+                out_idx = [-2, -1]
             else:
                 out_idx = [0, -1]
         else:

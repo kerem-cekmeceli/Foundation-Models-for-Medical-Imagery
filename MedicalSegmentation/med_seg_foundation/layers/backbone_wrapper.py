@@ -370,8 +370,9 @@ class BlockBackboneBase(BackBoneBase1):
         # Run the blocks and sace the outputs
         outputs, total_block_len = [], len(self.blocks)
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
-        if -1 in blocks_to_take:
-            blocks_to_take[blocks_to_take.index(-1)] = len(self.blocks)-1
+        for i, num in enumerate(blocks_to_take):
+            if num<0:
+                blocks_to_take[i] = len(self.blocks)+num
         for i, blk in enumerate(self.blocks):
             self.blk_pre_hook(x)
             x = blk(x)

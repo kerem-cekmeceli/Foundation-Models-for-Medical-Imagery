@@ -1347,6 +1347,27 @@ class HQSAMdecHead(SAMdecHead):
         return low_res_masks  # Will be reshaped to correct size in segmentor
     
     
+                #      num_classes: int, 
+                #  patch_sz: int, 
+                #  image_pe_size: Union[int, Sequence[int]], 
+                #  last_out_ch:int, 
+                #  first_out_ch:int,
+                #  sam_checkpoint_neck: Optional[str] = None, 
+                #  sam_checkpoint_prom_enc: Optional[str]= None, 
+                #  loss_weights: Optional[list] = None, 
+    
+class HSAMHQdecHead(HSAMdecHead):
+    def __init__(self, 
+                 num_classes: int, 
+                 nb_patches:int,
+                 patch_sz:int,
+                 image_pe_size:Union[int, Sequence[int]],
+                 in_channels: Union[int, Sequence[int]], 
+                 sam_checkpoint_neck:Optional[str]=None,
+                 sam_checkpoint_prom_enc:Optional[str]=None,
+                 ) -> None:
+        super().__init__(num_classes=num_classes, nb_patches=nb_patches, patch_sz=patch_sz, image_pe_size=image_pe_size, 
+                         in_channels=in_channels, sam_checkpoint_neck=sam_checkpoint_neck, 
+                         sam_checkpoint_prom_enc=sam_checkpoint_prom_enc)
         
-
 
