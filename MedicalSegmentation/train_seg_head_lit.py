@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'prostate_usz'  if cluster_paths else 'hcp1'
+dataset = 'abide_caltech'  if cluster_paths else 'hcp1'
 rcs_enabled = True
 
 # Select loss
