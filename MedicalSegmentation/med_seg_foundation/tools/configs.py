@@ -364,7 +364,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                 out_idx = [first_glob_attn_i, -1]
                 
             elif "dino" in  bb_name:
-                out_idx = [-2, -1]
+                out_idx = [0, -1]
             else:
                 out_idx = [0, -1]
         else:
