@@ -1109,7 +1109,7 @@ class SAMdecHead(nn.Module):
         # Mask Decoder     
         # Mask dec outputs masks that are x4 upscaled by transposed convolutions (=low res masks)   
         self.mask_decoder=MaskDecoder(
-                num_multimask_outputs=self.num_classses-1,
+                num_multimask_outputs=self.num_classses,
                 transformer=TwoWayTransformer(
                     depth=2,
                     embedding_dim=self.embed_dim,
@@ -1218,7 +1218,7 @@ class HSAMdecHead(SAMdecHead):
                          image_pe_size=image_pe_size, train_prompt_enc=True,
                          loss_weights=[0.4, 0.6])
             
-        self.mask_decoder=MaskDecoder_224(num_multimask_outputs=num_classes-1,
+        self.mask_decoder=MaskDecoder_224(num_multimask_outputs=num_classes,
                                           transformer=transf_hsam.TwoWayTransformer(
                                                 depth=2,
                                                 embedding_dim=self.embed_dim,
@@ -1230,7 +1230,7 @@ class HSAMdecHead(SAMdecHead):
                                             iou_head_hidden_dim=256,
                                         )
         self.mask_decoder2=MaskDecoder2_224(nb_patches=nb_patches,
-                                            num_multimask_outputs=num_classes-1,
+                                            num_multimask_outputs=num_classes,
                                             transformer2=transf_hsam.TwoWayTransformer2(
                                                 depth=2,
                                                 embedding_dim=self.embed_dim,
@@ -1278,9 +1278,9 @@ class HSAMdecHead(SAMdecHead):
             up_embed=up_embed
         )    
         
-        # # Remove the extra output token
-        # low_res_masks = low_res_masks[:, 1:]
-        # low_res_masks2 = low_res_masks2[:, 1:]
+        # Remove the extra output token
+        low_res_masks = low_res_masks[:, 1:]
+        low_res_masks2 = low_res_masks2[:, 1:]
         
         assert low_res_masks.shape[1]==self.num_classses
         assert low_res_masks2.shape[1]==self.num_classses
@@ -1312,7 +1312,7 @@ class HQSAMdecHead(SAMdecHead):
         
         self.first_out_ch = first_out_ch
         
-        self.mask_decoder = MaskDecoderHQ(num_multimask_outputs=self.num_classses-1,
+        self.mask_decoder = MaskDecoderHQ(num_multimask_outputs=self.num_classses,
                                           transformer=TwoWayTransformer(
                                             depth=2,
                                             embedding_dim=self.embed_dim,

@@ -107,7 +107,7 @@ class MaskDecoder_224(nn.Module):
             img_size=img_size
         )
 
-        # Select the correct mask or masks for output
+        # # Select the correct mask or masks for output
         # if multimask_output:
         #     mask_slice = slice(1, None)
         # else:
@@ -326,7 +326,7 @@ class MaskDecoder2_224(nn.Module):
             up_embed=up_embed
         )
 
-        # Select the correct mask or masks for output
+        # # Select the correct mask or masks for output
         # if multimask_output:
         #     mask_slice = slice(1, None)
         # else:

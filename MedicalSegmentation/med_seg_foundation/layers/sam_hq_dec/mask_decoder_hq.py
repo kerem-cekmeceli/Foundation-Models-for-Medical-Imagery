@@ -133,12 +133,12 @@ class MaskDecoderHQ(nn.Module):
             hq_features=hq_features,
         )
 
-        # if multimask_output:
-        #     # Remove the mask token (first) and hq token (last)
-        #     masks_sam = masks_sam[:, 1:]  # Remove mask token
-        #     masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
-        # else:
-        #     ValueError('Not Implemented Yet')
+        if multimask_output:
+            # Remove the mask token (first) and hq token (last)
+            masks_sam = masks_sam[:, 1:]  # Remove extra oup token
+            masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
+        else:
+            ValueError('Not Implemented Yet')
 
         
         if hq_token_only:

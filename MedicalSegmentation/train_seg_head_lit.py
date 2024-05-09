@@ -70,12 +70,12 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
-    dec_head_key = 'sam_mask_dec'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec'
+    dec_head_key = 'hsam_mask_dec'  # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec'
     
 
 # Select dataset
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'prostate_usz'  if cluster_paths else 'hcp1'
+dataset = 'spine_mrspinesegv'  if cluster_paths else 'hcp1'
 rcs_enabled = True
 
 # Select loss
@@ -195,9 +195,6 @@ segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs
                                           dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, **kwargs)
 model = LitSegmentor(**segmentor_cfg_lit)
 
-# Print model info
-summary(model)
-
 # Get augmentations
 augmentations = get_augmentations()
 
@@ -308,7 +305,8 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 # logger.watch(model, log="all")
 
 n_best = 1 if save_checkpoints else 0
-models_pth = main_pth / f'Checkpoints/{dataset}/{group_name}'
+ckp_pth = main_pth #if not cluster_paths else '/scratch-second'
+models_pth = ckp_pth / f'Checkpoints/{dataset}/{group_name}'
 if model_type == ModelType.SEGMENTOR:
     models_pth = models_pth / model.segmentor.decode_head.__class__.__name__
     
@@ -321,6 +319,9 @@ checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n
 
 # Create the trainer object
 trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)
+
+# Print model info
+summary(model)
 
 # Train the model
 # model is saved only on the main process when using distributed training
