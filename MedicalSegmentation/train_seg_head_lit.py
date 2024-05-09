@@ -70,14 +70,14 @@ model_type = ModelType.SEGMENTOR
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'mae'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'hq_hsam_mask_dec'  
+    dec_head_key = 'hsam_mask_dec'  
 
     
 
@@ -206,9 +206,9 @@ if model_type==ModelType.SEGMENTOR:
     processings = model.segmentor.backbone.get_pre_processing_cfg_list()
 else:
     processings = [dict(type='Normalize', 
-                               mean=[123.675, 116.28, 103.53],  #RGB
-                               std=[58.395, 57.12, 57.375],  #RGB
-                               to_rgb=True)]
+                        mean=[123.675, 116.28, 103.53],  #RGB
+                        std=[58.395, 57.12, 57.375],  #RGB
+                        to_rgb=True)]
 
 # Get the data loader
 if cluster_paths:

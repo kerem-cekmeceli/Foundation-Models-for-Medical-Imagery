@@ -8,12 +8,14 @@ from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
 from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, \
     DinoReinBackbone, SamReinBackBone, MAEBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
-from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
+from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor, SegmentorModel
 from MedicalSegmentation.med_seg_foundation.models.unet import UNet
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_transformer_unet_skip_expand_decoder_sys import SwinTransformerSys
 
 class ModelType(Enum):
     SEGMENTOR=1
     UNET=2
+    SWINUNET=2
 
 def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
     attrs = {}
@@ -868,7 +870,7 @@ def get_lr(model_type, **kwargs):
         # SAM and MedSAM
         else: 
             return 5e-5 
-    elif model_type==ModelType.UNET:
+    elif model_type in [ModelType.UNET, ModelType.SWINUNET]:
         return 5e-5 
     else:
         ValueError(f'Unknown model type {model_type}')
@@ -880,8 +882,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
     
     if model_type==ModelType.SEGMENTOR:
         kwargs['dataset_attrs'] = dataset_attrs
-        lr = get_lr(model_type=model_type, **kwargs)
-        
+                
         # Backbone config
         bb_cfg = get_bb_cfg(bb_name=kwargs['backbone'], bb_size=kwargs['backbone_sz'], train_bb=kwargs['train_backbone'], 
                             dec_name=kwargs['dec_head_key'], main_pth=kwargs['main_pth'], pretrained=True)
@@ -891,26 +892,43 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
         else:
             n_out_bb = bb_cfg['params']['bb1_name_params']['params'].get('nb_outs', 1)
         
+        # Decnconfig
         dec_head_cfg = get_dec_cfg(dec_name=kwargs['dec_head_key'], dataset_attrs=dataset_attrs, n_in=n_out_bb,
                                    bb_size=kwargs['backbone_sz'], main_path=kwargs['main_pth'])
         
+        # Segmentor config (Encoder-Decoder)
         segmentor_cfg = dict(name=Segmentor.__name__,
                          params=dict(backbone=bb_cfg,
                                      decode_head=dec_head_cfg,
                                      reshape_dec_oup=True,
                                      align_corners=False))
+    
+    else:    
         
-    elif model_type==ModelType.UNET:
-        lr = get_lr(model_type=model_type, **kwargs)
-        
-        segmentor_cfg = dict(name=UNet.__name__,
-                         params=dict(n_channels=3, 
-                                     n_classes=dataset_attrs['num_classes'], 
-                                     bilinear=False))
-        
-    else:
-        ValueError(f'Unknown model type {model_type}')
-        
+        if model_type==ModelType.UNET:            
+            model_cfg = dict(name=UNet.__name__,
+                            params=dict(n_channels=3, 
+                                        n_classes=dataset_attrs['num_classes'], 
+                                        bilinear=False))
+            
+        elif model_type==ModelType.SWINUNET:            
+            model_cfg = dict(name=SwinTransformerSys.__name__,
+                            params=dict(n_channels=3, 
+                                        num_classes=dataset_attrs['num_classes'], 
+                                        ))    
+            
+        else:
+            ValueError(f'Unknown model type {model_type}')
+            
+        segmentor_cfg = dict(name=SegmentorModel.__name__,
+                             params=dict(reshape_dec_oup=True,
+                                         align_corners=False,
+                                         model=model_cfg,
+                                         target_inp_shape=224))        
+    
+    # Get lr
+    lr = get_lr(model_type=model_type, **kwargs)
+    
     # Optimizer Config    
     optm_cfg = get_optimizer_cfg(lr=lr)
 
