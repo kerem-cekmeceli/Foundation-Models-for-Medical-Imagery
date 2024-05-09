@@ -77,7 +77,7 @@ if model_type == ModelType.SEGMENTOR:
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'hq_sam_mask_dec'  
+    dec_head_key = 'hq_hsam_mask_dec'  
 
     
 
@@ -86,7 +86,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'prostate_usz'  if cluster_paths else 'hcp1'
+dataset = 'spine_mrspinesegv'  if cluster_paths else 'hcp1'
 rcs_enabled = True
 
 # Select loss
