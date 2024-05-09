@@ -1240,7 +1240,27 @@ class HSAMdecHead(SAMdecHead):
                                             transformer_dim=self.embed_dim,
                                             iou_head_depth=3,
                                             iou_head_hidden_dim=256,
-                                        )
+                                        )    
+        
+    def run_dec_part2(self, embd_size, low_res_masks, msk_feat, up_embed, sparse_embeddings, dense_embeddings, image_embeddings):
+        ps_mask = F.interpolate(low_res_masks,size=(int(low_res_masks.shape[-2]/4), int(low_res_masks.shape[-1]/4)),mode='bilinear')
+
+        if self.training:
+            img_noise_gaussian = torch.randn((image_embeddings.size()), device=image_embeddings.device) * 0.2 *(image_embeddings.max()-image_embeddings.min())
+            image_embeddings = (image_embeddings + img_noise_gaussian)
+        
+        low_res_masks2, iou_predictions2, attn1 = self.mask_decoder2(
+            image_embeddings=image_embeddings,
+            image_pe=self.get_reshaped_pos_embds(embd_size=embd_size),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=True,
+            mask_feat = ps_mask,
+            msk_feat=msk_feat,
+            up_embed=up_embed
+        )    
+        
+        return low_res_masks2, iou_predictions2, attn1
         
         
     def forward(self, image_embeddings):
@@ -1261,22 +1281,26 @@ class HSAMdecHead(SAMdecHead):
             multimask_output=True,
         )
         
-        ps_mask = F.interpolate(low_res_masks,size=(int(low_res_masks.shape[-2]/4), int(low_res_masks.shape[-1]/4)),mode='bilinear')
+        # ps_mask = F.interpolate(low_res_masks,size=(int(low_res_masks.shape[-2]/4), int(low_res_masks.shape[-1]/4)),mode='bilinear')
 
-        if self.training:
-            img_noise_gaussian = torch.randn((image_embeddings.size()), device=image_embeddings.device) * 0.2 *(image_embeddings.max()-image_embeddings.min())
-            image_embeddings = (image_embeddings + img_noise_gaussian)
+        # if self.training:
+        #     img_noise_gaussian = torch.randn((image_embeddings.size()), device=image_embeddings.device) * 0.2 *(image_embeddings.max()-image_embeddings.min())
+        #     image_embeddings = (image_embeddings + img_noise_gaussian)
         
-        low_res_masks2, iou_predictions2, attn1 = self.mask_decoder2(
-            image_embeddings=image_embeddings,
-            image_pe=self.get_reshaped_pos_embds(embd_size=embd_size),
-            sparse_prompt_embeddings=sparse_embeddings,
-            dense_prompt_embeddings=dense_embeddings,
-            multimask_output=True,
-            mask_feat = ps_mask,
-            msk_feat=msk_feat,
-            up_embed=up_embed
-        )    
+        # low_res_masks2, iou_predictions2, attn1 = self.mask_decoder2(
+        #     image_embeddings=image_embeddings,
+        #     image_pe=self.get_reshaped_pos_embds(embd_size=embd_size),
+        #     sparse_prompt_embeddings=sparse_embeddings,
+        #     dense_prompt_embeddings=dense_embeddings,
+        #     multimask_output=True,
+        #     mask_feat = ps_mask,
+        #     msk_feat=msk_feat,
+        #     up_embed=up_embed
+        # )    
+        
+        low_res_masks2, _, _ = self.run_dec_part2(embd_size=embd_size, low_res_masks=low_res_masks, msk_feat=msk_feat, 
+                                                  up_embed=up_embed, sparse_embeddings=sparse_embeddings, 
+                                                  dense_embeddings=dense_embeddings, image_embeddings=image_embeddings)
         
         # Remove the extra output token
         low_res_masks = low_res_masks[:, 1:]
@@ -1356,27 +1380,84 @@ class HQSAMdecHead(SAMdecHead):
         return low_res_masks  # Will be reshaped to correct size in segmentor
     
     
-                #      num_classes: int, 
-                #  patch_sz: int, 
-                #  image_pe_size: Union[int, Sequence[int]], 
-                #  last_out_ch:int, 
-                #  first_out_ch:int,
-                #  sam_checkpoint_neck: Optional[str] = None, 
-                #  sam_checkpoint_prom_enc: Optional[str]= None, 
-                #  loss_weights: Optional[list] = None, 
     
-class HSAMHQdecHead(HSAMdecHead):
+class HQHSAMdecHead(HSAMdecHead):
     def __init__(self, 
                  num_classes: int, 
                  nb_patches:int,
                  patch_sz:int,
                  image_pe_size:Union[int, Sequence[int]],
-                 in_channels: Union[int, Sequence[int]], 
+                 last_out_ch:int, 
+                 first_out_ch:int,
                  sam_checkpoint_neck:Optional[str]=None,
                  sam_checkpoint_prom_enc:Optional[str]=None,
                  ) -> None:
-        super().__init__(num_classes=num_classes, nb_patches=nb_patches, patch_sz=patch_sz, image_pe_size=image_pe_size, 
-                         in_channels=in_channels, sam_checkpoint_neck=sam_checkpoint_neck, 
+        super().__init__(num_classes=num_classes+1, nb_patches=nb_patches, patch_sz=patch_sz, image_pe_size=image_pe_size, 
+                         in_channels=last_out_ch, sam_checkpoint_neck=sam_checkpoint_neck, 
                          sam_checkpoint_prom_enc=sam_checkpoint_prom_enc)
         
-
+        self.num_classses = num_classes
+        self.first_out_ch = first_out_ch
+        
+        self.mask_decoder = MaskDecoderHQ(num_multimask_outputs=self.num_classses,
+                                          transformer=TwoWayTransformer(
+                                            depth=2,
+                                            embedding_dim=self.embed_dim,
+                                            mlp_dim=2048,
+                                            num_heads=8,
+                                          ),
+                                          transformer_dim=self.embed_dim,
+                                          iou_head_depth=3,
+                                          iou_head_hidden_dim=256,
+                                          vit_dim=self.first_out_ch,
+                                        )
+        
+        
+    def forward(self, image_embeddings):
+        # Start running the first decoder as usual HQSam decoder with correct outputs
+        assert len(image_embeddings)==2
+        img_embds = image_embeddings[0]
+        first_embd = image_embeddings[1].permute(0, 2, 3, 1).contiguous()
+        
+        image_embeddings, embd_size =  self.prep_img_embds(img_embds)
+        
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=None, boxes=None, masks=None
+        )
+        
+        # interpolate pos_enc and dense embeddings
+        pos_enc, dense_embeddings = self.get_reshaped_pos_embds(embd_size=embd_size, dense_embeddings=dense_embeddings)
+        
+        # low_res_masks is x4 smaller compared to the input size
+        low_res_masks, iou_predictions, msk_feat, up_embed = self.mask_decoder(
+                                                                            image_embeddings=image_embeddings,
+                                                                            image_pe=pos_enc,
+                                                                            sparse_prompt_embeddings=sparse_embeddings,
+                                                                            dense_prompt_embeddings=dense_embeddings,
+                                                                            multimask_output=True,
+                                                                            hq_token_only=self.training,
+                                                                            interm_embeddings=first_embd.unsqueeze(0),
+                                                                            hsam_compet_out=True,
+                                                                            )
+        
+        
+        # Usual HSAM second decoder
+        low_res_masks2, _, _ = self.run_dec_part2(embd_size=embd_size, low_res_masks=low_res_masks, msk_feat=msk_feat, 
+                                                  up_embed=up_embed, sparse_embeddings=sparse_embeddings, 
+                                                  dense_embeddings=dense_embeddings, image_embeddings=image_embeddings)
+        
+        # Remove the extra output token and hq token
+        low_res_masks = low_res_masks[:, 1:-1]
+        low_res_masks2 = low_res_masks2[:, 1:-1]
+        
+        assert low_res_masks.shape[1]==self.num_classses
+        assert low_res_masks2.shape[1]==self.num_classses
+        
+        low_res_masks = F.interpolate(low_res_masks, size=low_res_masks2.shape[-2:], mode='bilinear')
+        
+        if self.training:
+            return [low_res_masks, low_res_masks2]
+        else:
+            return (low_res_masks+low_res_masks2)/2
+    
+    

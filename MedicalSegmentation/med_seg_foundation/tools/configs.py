@@ -1,5 +1,5 @@
 from enum import Enum
-from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead
+from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from eval.losses import DiceLoss, FocalLoss, CompositionLoss
@@ -352,7 +352,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
             n_out = 5*2
         elif dec_name in ['sam_mask_dec', 'hsam_mask_dec']:
             n_out=1
-        elif dec_name in ['hq_sam_mask_dec']:
+        elif dec_name in ['hq_sam_mask_dec', 'hq_hsam_mask_dec']:
             n_out=2
             if "sam" in bb_name:
                 if bb_size=="base":
@@ -649,7 +649,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
                             input_group_cat_nb=input_group_cat_nb,
                             in_channels_red=576 if dec_name=='unet' else 240)  # 576  |  384*input_group_cat_nb
      
-    elif dec_name in ['sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec']:
+    elif dec_name in ['sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec']:
         
         pretrained=True
         if pretrained:
@@ -677,6 +677,8 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
             class_name = HSAMdecHead.__name__
         elif dec_name=='hq_sam_mask_dec':
             class_name = HQSAMdecHead.__name__
+        elif dec_name=='hq_hsam_mask_dec':
+            class_name = HQHSAMdecHead.__name__
         else:
             ValueError(f'Unknown dec name : {dec_name}')
             

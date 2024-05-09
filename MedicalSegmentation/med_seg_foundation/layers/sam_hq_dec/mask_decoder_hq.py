@@ -125,28 +125,39 @@ class MaskDecoderHQ(nn.Module):
         vit_features = interm_embeddings[0].permute(0, 3, 1, 2) # early-layer ViT feature, after 1st global attention block in ViT
         hq_features = self.embedding_encoder(image_embeddings) + self.compress_vit_feat(vit_features)
 
-        masks_sam, masks_sam_hq, iou_pred = self.predict_masks(
-            image_embeddings=image_embeddings,
-            image_pe=image_pe,
-            sparse_prompt_embeddings=sparse_prompt_embeddings,
-            dense_prompt_embeddings=dense_prompt_embeddings,
-            hq_features=hq_features,
-        )
+        if not hsam_compet_out:
+            masks_sam, masks_sam_hq, iou_pred = self.predict_masks(
+                image_embeddings=image_embeddings,
+                image_pe=image_pe,
+                sparse_prompt_embeddings=sparse_prompt_embeddings,
+                dense_prompt_embeddings=dense_prompt_embeddings,
+                hq_features=hq_features,
+                hsam_compet_out=hsam_compet_out,
+            )
 
-        if multimask_output:
-            # Remove the mask token (first) and hq token (last)
-            masks_sam = masks_sam[:, 1:]  # Remove extra oup token
-            masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
-        else:
-            ValueError('Not Implemented Yet')
+            if multimask_output:
+                # Remove the mask token (first) and hq token (last)
+                masks_sam = masks_sam[:, 1:]  # Remove extra oup token
+                masks_sam_hq = masks_sam_hq[:, :-1]  # Remove HQ token
+            else:
+                ValueError('Not Implemented Yet')
 
-        
-        if hq_token_only:
-            masks = masks_sam_hq
+            
+            if hq_token_only:
+                masks = masks_sam_hq
+            else:
+                masks = masks_sam + masks_sam_hq
+            
+            return masks, iou_pred
         else:
-            masks = masks_sam + masks_sam_hq
-        
-        return masks, iou_pred
+            return self.predict_masks(
+                image_embeddings=image_embeddings,
+                image_pe=image_pe,
+                sparse_prompt_embeddings=sparse_prompt_embeddings,
+                dense_prompt_embeddings=dense_prompt_embeddings,
+                hq_features=hq_features,
+                hsam_compet_out=hsam_compet_out,
+            )
 
     def predict_masks(
         self,
@@ -155,6 +166,7 @@ class MaskDecoderHQ(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         hq_features: torch.Tensor,
+        hsam_compet_out:bool=False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
@@ -172,6 +184,9 @@ class MaskDecoderHQ(nn.Module):
         hs, src = self.transformer(src, pos_src, tokens)
         iou_token_out = hs[:, 0, :]
         mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
+        
+        if hsam_compet_out:
+            msk_feat = torch.matmul(mask_tokens_out,src.transpose(1, 2)) 
 
         # Upscale mask embeddings and predict masks using the mask tokens
         src = src.transpose(1, 2).view(b, c, h, w)
@@ -194,8 +209,14 @@ class MaskDecoderHQ(nn.Module):
         
         # Generate mask quality predictions
         iou_pred = self.iou_prediction_head(iou_token_out)
-
-        return masks_sam, masks_sam_hq, iou_pred
+        
+        if not hsam_compet_out:
+            return masks_sam, masks_sam_hq, iou_pred
+        else:
+            masks_no_token = (masks_sam[:, 1:] + masks_sam_hq[:, :-1])/2
+            masks = torch.concat([masks_sam[:,0].unsqueeze(1), masks_no_token, masks_sam_hq[:,-1].unsqueeze(1)], dim=1)
+            assert masks.shape[1]==self.num_mask_tokens
+            return masks, iou_pred, msk_feat, (upscaled_embedding_sam+upscaled_embedding_hq)/2
 
 
 # Lightly adapted from

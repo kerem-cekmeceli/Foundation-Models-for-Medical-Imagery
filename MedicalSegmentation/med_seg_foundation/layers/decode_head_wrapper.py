@@ -133,6 +133,20 @@ class HQSAMdecHead(SAMdecHead):
         self.cfg['first_out_ch']=first_out_ch
         return seg.HQSAMdecHead(**self.cfg)
     
+
+class HQHSAMdecHead(SAMdecHead):
+    def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
+        cfg['nb_patches']=backbone.nb_patches
+        assert backbone.nb_outs==2
+        assert backbone.last_out_first
+        super().__init__(backbone, cfg, *args, **kwargs)
+        
+    def _get_dec_from_cfg(self):
+        [last_out_ch, first_out_ch] = self.cfg.pop('in_channels')
+        self.cfg['last_out_ch']=last_out_ch
+        self.cfg['first_out_ch']=first_out_ch
+        return seg.HQHSAMdecHead(**self.cfg)
+    
     
 # class Mask2FormerHead(DecHeadBase):
 #     def __init__(self, backbone: BackBoneBase, cfg: dict, *args, **kwargs) -> None:
@@ -154,5 +168,6 @@ implemented_dec_heads = [ConvHeadLinear.__name__,
                          SegformerHead.__name__,
                          SAMdecHead.__name__,
                          HSAMdecHead.__name__,
-                         HQSAMdecHead.__name__]    
+                         HQSAMdecHead.__name__,
+                         HQHSAMdecHead.__name__,]    
     

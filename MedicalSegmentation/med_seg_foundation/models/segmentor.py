@@ -10,7 +10,7 @@ from mmseg.ops import resize
 # from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 # from OrigDino.dinov2.models.vision_transformer import DinoVisionTransformer
 from layers.decode_head_wrapper import implemented_dec_heads, DecHeadBase, ConvHeadLinear,\
-    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead, HSAMdecHead, HQSAMdecHead
+    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
 from layers.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBackBone, SamBackBone, ResNetBackBone,\
     LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone
 from typing import Union, Optional, Sequence, Callable, Any
