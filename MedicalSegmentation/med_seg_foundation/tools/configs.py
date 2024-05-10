@@ -688,7 +688,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
                             sam_checkpoint_neck=sam_checkpoint_neck,
                             sam_checkpoint_prom_enc=sam_checkpoint_prom_enc)
         if dec_name=='sam_mask_dec':
-            dec_head_cfg['train_prompt_enc']=False#True
+            dec_head_cfg['train_prompt_enc']=True
     else:
         ValueError(f'Decoder name {dec_name} is not defined')
         
