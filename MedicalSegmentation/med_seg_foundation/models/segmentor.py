@@ -53,7 +53,7 @@ class SegmentorBase(nn.Module):
         orig_shape = x.shape[-2:]
         
         if self.target_inp_shape is not None:
-            x = self.reshape_tensor_2d(o, self.target_inp_shape)
+            x = self.reshape_tensor_2d(x, self.target_inp_shape)
         
         out = self.get_masks(x)
         
@@ -63,8 +63,8 @@ class SegmentorBase(nn.Module):
         for i, o in enumerate(out):
             if self.reshape_dec_oup:
                 out[i] = self.reshape_tensor_2d(o, orig_shape)
-            assert x.shape[-2:] == out[i].shape[-2:], \
-                f'input and output image shapes do not match, {x.shape[:-2]} =! {o.shape[:-2]}'
+            assert orig_shape == out[i].shape[-2:], \
+                f'input and output image shapes do not match, {orig_shape} =! {out[i].shape[:-2]}'
                 
         if len(out)==1:
             out = out[0]

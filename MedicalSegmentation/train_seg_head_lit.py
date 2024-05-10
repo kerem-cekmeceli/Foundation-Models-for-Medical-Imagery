@@ -66,7 +66,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.SEGMENTOR
+model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
@@ -206,8 +206,8 @@ if model_type==ModelType.SEGMENTOR:
     processings = model.segmentor.backbone.get_pre_processing_cfg_list()
 else:
     processings = [dict(type='Normalize', 
-                        mean=[123.675, 116.28, 103.53],  #RGB
-                        std=[58.395, 57.12, 57.375],  #RGB
+                        mean=[0., 0., 0.],  #RGB
+                        std=[255.0, 255.0, 255.0],  #RGB
                         to_rgb=True)]
 
 # Get the data loader
