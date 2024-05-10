@@ -77,7 +77,7 @@ if model_type == ModelType.SEGMENTOR:
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'sam_mask_dec'  
+    dec_head_key = 'unetS'  
 
     
 
