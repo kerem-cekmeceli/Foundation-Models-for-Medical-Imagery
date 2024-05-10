@@ -66,7 +66,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
@@ -270,6 +270,10 @@ if model_type==ModelType.SEGMENTOR:
     
 elif model_type==ModelType.UNET:
     group_name = UNet.__name__ + 'Model'
+    run_name = f'{dataset}_{group_name}_{loss_cfg_key}'
+    
+elif model_type==ModelType.SWINUNET:
+    group_name = 'SwinUNet' + 'Model'
     run_name = f'{dataset}_{group_name}_{loss_cfg_key}'
     
 else:

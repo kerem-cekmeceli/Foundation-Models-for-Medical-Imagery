@@ -15,7 +15,7 @@ from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_tran
 class ModelType(Enum):
     SEGMENTOR=1
     UNET=2
-    SWINUNET=2
+    SWINUNET=3
 
 def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
     attrs = {}
