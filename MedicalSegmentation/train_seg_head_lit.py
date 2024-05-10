@@ -66,7 +66,7 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB

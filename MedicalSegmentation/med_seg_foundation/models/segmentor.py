@@ -134,6 +134,8 @@ class SegmentorModel(SegmentorBase):
             # Model is given
             self.model = model
             
+        pass
+            
     def get_masks(self, x):
         return self.model(x)
  
