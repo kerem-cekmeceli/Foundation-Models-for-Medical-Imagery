@@ -9,7 +9,7 @@ from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, L
     DinoReinBackbone, SamReinBackBone, MAEBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor, SegmentorModel
-from MedicalSegmentation.med_seg_foundation.models.unet import UNet
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_transformer_unet_skip_expand_decoder_sys import SwinTransformerSys
 
 class ModelType(Enum):

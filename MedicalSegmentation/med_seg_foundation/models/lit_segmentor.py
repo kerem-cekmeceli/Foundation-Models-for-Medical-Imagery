@@ -7,8 +7,8 @@ import lightning as L
 # from torch.optim.optimizer import Optimizer
 # from OrigDino.dinov2.hub.utils import CenterPadding
 # from lightning.pytorch.core.optimizer import LightningOptimizer
-from models.segmentor import Segmentor
-from models.unet import UNet
+from models.segmentor import SegmentorBase, Segmentor, SegmentorModel, implemented_segmentors
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
 import torch
 import wandb
 from typing import Union, Optional, Sequence, Callable, Any
@@ -18,8 +18,6 @@ import torch.nn.functional as F
 # import math
 from torchvision.utils import make_grid
 from lightning.pytorch.utilities import rank_zero_only
-
-implemented_segmentors = [Segmentor.__name__, UNet.__name__]
 
 class LitBaseModule(L.LightningModule):
     def __init__(self,
@@ -165,7 +163,7 @@ class LitSegmentor(LitBaseModule):
             self.segmentor = globals()[segmentor_name](**segmentor_params)
             
         else:
-            assert isinstance(segmentor, torch.nn.Module)
+            assert isinstance(segmentor, SegmentorBase)
             # Model is given
             self.segmentor = segmentor
         

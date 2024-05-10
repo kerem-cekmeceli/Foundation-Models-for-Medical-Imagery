@@ -52,7 +52,7 @@ from lightning.pytorch import seed_everything
 from med_seg_foundation.tools.configs import *
 # from torch.utils.data import Sampler
 from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
-from MedicalSegmentation.med_seg_foundation.models.unet import UNet
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
 
 from torchvision.models import get_model
 from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freqs
@@ -77,7 +77,7 @@ if model_type == ModelType.SEGMENTOR:
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'hq_hsam_mask_dec'  
+    dec_head_key = 'sam_mask_dec'  
 
     
 

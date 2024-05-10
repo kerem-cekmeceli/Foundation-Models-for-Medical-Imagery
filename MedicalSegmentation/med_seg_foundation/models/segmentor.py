@@ -16,6 +16,7 @@ from layers.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBac
     LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone
 from typing import Union, Optional, Sequence, Callable, Any
 
+from models.benchmarks import implemented_models, UNet, SwinTransformerSys
 
 class SegmentorBase(nn.Module):
     def __init__(self, reshape_dec_oup=False, align_corners=False, target_inp_shape=None,) -> None:
@@ -124,8 +125,8 @@ class SegmentorModel(SegmentorBase):
             model_name = model['name']
             model_params = model['params']
             
-            # if model_name not in implemented_models:
-            #     ValueError(f"Model {model_name} is not supported from config.")
+            if model_name not in implemented_models:
+                ValueError(f"Model {model_name} is not supported from config.")
             
             self.model = globals()[model_name](**model_params)
             
@@ -135,5 +136,9 @@ class SegmentorModel(SegmentorBase):
             
     def get_masks(self, x):
         return self.model(x)
+ 
+ 
+    
+implemented_segmentors = [Segmentor.__name__, SegmentorModel.__name__]
 
     
