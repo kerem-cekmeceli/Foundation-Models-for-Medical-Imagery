@@ -574,7 +574,7 @@ class SamBackBone(BlockBackboneBase):
             x = x + self.backbone.pos_embed
         return x
     
-    def oup_before_append_hook(self, x, B, h, w, i, norm=True):
+    def oup_before_append_hook(self, x, B, h, w, i, norm):
         out = x.permute(0, 3, 1, 2).contiguous()
         if (i==len(self.blocks)-1) and self.backbone.neck is not None:
             out = self.backbone.neck(out)

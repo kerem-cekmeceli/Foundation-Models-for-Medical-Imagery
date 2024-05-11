@@ -66,18 +66,18 @@ save_checkpoints = True
 log_the_run = True
 
 # Select model type
-model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'reinL_sam'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base" if not 'sam' in backbone else "base" # in ("small", "base", "large" or "giant")
     
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'da'  
+    dec_head_key = 'hq_hsam_mask_dec'  
 
     
 
