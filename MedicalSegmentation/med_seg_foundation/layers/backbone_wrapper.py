@@ -961,6 +961,7 @@ class LadderBackbone(BackBoneBase):
         necks_ch = []
         for i in range(self.bb1.nb_outs):
             if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
+                # Might try MLP
                 necks_ch.append(nn.Conv2d(self.bb2.out_feat_channels, self.bb1.out_feat_channels, kernel_size=1))
             else:
                 necks_ch.append(nn.Identity())
