@@ -13,7 +13,7 @@ from mmseg.ops import resize
 from layers.decode_head_wrapper import implemented_dec_heads, DecHeadBase, ConvHeadLinear,\
     ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
 from layers.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBackBone, SamBackBone, ResNetBackBone,\
-    LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone
+    LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone, MAEReinBackbone
 from typing import Union, Optional, Sequence, Callable, Any
 
 from models.benchmarks import implemented_models, UNet, SwinTransformerSys
