@@ -492,6 +492,13 @@ class DinoReinBackbone(DinoBackBone):
             self.reins: Reins = Reins(**lora_params)
         else:
             self.reins: LoRAReins = LoRAReins(**lora_params)
+        
+        # If to apply layer norm before append
+        self.do_norm = False
+        
+        if not self.do_norm:
+            for param in self.backbone.norm.parameters():
+                param.requires_grad=False
     
     def blk_post_hook(self, x, i):
         # Apply Rein
@@ -507,7 +514,7 @@ class DinoReinBackbone(DinoBackBone):
         return self.reins.return_auto(outputs)
     
     def oup_before_append_hook(self, x, B, h, w, i):
-        return super().oup_before_append_hook(x, B, h, w, i, norm=False)
+        return super().oup_before_append_hook(x, B, h, w, i, norm=self.do_norm)
         
   
 class SamBackBone(BlockBackboneBase):
@@ -684,6 +691,57 @@ class MAEBackbone(BlockBackboneBase):
     
     def oups_end_hook(self, outputs):
         return tuple(outputs)
+    
+    
+class MAEReinBackbone(MAEBackbone):
+    def __init__(self, 
+                 name: str, 
+                 nb_outs: int, 
+                 bb_model: Optional[nn.Module] = None, 
+                 cfg: Optional[dict] = None, 
+                 train: bool = False, 
+                 pre_normalize: bool = False, 
+                 last_out_first: bool = True, 
+                 out_idx:Optional[List[int]]=None,
+                 lora_reins:bool=False,
+                 link_token_to_query:bool=False,
+                 ):
+        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, 
+                         pre_normalize=pre_normalize, last_out_first=last_out_first, out_idx=out_idx) 
+        
+        self.lora_reins = lora_reins
+        lora_params = dict(num_layers=len(self.backbone.blocks),
+                           embed_dims=self.backbone.patch_embed.proj.out_channels,
+                           patch_size=self.hw_shrink_fac,
+                           link_token_to_query=link_token_to_query)
+        
+        if not self.lora_reins:
+            self.reins: Reins = Reins(**lora_params)
+        else:
+            self.reins: LoRAReins = LoRAReins(**lora_params)   
+            
+        # If to do Layernorm before reins (for last block only)
+        self.do_norm=False
+        
+        if not self.do_norm:
+            for param in self.backbone.norm.parameters():
+                param.requires_grad=False
+            
+        
+    def blk_post_hook(self, x, i):
+        # Do layer norm (for last blk only)
+        if self.do_norm:
+            x = super().blk_post_hook(x=x, i=i)
+            
+        # Apply Rein
+        x = self.reins.forward(
+            x,
+            i,
+            batch_first=True,
+            has_cls_token=True,
+        )
+        
+        return x
         
          
 # ResNet NEEDS RGB ORDER !              
