@@ -349,6 +349,8 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     # Set general fields
     bb_cps_pth = 'Checkpoints/Orig/backbone'
     out_idx = None
+    outs_from_diff_conv_layers = False  # For resnet
+    uniform_oup_size = True  # For resnet
     if bb_name in ["dino", "sam", "medsam", "mae", "resnet"]:
         if dec_name in ['unet', 'unetS']:
             n_out = 5*2
@@ -369,10 +371,13 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                 out_idx = [0, -1]
             else:
                 out_idx = [0, -1]
+            
+            outs_from_diff_conv_layers = True# For resnet
+            uniform_oup_size = False
         else:
             n_out = 4
     
-    last_out_first = True
+    last_out_first = True # Keep True
     
     # Backbone Specifics
     if bb_name == 'dino':
@@ -501,7 +506,10 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       nb_layers=layers,
                       pre_normalize=False,
                       nb_outs=n_out,
-                      last_out_first=last_out_first,)   
+                      last_out_first=last_out_first,
+                      out_idx=out_idx,
+                      outs_from_diff_conv_layers=outs_from_diff_conv_layers,
+                      uniform_oup_size=uniform_oup_size)   
         
     elif 'ladder' in bb_name:
         name = LadderBackbone.__name__
@@ -524,7 +532,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                                          train_bb=True, 
                                          dec_name=dec_name, 
                                          main_pth=main_pth, 
-                                         pretrained=True)
+                                         pretrained=True,)
             bb2_name_params['params']['skip_last_layer']=True
         
         elif 'ladderD' in bb_name:

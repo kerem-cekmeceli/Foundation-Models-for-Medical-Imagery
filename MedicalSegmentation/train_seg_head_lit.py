@@ -61,16 +61,18 @@ from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freq
 # # No weights - random initialization
 # mdl = get_model(**cfg)
 
-cluster_paths = True
-save_checkpoints = True
-log_the_run = True
+cluster_mode = False
+
+cluster_paths = cluster_mode
+save_checkpoints = cluster_mode
+log_the_run = cluster_mode
 
 # Select model type
 model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'rein_mae'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'ladderR_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
@@ -86,7 +88,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'hcp1'  if cluster_paths else 'hcp1'
+dataset = 'prostate_usz'  if cluster_paths else 'hcp1'
 rcs_enabled = True
 
 # Select loss

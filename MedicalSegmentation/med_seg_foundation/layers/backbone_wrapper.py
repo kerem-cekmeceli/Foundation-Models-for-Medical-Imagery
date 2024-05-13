@@ -373,6 +373,8 @@ class BlockBackboneBase(BackBoneBase1):
         for i, num in enumerate(blocks_to_take):
             if num<0:
                 blocks_to_take[i] = len(self.blocks)+num
+        assert min(blocks_to_take)>=0
+        assert max(blocks_to_take)<len(self.blocks)
         for i, blk in enumerate(self.blocks):
             self.blk_pre_hook(x)
             x = blk(x)
@@ -758,6 +760,7 @@ class ResNetBackBone(BackBoneBase1):
                  last_out_first:bool=True,
                  uniform_oup_size:bool=True,
                  out_idx:Optional[List[int]]=None,
+                 outs_from_diff_conv_layers:bool=False,
                  *args: torch.Any, **kwargs: torch.Any) -> None:
         
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
@@ -778,7 +781,25 @@ class ResNetBackBone(BackBoneBase1):
         self.backbone.fc = None     
         
         self.nb_conv_layers = 3 if skip_last_layer else 4
+        
+        # Which conv layers to take the outs from
+        if out_idx is None:
+            out_idx = [i for i in range(self.nb_conv_layers)]
+        else:
+            assert isinstance(out_idx, list)
+            for i, oi in enumerate(out_idx):
+                if oi<0:
+                    out_idx[i] = self.nb_conv_layers+oi
+            assert max(out_idx)<self.nb_conv_layers
+            assert min(out_idx)>=0
+        out_idx.sort(reverse=True)  # Start taking oups from the latest layer
+        self.out_idx = out_idx
+        
+        # If to take outputs from all conv layers (starting from tha last)
+        self.outs_from_diff_conv_layers=outs_from_diff_conv_layers
+        
         self.assign_nb_outs_per_layer()
+        
         self.uniform_oup_size = uniform_oup_size
         
         if self.uniform_oup_size:
@@ -786,6 +807,7 @@ class ResNetBackBone(BackBoneBase1):
             for layer_i, nb_outs_i in enumerate(self.nb_outs_per_l):
                 if nb_outs_i>0:
                     layer_i_out_ch = self.get_out_channels(getattr(self.backbone, f'layer{layer_i+1}'))
+                    
                     assert self.out_feat_channels >= layer_i_out_ch
                     assert self.out_feat_channels % layer_i_out_ch == 0
                     factor =  self.out_feat_channels // layer_i_out_ch
@@ -804,8 +826,10 @@ class ResNetBackBone(BackBoneBase1):
         simple = True
         if simple:
             return nn.Sequential(nn.Conv2d(nb_out_channels, self.out_feat_channels, kernel_size=1),
+                                 nn.SyncBatchNorm(self.out_feat_channels),
                                  nn.Upsample(scale_factor=1/factor, mode='bilinear' if (1/factor)>1 else 'area'))
         else:
+            assert self.out_ch_target is None
             # Bottleneck blocks
             if self._nb_layers>34:
                 assert nb_out_channels%2==0
@@ -832,18 +856,39 @@ class ResNetBackBone(BackBoneBase1):
         assert hasattr(self, 'nb_outs')
         assert hasattr(self, '_skip_last_layer')
         self.nb_outs_per_l = [0]*self.nb_conv_layers
-        nb_outs = self.nb_outs
         
-        for i in range(self.nb_conv_layers-1, -1, -1):
-            if nb_outs>0:
-                self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
-            nb_outs -= self.nb_outs_per_l[i]
-        
-        assert nb_outs<=0, f'Requested nb_outs={self.nb_outs}, but only {self.nb_outs+nb_outs} available'    
+        if not self.outs_from_diff_conv_layers:
+            # Taking starting from the last until we reach the nb of desired oups
+            nb_outs = self.nb_outs
+            for i in self.out_idx:
+                if nb_outs>0:
+                    self.nb_outs_per_l[i] = min(len(getattr(self.backbone, f'layer{i+1}')), nb_outs)
+                nb_outs -= self.nb_outs_per_l[i]
+            assert nb_outs<=0, f'Requested nb_outs={self.nb_outs}, but only {self.nb_outs+nb_outs} available'    
+            
+        else:
+            # Taking from all layers round-robin (satrting from the last)
+            while(sum(self.nb_outs_per_l)<self.nb_outs):
+                took_oup = False
+                for i in self.out_idx:
+                    if sum(self.nb_outs_per_l)<self.nb_outs:
+                        if len(getattr(self.backbone, f'layer{i+1}'))>self.nb_outs_per_l[i]:
+                            self.nb_outs_per_l[i] += 1
+                            took_oup = True
+                    
+                assert took_oup, "Requested nb of output is larger than the max available !"
+                
         assert sum(self.nb_outs_per_l) == self.nb_outs
         assert len(self.nb_outs_per_l)==self.nb_conv_layers
                 
-    
+        # Get the nb channels for oups
+        self.oup_channels = []
+
+        for i, nb_outs in enumerate(self.nb_outs_per_l):
+            self.oup_channels.extend([self.get_out_channels(getattr(self.backbone, f'layer{i+1}'))]*self.nb_outs_per_l[i])
+        
+        assert len(self.oup_channels)==self.nb_outs
+            
     def get_inter_res_from_layer(layer, n, x):
         """ layer: layer to take the blocks from,
             n: number of blocks (from the end) to take,
@@ -911,13 +956,21 @@ class ResNetBackBone(BackBoneBase1):
         
     @property  
     def out_feat_channels(self):
-        if self._skip_last_layer:
-            return self.get_out_channels(self.backbone.layer3)
+        if not self.uniform_oup_size:
+            if self.last_out_first:
+                return self.oup_channels[::-1]
+            else:
+                return self.oup_channels
+        
         else:
-            return self.get_out_channels(self.backbone.layer4)
+            if self._skip_last_layer:
+                return self.get_out_channels(self.backbone.layer3)
+            else:
+                return self.get_out_channels(self.backbone.layer4)
     
     @property
     def hw_shrink_fac(self):
+        # assert self.uniform_oup_size, "Not implemented yet"
         return self._hw_shrink_fac
     
     def get_pre_processing_cfg_list(self):
@@ -927,10 +980,7 @@ class ResNetBackBone(BackBoneBase1):
         processing.append(dict(type='CentralPad', 
                                make_square=True,
                                pad_val=0, seg_pad_val=0))
-       
-
         return processing
-    
     
 class LadderBackbone(BackBoneBase):
     def __init__(self, 
@@ -943,12 +993,12 @@ class LadderBackbone(BackBoneBase):
         bb1_name = bb1_name_params['name']
         bb1_params = bb1_name_params['params']
         self.bb1 = globals()[bb1_name](**bb1_params)
-        assert isinstance(self.bb1, BackBoneBase)
+        assert isinstance(self.bb1, BlockBackboneBase)
         
         bb2_name = bb2_name_params['name']
         bb2_params = bb2_name_params['params']
         self.bb2 = globals()[bb2_name](**bb2_params)
-        assert isinstance(self.bb2, BackBoneBase)
+        assert isinstance(self.bb2, BackBoneBase1)
         assert self.bb2.train_backbone
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
@@ -958,18 +1008,25 @@ class LadderBackbone(BackBoneBase):
         assert self.bb1.last_out_first == self.bb2.last_out_first
         
         # This takes care of matching the channel sizes
+        bb1_out_chs = [self.bb1.out_feat_channels]*self.nb_outs if isinstance(self.bb1.out_feat_channels, int) else self.bb1.out_feat_channels
+        bb2_out_chs = [self.bb2.out_feat_channels]*self.nb_outs if isinstance(self.bb2.out_feat_channels, int) else self.bb2.out_feat_channels
+        
         necks_ch = []
-        for i in range(self.bb1.nb_outs):
-            if self.bb1.out_feat_channels != self.bb2.out_feat_channels:
+        for bb1_out, bb2_out in zip(bb1_out_chs, bb2_out_chs):
+            if bb1_out != bb2_out:
                 # Might try MLP
-                necks_ch.append(nn.Conv2d(self.bb2.out_feat_channels, self.bb1.out_feat_channels, kernel_size=1))
+                necks_ch.append(nn.Sequential(nn.Conv2d(bb2_out, bb1_out, kernel_size=1),
+                                              nn.SyncBatchNorm(bb1_out)) )
             else:
                 necks_ch.append(nn.Identity())
         self.necks_y2_ch = nn.ModuleList(necks_ch)
             
         self.alpha = nn.ParameterList([nn.Parameter(torch.zeros(1)) for i in range(self.bb1.nb_outs)])
         self.Sigmoid = nn.Sigmoid()
-        
+    
+    @property
+    def nb_patches(self):
+        return self.bb1.nb_patches
  
     @property
     def hw_shrink_fac(self):
