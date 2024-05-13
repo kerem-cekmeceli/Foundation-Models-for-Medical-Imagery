@@ -61,7 +61,7 @@ from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freq
 # # No weights - random initialization
 # mdl = get_model(**cfg)
 
-cluster_mode = False
+cluster_mode = True
 
 cluster_paths = cluster_mode
 save_checkpoints = cluster_mode
