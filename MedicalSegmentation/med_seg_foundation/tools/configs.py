@@ -881,7 +881,7 @@ def get_lr(model_type, **kwargs):
             return 1e-4
         
         elif 'ladderR' in bb_name:
-            return 2e-4
+            return 5e-5
         
         elif 'ladderD' in bb_name:
             return 2e-5

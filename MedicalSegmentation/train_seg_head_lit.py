@@ -56,12 +56,10 @@ from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
 
 from torchvision.models import get_model
 from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freqs
+import socket
 
-# cfg = dict(name='resnet50', weights='ResNet50_Weights.IMAGENET1K_V2')
-# # No weights - random initialization
-# mdl = get_model(**cfg)
 
-cluster_mode = True
+cluster_mode = 'KeremPC' != socket.gethostname()
 
 cluster_paths = cluster_mode
 save_checkpoints = cluster_mode
@@ -72,7 +70,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'ladderR_medsam'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'ladderR_dino'  # dino, sam, medsam, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
