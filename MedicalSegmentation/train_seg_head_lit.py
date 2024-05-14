@@ -70,7 +70,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'ladderD_sam'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'rein_sam'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
@@ -86,7 +86,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'hcp1'  if cluster_paths else 'hcp1'
+dataset = 'abide_stanford'  if cluster_paths else 'hcp1'
 rcs_enabled = True
 
 # Select loss
