@@ -1,25 +1,26 @@
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 # from abc import abstractclassmethod
 from torch.nn import CrossEntropyLoss
-from eval.metrics import mIoU, DiceScore
-from eval.losses import DiceLoss, FocalLoss, CompositionLoss
+from utils.metrics import mIoU, DiceScore
+from utils.losses import DiceLoss, FocalLoss, CompositionLoss
 import lightning as L
-# from torch.optim.optimizer import Optimizer
-# from OrigDino.dinov2.hub.utils import CenterPadding
-# from lightning.pytorch.core.optimizer import LightningOptimizer
-from models.segmentor import SegmentorBase, Segmentor, SegmentorModel, implemented_segmentors
-from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
+from models.segmentor import SegmentorBase, SegmentorEncDec, SegmentorModel, implemented_segmentors
 import torch
 import wandb
 from typing import Union, Optional, Sequence, Callable, Any
-# from torchvision.transforms.functional import to_pil_image 
-# from tqdm import tqdm
 import torch.nn.functional as F
-# import math
 from torchvision.utils import make_grid
 from lightning.pytorch.utilities import rank_zero_only
 
-class LitBaseModule(L.LightningModule):
+# from torch.optim.optimizer import Optimizer
+# from OrigDino.dinov2.hub.utils import CenterPadding
+# from lightning.pytorch.core.optimizer import LightningOptimizer
+
+# from torchvision.transforms.functional import to_pil_image 
+# from tqdm import tqdm
+# import math
+
+class LitBaseTrainer(L.LightningModule):
     def __init__(self,
                  loss_config:dict,
                  optimizer_config:dict,
@@ -27,7 +28,7 @@ class LitBaseModule(L.LightningModule):
                  metric_configs:Optional[Union[dict, Sequence[dict]]]=None) -> None:
         
         super().__init__()  
-        self.loss_fn = LitBaseModule._get_loss(loss_config)
+        self.loss_fn = LitBaseTrainer._get_loss(loss_config)
         self.optimizer_config = optimizer_config
         self.scheduler_config = scheduler_config
         
@@ -37,7 +38,7 @@ class LitBaseModule(L.LightningModule):
                 metric_configs = [metric_configs]
             
             for metric_config in metric_configs:
-                self.metrics[metric_config['name']] = LitBaseModule._get_metric(metric_config)
+                self.metrics[metric_config['name']] = LitBaseTrainer._get_metric(metric_config)
        
     
     def _get_loss(loss_config):
@@ -121,7 +122,7 @@ class LitBaseModule(L.LightningModule):
             raise ValueError(f"Scheduler '{scheduler_name}' is not implemented.")
         
 
-class LitSegmentor(LitBaseModule):
+class LitTrainer(LitBaseTrainer):
     def __init__(self,
                  segmentor,
                  loss_config:dict,
@@ -208,8 +209,8 @@ class LitSegmentor(LitBaseModule):
     def training_step(self, batch, batch_idx):
         x_batch, y_batch = batch
         
-        LitSegmentor.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Train x_batch')
-        LitSegmentor.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Train y_batch')
+        LitTrainer.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Train x_batch')
+        LitTrainer.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Train y_batch')
        
         # Forward pass
         y_pred = self.segmentor(x_batch)
@@ -222,11 +223,11 @@ class LitSegmentor(LitBaseModule):
             y_pred_det = torch.stack(y_pred, dim=0).detach().mean(0)
             
         else:
-            LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
+            LitTrainer.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
             loss = self.loss_fn(y_pred, y_batch)
             y_pred_det = y_pred.detach()
             
-        LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Train loss')
+        LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Train loss')
                         
         # Log the loss
         self.log('loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
@@ -295,16 +296,16 @@ class LitSegmentor(LitBaseModule):
         else:
             x_batch, y_batch = val_batch
         
-        LitSegmentor.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Validation x_batch')
-        LitSegmentor.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Validation y_batch')
+        LitTrainer.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Validation x_batch')
+        LitTrainer.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Validation y_batch')
     
         
         # Forward pass
         y_pred = self.segmentor(x_batch)
-        LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Validation y_pred')
+        LitTrainer.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Validation y_pred')
             
         loss = self.loss_fn(y_pred, y_batch)
-        LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Validation loss')
+        LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Validation loss')
         
         loss_key = 'val_loss' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_loss'
         self.log(loss_key, loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_val)
@@ -362,19 +363,19 @@ class LitSegmentor(LitBaseModule):
         else:
             x_batch, y_batch = batch
             
-        LitSegmentor.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Test x_batch')
-        LitSegmentor.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Test y_batch')
+        LitTrainer.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Test x_batch')
+        LitTrainer.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Test y_batch')
              
         # Forward pass
         y_pred = self.segmentor(x_batch)
-        LitSegmentor.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Test y_pred')
+        LitTrainer.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Test y_pred')
         
         # Hard decision
         n_classes = y_pred.shape[1]
         y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(y_pred)
         
         loss = self.loss_fn(y_pred, y_batch)
-        LitSegmentor.check_nans(tensor=loss, batch_idx=batch_idx, name='Test loss')
+        LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Test loss')
         
         # save the segmentation result
         if batch_idx in self.seg_log_batch_idxs:

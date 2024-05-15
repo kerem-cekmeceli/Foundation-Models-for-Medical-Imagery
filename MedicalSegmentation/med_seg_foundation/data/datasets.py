@@ -1,33 +1,28 @@
-# from OrigDino.dinov2.models.vision_transformer import *
-
-
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
-# import torchvision.transforms as transforms
-# from torchvision.transforms import functional as F
 import numpy as np
 import os
-# from sklearn.model_selection import train_test_split
+from PIL import Image
+from pathlib import Path
+from mmseg.datasets.pipelines import Compose
+import mmcv
+import h5py
+from abc import abstractmethod
+import lightning as L
 from torch.utils.data import DataLoader
-from torch import optim
-from tqdm import tqdm
+from data.transforms import *
+from MedicalSegmentation.med_seg_foundation.data.distributed import VolDistributedSampler
+
+# import torchvision.transforms as transforms
+# from torchvision.transforms import functional as F
+# from sklearn.model_selection import train_test_split
 # import torch.nn.functional as F
 # import torchvision.transforms.functional as F
 # from model import Segmentor
 # from scipy.ndimage import zoom
 # import matplotlib.pyplot as plt
-from PIL import Image
-from pathlib import Path
-from mmseg.datasets.pipelines import Compose
-import mmcv
-from data.transforms import *
-import h5py
-import lightning as L
-from abc import abstractmethod
 
-
-# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def get_file_list(fld_pth, start_idx=0, num_img=None, extension=None, 
                   file_suffix=None, inc_exc=0):
@@ -370,83 +365,11 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
             return image, mask
         else:
             return image, mask, n_xyz
-    
-from torch.utils.data import DistributedSampler    
 
-class VolDistributedSampler(DistributedSampler):
-    def __init__(self, dataset: Dataset,  vol_depth:int, num_replicas: Optional[int] = None, 
-                 rank: Optional[int] = None, shuffle: bool = True, 
-                 seed: int = 0, drop_last: bool = False) -> None:
         
-        super().__init__(dataset, num_replicas, rank, shuffle, seed, drop_last)
-        
-        assert vol_depth>0
-        self.vol_depth = vol_depth
-        
-        assert len(self.dataset)> 0
-        
-        assert len(self.dataset)%self.vol_depth == 0, "Dataset can not contain a partial volume"
-        self.total_nb_vols_dataset = len(self.dataset)//self.vol_depth
-        assert self.total_nb_vols_dataset > 0
-        
-        # If the dataset length is evenly divisible by # of replicas, then there
-        # is no need to drop any data, since the dataset will be split equally.
-        if self.drop_last and self.total_nb_vols_dataset % self.num_replicas != 0 and \
-            self.total_nb_vols_dataset>self.num_replicas:  
-            # Split to nearest available length that is evenly divisible.
-            # This is to ensure each rank receives the same amount of data when
-            # using this Sampler.
-            self.num_vols = math.floor(self.total_nb_vols_dataset / self.num_replicas)
+ #################################################################################################
 
-        else:
-            # Num volumes per rank
-            self.num_vols = math.ceil(self.total_nb_vols_dataset / self.num_replicas)
-            
-        assert self.num_vols>0, "Each GPU must get at least 1 volume"
-                        
-        # Num samples per rank
-        self.num_samples = self.num_vols * self.vol_depth
         
-        # Total number of volumes (inc replication)
-        self.total_nb_vols = self.num_vols * self.num_replicas
-        self.total_size = self.total_nb_vols * self.vol_depth
-        
-    def __iter__(self):
-        if self.shuffle:
-            # # deterministically shuffle based on epoch and seed
-            # g = torch.Generator()
-            # g.manual_seed(self.seed + self.epoch)
-            # indices = torch.randperm(len(self.dataset), generator=g).tolist()  # type: ignore[arg-type]
-            ValueError('Not Implemented yet') # shuffle assigned volumes and slices in the vol but keep complete volumes for all GPUs
-        else:
-            indices = list(range(len(self.dataset)))  # type: ignore[arg-type]
-
-        if not self.drop_last:
-            # add extra samples to make it evenly divisible
-            padding_size = self.total_size - len(indices)
-            
-            if padding_size>0:
-                assert padding_size%self.vol_depth == 0
-            
-            if padding_size <= len(indices):
-                indices += indices[:padding_size]  # append from the first volumes 
-            else:
-                indices += (indices * math.ceil(padding_size / len(indices)))[:padding_size]
-        else:
-            # remove tail of data to make it evenly divisible.
-            indices = indices[:self.total_size]
-        assert len(indices) == self.total_size
-
-        # subsample
-        # indices = indices[self.rank:self.total_size:self.num_replicas]
-        start_idx = self.rank*self.num_samples
-        end_idx = start_idx + self.num_samples
-        indices = indices[start_idx:end_idx:1]
-        assert len(indices) == self.num_samples
-
-        return iter(indices)
-
-
 class VolDataModule(L.LightningDataModule):
     def __init__(self, train_dataset, train_dataloader_cfg,
                  vol_depth, num_gpus,
@@ -487,81 +410,4 @@ class VolDataModule(L.LightningDataModule):
         else:
             sampler=None
             
-        return DataLoader(self.test_dataset, sampler=sampler, **self.val_dataloader_cfg)   
-  
-  
-        
-
-#################################################################################################
-
-def color_map_from_imgs(fld_pth, file_ls,  device='cuda:0'):
-    img_colors_all = None
-    for img in file_ls:
-        img = np.array(Image.open(fld_pth+'/'+img).convert('RGB'))
-        img = torch.from_numpy(img).to(device)
-        img_colors = img.reshape([-1, img.shape[-1]])
-        # img_colors = torch.unique(img_colors, axis=0)  # Keep the unique colors only
-        
-        if img_colors_all is None:
-            img_colors_all = img_colors
-        else:
-            img_colors_all = torch.cat([img_colors_all, img_colors], axis=0)
-            # img_colors_all =  torch.unique(img_colors_all, axis=0)  # Keep the unique colors only
-    img_colors_all = torch.unique(img_colors_all, dim=0)
-    color_mapping = {}
-    for i, c in enumerate(img_colors_all.cpu().numpy()):
-        color_mapping[tuple(c)] = i
-        
-    return color_mapping  # {(R, G, B) : idx}
-
-# def map_rgb_to_indices(rgb_tensor, color_map):
-#     # Convert the color map to a PyTorch tensor
-#     color_map_tensor = torch.tensor(list(color_map.keys())).float()
-
-#     # Expand dimensions of input tensor to (N, 1, 1, C) for broadcasting
-#     rgb_tensor_expanded = rgb_tensor.unsqueeze(1).unsqueeze(1)
-
-#     # Check if each RGB value in the tensor exactly matches a color in the color map
-#     exact_matches = torch.all(rgb_tensor_expanded == color_map_tensor.view(1, -1, 1, 3), dim=-1)
-
-#     # Find the index of the matching color for each RGB value
-#     indices = torch.argmax(exact_matches, dim=1)
-
-#     # Map indices to corresponding labels using the color map
-#     labels = torch.tensor(list(color_map.values()))[indices]
-
-#     # Check if any RGB values do not have an exact match in the color map
-#     if not torch.all(exact_matches.any(dim=1)):
-#         raise ValueError("Some RGB values do not have an exact match in the color map.")
-
-#     return labels
-
-
-# def get_masks_from_imgs(fld_pth, file_ls):
-#     for img in file_ls:
-#         img = np.array(Image.open(fld_pth+'/'+img).convert('RGB'))
-#         img = torch.from_numpy(img).to(device)
-        
-# def create_segmentation_mask(image_tensor, color_map):
-#     # Flatten the image tensor to (batch_size, height * width, channels)
-#     flattened_image = image_tensor.view(image_tensor.size(0), -1, image_tensor.size(-1))
-
-#     # Expand the color map to (1, 1, 1, num_colors, 3)
-#     color_map_tensor = torch.tensor(list(color_map.keys())).view(1, 1, 1, -1, 3).float()
-
-#     # Expand the image tensor to (batch_size, height * width, 1, channels)
-#     image_tensor_expanded = flattened_image.unsqueeze(2)
-
-#     # Compute the L2 distance between each pixel and each color in the color map
-#     distances = torch.norm(image_tensor_expanded - color_map_tensor, dim=-1)
-
-#     # Find the index of the minimum distance for each pixel
-#     indices = torch.argmin(distances, dim=-1)
-
-#     # Map the indices to the corresponding labels using the color map
-#     mask_tensor = torch.tensor(list(color_map.values()))[indices]
-
-#     # Convert the flattened mask tensor back to the original shape
-#     mask_tensor = mask_tensor.view(image_tensor.size(0), image_tensor.size(1), image_tensor.size(2))
-
-#     return mask_tensor
+        return DataLoader(self.test_dataset, sampler=sampler, **self.val_dataloader_cfg)  

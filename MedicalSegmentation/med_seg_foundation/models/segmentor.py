@@ -1,22 +1,21 @@
 
-# import torch
 import torch.nn as nn
+from abc import abstractmethod
+from mmseg.ops import resize
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.decode_head_wrapper import implemented_dec_heads, DecHeadBase, ConvHeadLinear,\
+    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
+from MedicalSegmentation.med_seg_foundation.models.EncDec.encoder.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBackBone, SamBackBone, ResNetBackBone,\
+    LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone, MAEReinBackbone
+from typing import Union, Optional, Sequence, Callable, Any
+from models.benchmarks import implemented_models, UNet, SwinTransformerSys
 
 # from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 # from MedDino.med_dinov2.layers.segmentation import DecBase
-from abc import abstractmethod
-from mmseg.ops import resize
 # from MedDino.prep_model import get_dino_backbone
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
 # from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 # from OrigDino.dinov2.models.vision_transformer import DinoVisionTransformer
-from layers.decode_head_wrapper import implemented_dec_heads, DecHeadBase, ConvHeadLinear,\
-    ResNetHead, UNetHead, FCNHead, PSPHead, DAHead, SegformerHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
-from layers.backbone_wrapper import implemented_backbones, BackBoneBase, DinoBackBone, SamBackBone, ResNetBackBone,\
-    LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone, MAEReinBackbone
-from typing import Union, Optional, Sequence, Callable, Any
 
-from models.benchmarks import implemented_models, UNet, SwinTransformerSys
 
 class SegmentorBase(nn.Module):
     def __init__(self, reshape_dec_oup=False, align_corners=False, target_inp_shape=None,) -> None:
@@ -71,7 +70,7 @@ class SegmentorBase(nn.Module):
         return out
         
 
-class Segmentor(SegmentorBase):
+class SegmentorEncDec(SegmentorBase):
     def __init__(self, backbone, decode_head,
                  reshape_dec_oup=False, align_corners=False, target_inp_shape=None,
                  ) -> None:
@@ -141,6 +140,6 @@ class SegmentorModel(SegmentorBase):
  
  
     
-implemented_segmentors = [Segmentor.__name__, SegmentorModel.__name__]
+implemented_segmentors = [SegmentorEncDec.__name__, SegmentorModel.__name__]
 
     

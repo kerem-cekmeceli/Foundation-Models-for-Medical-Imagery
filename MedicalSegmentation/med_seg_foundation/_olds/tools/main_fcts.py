@@ -20,7 +20,7 @@ from typing import Callable, Optional, Union, Dict
 from checkpointer import Checkpointer
 from tools.plot import show_result
 import math
-from eval.metrics import ScoreBase
+from utils.metrics import ScoreBase
 
 def train_batches(model : nn.Module, 
                       train_loader : DataLoader, 

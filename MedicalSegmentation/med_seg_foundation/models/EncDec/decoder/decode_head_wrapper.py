@@ -1,8 +1,8 @@
 # import torch
 from torch import nn 
 
-from layers.backbone_wrapper import BackBoneBase
-from layers import segmentation as seg   #import ConvHeadLinear, ResNetHead, UNetHead
+from MedicalSegmentation.med_seg_foundation.models.EncDec.encoder.backbone_wrapper import BackBoneBase
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder import decoders as seg   #import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models import decode_heads as seg_mmcv # FCNHead, PSPHead, DAHead, SegformerHead
 # from mmdet.models import dense_heads as seg_mmdet
 

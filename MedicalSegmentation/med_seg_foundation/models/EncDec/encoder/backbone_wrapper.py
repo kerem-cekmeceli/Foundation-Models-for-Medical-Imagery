@@ -5,7 +5,7 @@ from ModelSpecific.DinoMedical.prep_model import get_dino_backbone
 from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone, get_sam_neck
 from torchvision.models import get_model
 
-from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.decoders import ConvHeadLinear, ResNetHead, UNetHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 
 from abc import abstractmethod

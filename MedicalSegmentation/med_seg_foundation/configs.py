@@ -1,15 +1,15 @@
 from enum import Enum
-from layers.segmentation import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.decoders import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
-from eval.losses import DiceLoss, FocalLoss, CompositionLoss
+from utils.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
-from layers.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, \
+from MedicalSegmentation.med_seg_foundation.models.EncDec.encoder.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, \
     DinoReinBackbone, SamReinBackBone, MAEBackbone, MAEReinBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
-from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor, SegmentorModel
-from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
+from MedicalSegmentation.med_seg_foundation.models.segmentor import SegmentorEncDec, SegmentorModel
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.UNet.unet import UNet
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_transformer_unet_skip_expand_decoder_sys import SwinTransformerSys
 
 class ModelType(Enum):
@@ -918,7 +918,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                                    bb_size=kwargs['backbone_sz'], main_path=kwargs['main_pth'])
         
         # Segmentor config (Encoder-Decoder)
-        segmentor_cfg = dict(name=Segmentor.__name__,
+        segmentor_cfg = dict(name=SegmentorEncDec.__name__,
                          params=dict(backbone=bb_cfg,
                                      decode_head=dec_head_cfg,
                                      reshape_dec_oup=True,

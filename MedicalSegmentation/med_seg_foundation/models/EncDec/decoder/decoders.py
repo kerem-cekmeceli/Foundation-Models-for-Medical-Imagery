@@ -3,11 +3,14 @@ import torch.nn as nn
 from abc import ABC, abstractmethod
 from mmseg.ops import resize
 from typing import Sequence, Union, Optional
-# from torch import functional as F
 import math
 from copy import deepcopy
 from ModelSpecific.SamMedical.img_enc import get_sam_prompt_enc
 from ModelSpecific.SamMedical.img_enc import get_sam_vit_backbone, get_sam_neck
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.orig_decoders.sam_hq_dec.mask_decoder_hq import MaskDecoderHQ
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.orig_decoders.hsam_dec.mask_decoder_224 import MaskDecoder_224, MaskDecoder2_224
+from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.orig_decoders.hsam_dec import transformer as transf_hsam
+import torch.nn.functional as F
 
 class DecBase(nn.Module, ABC):
     def __init__(self, 
@@ -1197,11 +1200,6 @@ class SAMdecHead(nn.Module):
        
         return low_res_masks  # Will be reshaped to correct size in segmentor
 
-                
-from .hsam_dec.mask_decoder_224 import MaskDecoder_224, MaskDecoder2_224
-from .hsam_dec import transformer as transf_hsam
-import torch.nn.functional as F
-
 
 class HSAMdecHead(SAMdecHead):
     def __init__(self, 
@@ -1316,8 +1314,6 @@ class HSAMdecHead(SAMdecHead):
         else:
             return (low_res_masks+low_res_masks2)/2
     
-
-from .sam_hq_dec.mask_decoder_hq import MaskDecoderHQ
     
 class HQSAMdecHead(SAMdecHead):
     def __init__(self, 

@@ -16,47 +16,21 @@ sys.path.insert(2, str(dino_mod_pth))
 sys.path.insert(3, str(sam_mod_pth))
 
 import torch
-# import math
-
-# import cv2
-# import numpy as np
-# from matplotlib import pyplot as plt
-
 from ModelSpecific.DinoMedical.prep_model import time_str
-# from prep_model import get_bb_name, time_str, get_backone_patch_embed_sizes #, get_dino_backbone
-# from OrigDino.dinov2.eval.segmentation import models
-
-# from MedDino.med_dinov2.models.segmentor import Segmentor
-# from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
-# from mmseg.models.decode_heads import *
-
-from med_seg_foundation.data.datasets import VolDataModule # SegmentationDataset, SegmentationDatasetHDF5,
 from torch.utils.data import DataLoader
-# from MedDino.med_dinov2.tools.main_fcts import train, test
-# from MedDino.med_dinov2.eval.metrics import mIoU, DiceScore
-# from MedDino.med_dinov2.eval.losses import FocalLoss, DiceScore, CompositionLoss
-
-# from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
+from MedicalSegmentation.med_seg_foundation.data.datasets import VolDataModule
 from torchinfo import summary
-# from torch.nn import CrossEntropyLoss
 import wandb
-# from MedDino.med_dinov2.tools.checkpointer import Checkpointer
-from med_seg_foundation.eval.losses import * 
-from med_seg_foundation.models.lit_segmentor import LitSegmentor
-import os
+from med_seg_foundation.utils.losses import * 
+from MedicalSegmentation.med_seg_foundation.trainer.lit_trainer import LitTrainer
 from lightning.pytorch.loggers import WandbLogger
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
-
-from med_seg_foundation.tools.configs import *
-# from torch.utils.data import Sampler
-from MedicalSegmentation.med_seg_foundation.models.segmentor import Segmentor
-from MedicalSegmentation.med_seg_foundation.models.benchmarks.unet import UNet
-
-from torchvision.models import get_model
-from MedicalSegmentation.med_seg_foundation.tools.plot import log_class_rel_freqs
+from med_seg_foundation.configs import *
 import socket
+from MedicalSegmentation.med_seg_foundation.utils.tools import log_class_rel_freqs
+# import os
 
 
 cluster_mode = 'KeremPC' != socket.gethostname()
@@ -70,7 +44,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'rein_sam'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'medsam'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
@@ -79,14 +53,13 @@ if model_type == ModelType.SEGMENTOR:
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
     dec_head_key = 'hq_hsam_mask_dec'  
 
-    
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'spine_verse'  if cluster_paths else 'hcp1'
+dataset = 'prostate_nci'  if cluster_paths else 'prostate_usz'
 rcs_enabled = True
 
 # Select loss
@@ -196,7 +169,7 @@ else:
     
 segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
                                           dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, **kwargs)
-model = LitSegmentor(**segmentor_cfg_lit)
+model = LitTrainer(**segmentor_cfg_lit)
 
 # Get augmentations
 augmentations = get_augmentations()
@@ -269,7 +242,7 @@ if model_type==ModelType.SEGMENTOR:
     
     
 elif model_type==ModelType.UNET:
-    group_name = UNet.__name__ + 'Model'
+    group_name = 'UNet' + 'Model'
     run_name = f'{dataset}_{group_name}_{loss_cfg_key}'
     
 elif model_type==ModelType.SWINUNET:
@@ -351,7 +324,7 @@ if trainer.global_rank == 0:
                                           dataset_attrs=dataset_attrs, gpus=1, model_type=model_type, **kwargs)
     
     # Load the best checkpoint (highest val_dice_vol)
-    model = LitSegmentor.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **test_model_cfg)
+    model = LitTrainer.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **test_model_cfg)
     
     for i, dataset_name_testing in enumerate(test_datasets):
         print(f'Eval/Test for dataset: {dataset_name_testing} {i+1}/{len(test_datasets)}')

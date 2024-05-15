@@ -23,21 +23,21 @@ from matplotlib import pyplot as plt
 from ModelSpecific.DinoMedical.prep_model import get_bb_name, get_dino_backbone, time_str, get_backone_patch_embed_sizes
 from OrigModels.DinoV2.dinov2.eval.segmentation import models
 
-from med_seg_foundation.models.segmentor import Segmentor
+from med_seg_foundation.models.segmentor import SegmentorEncDec
 # from MedDino.med_dinov2.layers.segmentation import ConvHeadLinear, ConvUNet
 # from mmseg.models.decode_heads import *
 from med_seg_foundation.data.datasets import SegmentationDataset
 from torch.utils.data import DataLoader
 from med_seg_foundation.tools.main_fcts import train, test
-from med_seg_foundation.eval.metrics import mIoU, DiceScore
-from med_seg_foundation.eval.losses import FocalLoss, DiceScore, CompositionLoss
+from med_seg_foundation.utils.metrics import mIoU, DiceScore
+from med_seg_foundation.utils.losses import FocalLoss, DiceScore, CompositionLoss
 
 from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 from torchinfo import summary
 from torch.nn import CrossEntropyLoss
 import wandb
 from med_seg_foundation.tools.checkpointer import Checkpointer
-from med_seg_foundation.eval.losses import * 
+from med_seg_foundation.utils.losses import * 
 
 
 cluster_paths = False
@@ -124,7 +124,7 @@ segmentor_cfg = dict(backbone=dino_bb_cfg,
                      decode_head=dec_head_cfg,
                      train_backbone=train_backbone,
                      reshape_dec_oup=True)
-model = Segmentor(**segmentor_cfg)
+model = SegmentorEncDec(**segmentor_cfg)
 model.to(device)
 
 # Print model info
