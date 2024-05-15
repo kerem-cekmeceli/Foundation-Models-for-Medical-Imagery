@@ -70,7 +70,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'reinL_mae'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'rein_dino'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
