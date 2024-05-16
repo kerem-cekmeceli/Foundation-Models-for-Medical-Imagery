@@ -40,11 +40,11 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'ladderD_medsam'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
+    backbone = 'reinL_medsam'  # dino, sam, medsam, mae, resnet, ladderR_, ladderD_, rein_, reinL_
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
