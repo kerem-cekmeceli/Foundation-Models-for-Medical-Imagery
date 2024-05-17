@@ -44,10 +44,22 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, sam, medsam, mae, resnet
+    backbone = 'sam'  # dino, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "large"  # in ("small", "base", "large" or "giant")
-    fine_tune = 'reinL' # ladderR, ladderD, rein, reinL
+    
+    # Choose the FineTuning  # ladderR, ladderD, rein, reinL
+    if backbone=='dino':
+        fine_tune = 'reinL' 
+    elif backbone=='sam':
+        fine_tune = 'rein' 
+    elif backbone=='medsam':
+        fine_tune = 'ladderD' 
+    elif backbone=='mae':
+        fine_tune = ''
+    else:
+        raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
+    
     
     backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
