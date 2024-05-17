@@ -92,7 +92,7 @@ def get_sam_neck(in_channels, out_channels=256, sam_checkpoint=None):
         elif 'vit_h' in str(sam_checkpoint):
             size = 'vit_h'
         else:
-            ValueError('Size not supported')
+            raise ValueError(f'Size not supported for checkpoint: {sam_checkpoint}')
             
         return sam_model_registry[size](checkpoint=sam_checkpoint).image_encoder.neck
 
