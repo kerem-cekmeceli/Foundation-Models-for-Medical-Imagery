@@ -84,7 +84,16 @@ def get_sam_neck(in_channels, out_channels=256, sam_checkpoint=None):
                                 LayerNorm2d(out_channels),
                             )
     else:
-        return sam_model_registry['vit_b'](checkpoint=sam_checkpoint).image_encoder.neck
+        if 'vit_b' in sam_checkpoint:
+            size ='vit_b'
+        elif 'vit_b' in sam_checkpoint:
+            size = 'vit_l'
+        elif 'vit_h' in sam_checkpoint:
+            size = 'vit_h'
+        else:
+            ValueError('Size not supported')
+            
+        return sam_model_registry[size](checkpoint=sam_checkpoint).image_encoder.neck
 
     
     
