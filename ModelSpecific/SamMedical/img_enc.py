@@ -84,11 +84,11 @@ def get_sam_neck(in_channels, out_channels=256, sam_checkpoint=None):
                                 LayerNorm2d(out_channels),
                             )
     else:
-        if 'vit_b' in sam_checkpoint:
+        if 'vit_b' in str(sam_checkpoint):
             size ='vit_b'
-        elif 'vit_b' in sam_checkpoint:
+        elif 'vit_b' in str(sam_checkpoint):
             size = 'vit_l'
-        elif 'vit_h' in sam_checkpoint:
+        elif 'vit_h' in str(sam_checkpoint):
             size = 'vit_h'
         else:
             ValueError('Size not supported')
