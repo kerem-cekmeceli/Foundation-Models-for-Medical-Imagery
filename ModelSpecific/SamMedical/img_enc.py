@@ -87,7 +87,7 @@ def get_sam_neck(in_channels, out_channels=256, sam_checkpoint=None):
         size=None
         if 'vit_b' in str(sam_checkpoint):
             size ='vit_b'
-        elif 'vit_b' in str(sam_checkpoint):
+        elif 'vit_l' in str(sam_checkpoint):
             size = 'vit_l'
         elif 'vit_h' in str(sam_checkpoint):
             size = 'vit_h'
