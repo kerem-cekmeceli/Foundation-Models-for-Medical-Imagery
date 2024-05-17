@@ -24,6 +24,9 @@ def get_mae_bb(bb_size, checkpoint=None, enc_only=True):
             else:
                 for param in attr.parameters():
                     param.requires_grad=False
+
+            # Remove from model
+            setattr(model, layer, None)
     return model
         
         

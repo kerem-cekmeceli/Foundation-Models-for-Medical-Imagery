@@ -46,7 +46,7 @@ if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'mae'  # dino, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
-    backbone_sz = "large"  # in ("small", "base", "large" or "giant")
+    backbone_sz = "base"  # in ("small", "base", "large" or "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone=='dino':
@@ -73,7 +73,7 @@ if model_type == ModelType.SEGMENTOR:
 # prostate_nci, prostate_usz, 
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
-dataset = 'abide_stanford'  if cluster_paths else 'prostate_usz'
+dataset = 'hcp1'  if cluster_paths else 'prostate_usz'
 rcs_enabled = True
 
 # Select loss
