@@ -120,7 +120,7 @@ def get_dino_backbone(backbone_name, backbone_cp=None):
         elif backbone_name == 'dinov2_vitl14':
             backbone_model = vit_large(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
         elif backbone_name == 'dinov2_vitg14':
-            backbone_model = vit_giant2(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
+            backbone_model = vit_giant2(patch_size=14, img_size=518, block_chunks=0, init_values=1, ffn_layer="swiglufused")
         else:
             raise ValueError(f'Unknown backbone name {backbone_name}')
 
