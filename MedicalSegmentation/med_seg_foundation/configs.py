@@ -435,6 +435,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         
         if pretrained:
             if bb_name == 'sam':
+                assert bb_size in ["base", "large", "huge"]
                 bb_checkpoint_path = main_pth/bb_cps_pth/'SAM'
                 prefix = ''
                 if bb_size=='base':
@@ -465,6 +466,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       out_idx=out_idx)
         
     elif bb_name=='mae':    
+        assert bb_size in ["base", "large", "huge"]
         if pretrained:
             bb_checkpoint_path = main_pth/bb_cps_pth/f'MAE/mae_pretrain_vit_{bb_size}.pth'
         else:
@@ -686,7 +688,8 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
             elif bb_size=='huge':
                 sam_checkpoint_neck = main_path/bb_cps_pth/'SAM' / 'sam_vit_h_4b8939.pth'
             else:
-                ValueError(f'Size: {bb_size} is not available for SAM')
+                # raise ValueError(f'Size: {bb_size} is not available for SAM')
+                sam_checkpoint_neck = None
                
         else:
             sam_checkpoint_neck = None
