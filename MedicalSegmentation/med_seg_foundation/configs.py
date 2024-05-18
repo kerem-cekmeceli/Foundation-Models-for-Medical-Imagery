@@ -873,7 +873,7 @@ def get_lr(model_type, **kwargs):
         dec_name=kwargs['dec_head_key']
         dataset_attrs = kwargs['dataset_attrs']
         if bb_name=='dino':
-            if dataset_attrs['name'] in ['spine_verse', 'hcp1']:
+            if dataset_attrs['name'] in ['spine_verse', 'hcp1', 'hcp2']:
                 return 1e-5
             return 2e-5
         
