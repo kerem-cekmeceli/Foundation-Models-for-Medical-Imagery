@@ -880,8 +880,8 @@ def get_lr(model_type, **kwargs):
         elif bb_name =='resnet': #or 'ladder' in bb_name:
             return 5e-4
         
-        elif 'reins' in bb_name:
-            return 1e-4
+        elif 'rein' in bb_name or 'reinL' in bb_name:
+            return 2e-5
         
         elif 'ladderR' in bb_name:
             return 5e-5
