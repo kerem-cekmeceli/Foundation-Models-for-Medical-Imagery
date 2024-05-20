@@ -368,6 +368,59 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
 
         
  #################################################################################################
+ 
+class SegmentationDatasetNIFIT(SegDatasetRcsBase):
+    def __init__(self, 
+                 directory:Union[str, Path],
+                 img_suffix:str,
+                 lab_suffix:str,
+                 num_classes: int, 
+                 rcs_enabled: bool = False, 
+                 dtype=torch.float32, 
+                 augmentations=None) -> None:
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations)
+        
+        self.extension = '.nii.gz'
+        
+        # data directory
+        if isinstance(directory, Path):
+            directory = str(directory)
+        self.directory = directory
+        
+        # image(volume) file suffix
+        self.img_suffix = img_suffix  # _FLAIR, _T1
+        
+        # Label file suffix
+        self.lab_suffix = lab_suffix  # _Label
+        
+        # Image files
+        self.img_files = get_file_list(self.directory, extension=self.extension, file_suffix=self.img_suffix)
+        
+        # Label files
+        self.lab_files = get_file_list(self.directory, extension=self.extension, file_suffix=self.lab_suffix)
+        
+        # Verifications
+        assert len(self.img_files) == len(self.lab_files)
+        self.nb_vols = len(self.img_files)
+        
+        for i in range(self.nb_vols):
+            assert os.path.isfile(os.path.join(self.directory, 
+                                               self.img_files[i].split(self.img_suffix)[0]+self.lab_suffix+self.extension))
+            
+        
+        
+
+        
+        
+        
+    
+    def __len__(self):
+        pass
+    
+    def __getitem__(self, idx):
+        pass
+ 
+ #################################################################################################
 
         
 class VolDataModule(L.LightningDataModule):

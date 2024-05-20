@@ -322,6 +322,29 @@
 
 #######################################################################################################################
 
+
+import SimpleITK as sitk
+
+
+
+pth_flair = "/home/kerem_ubuntu/Projects/DataFoundationModels/brain/brats_val/0_FLAIR.nii.gz"
+pth_t1 = "/home/kerem_ubuntu/Projects/DataFoundationModels/brain/brats_val/0_T1.nii.gz"
+pth_label = "/home/kerem_ubuntu/Projects/DataFoundationModels/brain/brats_val/0_Label.nii.gz"
+
+
+flair = sitk.GetArrayFromImage(sitk.ReadImage(pth_flair))
+t1 = sitk.GetArrayFromImage(sitk.ReadImage(pth_t1))
+label = sitk.GetArrayFromImage(sitk.ReadImage(pth_label))
+
+print()
+
+
+
+
+
+#######################################################################################################################
+
+
 import h5py
 
 dataset = 'acdc' # 'nci' , 'acdc', 'rvsc'
@@ -435,9 +458,9 @@ pth += file_n
 with h5py.File(pth, "r") as f:
     print("Keys: %s" % f.keys())
 
-train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
+# train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
 
-save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_dict=test_dict)
+# save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_dict=test_dict)
 
 
 pth = dir_path+'test.hdf5'
