@@ -12,6 +12,7 @@ from abc import abstractmethod
 import lightning as L
 from torch.utils.data import DataLoader
 from data.transforms import *
+import SimpleITK as sitk
 from MedicalSegmentation.med_seg_foundation.data.distributed import VolDistributedSampler
 
 # import torchvision.transforms as transforms
@@ -257,7 +258,36 @@ class SegmentationDataset(SegDatasetRcsBase):
 
 #################################################################################################
 
-class SegmentationDatasetHDF5(SegDatasetRcsBase):
+class Segmentation3Dto2Dbase(SegDatasetRcsBase):
+    def __init__(self, 
+                 num_classes: int, 
+                 rcs_enabled: bool = False, 
+                 dtype=torch.float32, 
+                 augmentations=None) -> None:
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations)
+        
+        
+    def _get_n_vol_n_slice_idxs(self, idx):
+        assert hasattr(self, 'nb_slices_until')
+        
+        vol_idx = np.searchsorted(self.nb_slices_until, idx, side='right')
+        
+        if vol_idx>0:
+            nb_slices_before = self.nb_slices_until[vol_idx-1]
+        else:
+            nb_slices_before = 0
+            
+        slice_idx = idx - nb_slices_before
+        
+        assert slice_idx >= 0, f'Should be positive but got {slice_idx}'
+        assert slice_idx < self.nb_slices_until[vol_idx]-nb_slices_before
+        assert nb_slices_before + slice_idx == idx, f'Mismatch, expected: {idx}, calculated {nb_slices_before+slice_idx}'
+        
+        return vol_idx, slice_idx 
+
+#################################################################################################
+
+class SegmentationDatasetHDF5(Segmentation3Dto2Dbase):
     def __init__(self, file_pth, num_classes, 
                  augmentations=None,
                  dtype=torch.float32,
@@ -286,7 +316,7 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
     def get_mask(self, idx):
         with h5py.File(self.file_pth, 'r') as f:
             if len(f['labels'].shape) == 4:
-                vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
+                vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx)
                 mask = f['labels'][vol_idx, slice_idx].copy().astype('uint8')  
                             
             elif len(f['labels'].shape) == 3:
@@ -298,22 +328,6 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
     def __len__(self):
         return self.nb_slice_tot
     
-    def _get_nb_vol_n_slice_idxs(self, idx):
-        
-        vol_idx = np.searchsorted(self.nb_slices_until, idx, side='right')
-        
-        if vol_idx>0:
-            nb_slices_before = self.nb_slices_until[vol_idx-1]
-        else:
-            nb_slices_before = 0
-            
-        slice_idx = idx - nb_slices_before
-        
-        assert slice_idx >= 0, f'Should be positive but got {slice_idx}'
-        assert slice_idx < self.nb_slices_until[vol_idx]-nb_slices_before
-        assert nb_slices_before + slice_idx == idx, f'Mismatch, expected: {idx}, calculated {nb_slices_before+slice_idx}'
-        
-        return vol_idx, slice_idx 
 
     def __getitem__(self, idx):
         
@@ -323,7 +337,7 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
         if self.dataset is None:
             self.dataset = h5py.File(self.file_pth, 'r')
             
-        vol_idx, slice_idx = self._get_nb_vol_n_slice_idxs(idx)
+        vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx)
         
         if self.ret_n_xyz:
             n_xyz = dict(nx = self.dataset['nx'][vol_idx].copy().astype('int32'),
@@ -369,7 +383,8 @@ class SegmentationDatasetHDF5(SegDatasetRcsBase):
         
  #################################################################################################
  
-class SegmentationDatasetNIFIT(SegDatasetRcsBase):
+ 
+class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
     def __init__(self, 
                  directory:Union[str, Path],
                  img_suffix:str,
@@ -377,9 +392,11 @@ class SegmentationDatasetNIFIT(SegDatasetRcsBase):
                  num_classes: int, 
                  rcs_enabled: bool = False, 
                  dtype=torch.float32, 
-                 augmentations=None) -> None:
+                 augmentations=None,
+                 preload=False) -> None:
         super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations)
         
+        self.preload=preload
         self.extension = '.nii.gz'
         
         # data directory
@@ -403,22 +420,53 @@ class SegmentationDatasetNIFIT(SegDatasetRcsBase):
         assert len(self.img_files) == len(self.lab_files)
         self.nb_vols = len(self.img_files)
         
+        self.nb_slice_per_vol = []
         for i in range(self.nb_vols):
             assert os.path.isfile(os.path.join(self.directory, 
                                                self.img_files[i].split(self.img_suffix)[0]+self.lab_suffix+self.extension))
-            
-        
-        
+            # Save the nb slices per vol
+            lab_pth = os.path.join(self.directory, self.lab_files[i])
+            self.nb_slice_per_vol.append(sitk.GetArrayFromImage(sitk.ReadImage(lab_pth)).shape[0])
 
+        self.nb_slice_tot = sum(self.nb_slice_per_vol)
+        self.nb_slices_until = np.cumsum(self.nb_slice_per_vol)
         
+        if self.preload:
+            self.imgs = []
+            self.labels = []
+            for i in range(self.nb_vols):
+                img_pth = os.path.join(self.directory, self.img_files[i])
+                lab_pth = os.path.join(self.directory, self.lab_files[i])
+                self.imgs.append(sitk.GetArrayFromImage(sitk.ReadImage(img_pth)).astype('float32')) 
+                self.labels.append(sitk.GetArrayFromImage(sitk.ReadImage(lab_pth)).astype('uint8')) 
+                
+                if self.imgs[i].max()<=1 and self.imgs[i].min()>=0:
+                    self.imgs[i] = self.imgs[i]*255.
         
+                assert self.imgs[i].max()<=255 and self.imgs[i].min()>=0
+                assert self.labels[i].max()<=self.num_classes
+                
+        if self.rcs_enabled:
+            self.init_rcs()
+                           
         
+    def get_mask(self, idx):
+        vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx=idx)
+        
+        if self.preload:
+            assert hasattr(self, 'labels')
+            return self.labels[vol_idx][slice_idx]
+        else:
+            return sitk.GetArrayFromImage(sitk.ReadImage(self.lab_files[vol_idx])).astype('uint8')[slice_idx]
     
     def __len__(self):
-        pass
+        return self.nb_slice_tot
     
     def __getitem__(self, idx):
-        pass
+        if self.rcs_enabled:
+            idx = self.get_rare_class_idx()
+            
+        
  
  #################################################################################################
 
