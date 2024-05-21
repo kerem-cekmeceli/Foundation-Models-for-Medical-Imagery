@@ -43,10 +43,10 @@ def get_file_list(fld_pth, start_idx=0, num_img=None, extension=None,
     if file_suffix is not None:
         if inc_exc == 0:
             # Include
-            files = [f for f in files if os.path.splitext(f)[0].endswith(file_suffix)]
+            files = [f for f in files if f.split(extension)[0].endswith(file_suffix)]
         else:
             # Exlude
-            files = [f for f in files if not os.path.splitext(f)[0].endswith(file_suffix)]
+            files = [f for f in files if not f.split(extension)[0].endswith(file_suffix)]
 
     # Sort by name
     files.sort()
@@ -284,6 +284,27 @@ class Segmentation3Dto2Dbase(SegDatasetRcsBase):
         assert nb_slices_before + slice_idx == idx, f'Mismatch, expected: {idx}, calculated {nb_slices_before+slice_idx}'
         
         return vol_idx, slice_idx 
+    
+    def post_process(self, image, mask):
+        
+        # [0, 1] to [0, 255]
+        if image.max()<=1 and image.min()>=0:
+            image = image*255.
+        
+        assert image.max()<=255 and image.min()>=0
+        assert mask.max()<=self.num_classes
+        
+        # Convert grayscale to RGB
+        if len(image.shape)<3:
+            image = np.stack([image, image, image], axis=-1)
+            
+        assert len(mask.shape) == 2, f'mask shape = {mask.shape}'
+        assert len(image.shape) == 3, f'image shape = {image.shape}'
+        assert image.shape[:2] == mask.shape, f'image shape={image.shape}, maks shape = {mask.shape}'
+        
+        image, mask = self.apply_transform(img=image, msk=mask)
+        
+        return image, mask
 
 #################################################################################################
 
@@ -357,23 +378,9 @@ class SegmentationDatasetHDF5(Segmentation3Dto2Dbase):
             mask = self.dataset['labels'][idx].copy().astype('uint8')
             
         else:
-            ValueError(f'Unsupported dataset images shape')
+            raise ValueError(f'Unsupported dataset images shape')
         
-        if image.max()<=1 and image.min()>=0:
-            image = image*255.
-        
-        assert image.max()<=255 and image.min()>=0
-        assert mask.max()<=self.num_classes
-        
-        # Convert grayscale to RGB
-        if len(image.shape)<3:
-            image = np.stack([image, image, image], axis=-1)
-            
-        assert len(mask.shape) == 2, f'mask shape = {mask.shape}'
-        assert len(image.shape) == 3, f'image shape = {image.shape}'
-        assert image.shape[:2] == mask.shape, f'image shape={image.shape}, maks shape = {mask.shape}'
-        
-        image, mask = self.apply_transform(img=image, msk=mask)
+        image, mask = self.post_process(image=image, mask=mask)
         
         if not self.ret_n_xyz:            
             return image, mask
@@ -393,11 +400,13 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
                  rcs_enabled: bool = False, 
                  dtype=torch.float32, 
                  augmentations=None,
-                 preload=False) -> None:
+                 preload=False,
+                 ret_nz=True) -> None:
         super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations)
         
         self.preload=preload
         self.extension = '.nii.gz'
+        self.ret_nz = ret_nz
         
         # data directory
         if isinstance(directory, Path):
@@ -405,9 +414,11 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
         self.directory = directory
         
         # image(volume) file suffix
+        assert img_suffix in ["FLAIR", "T1"]
         self.img_suffix = img_suffix  # _FLAIR, _T1
         
         # Label file suffix
+        assert lab_suffix == "Label"
         self.lab_suffix = lab_suffix  # _Label
         
         # Image files
@@ -439,7 +450,7 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
                 lab_pth = os.path.join(self.directory, self.lab_files[i])
                 self.imgs.append(sitk.GetArrayFromImage(sitk.ReadImage(img_pth)).astype('float32')) 
                 self.labels.append(sitk.GetArrayFromImage(sitk.ReadImage(lab_pth)).astype('uint8')) 
-                
+                                
                 if self.imgs[i].max()<=1 and self.imgs[i].min()>=0:
                     self.imgs[i] = self.imgs[i]*255.
         
@@ -457,7 +468,8 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
             assert hasattr(self, 'labels')
             return self.labels[vol_idx][slice_idx]
         else:
-            return sitk.GetArrayFromImage(sitk.ReadImage(self.lab_files[vol_idx])).astype('uint8')[slice_idx]
+            return sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(self.directory, self.lab_files[vol_idx])))\
+                .astype('uint8')[slice_idx]
     
     def __len__(self):
         return self.nb_slice_tot
@@ -465,9 +477,29 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
     def __getitem__(self, idx):
         if self.rcs_enabled:
             idx = self.get_rare_class_idx()
-            
         
- 
+        vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx=idx)
+        
+        if self.preload:
+            image = self.imgs[vol_idx][slice_idx]
+            label = self.labels[vol_idx][slice_idx]
+        else:
+            image = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(self.directory, self.img_files[vol_idx])))\
+                .astype('float32')[slice_idx]
+            label = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(self.directory, self.lab_files[vol_idx])))\
+                .astype('uint8')[slice_idx]
+                    
+        if self.ret_nz:
+            nz = dict(nz = self.nb_slice_per_vol[vol_idx],
+                      last_slice = slice_idx==self.nb_slice_per_vol[vol_idx]-1)
+            
+        image, label = self.post_process(image=image, mask=label)
+
+        if self.ret_nz:
+            return image, label, nz
+        else:
+            return image, label
+        
  #################################################################################################
 
         

@@ -4,13 +4,14 @@ from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
 from utils.losses import DiceLoss, FocalLoss, CompositionLoss
 from torch.nn import CrossEntropyLoss
-from data.datasets import SegmentationDataset, SegmentationDatasetHDF5
+from data.datasets import SegmentationDataset, SegmentationDatasetHDF5, SegmentationDatasetNIFIT
 from MedicalSegmentation.med_seg_foundation.models.EncDec.encoder.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, \
     DinoReinBackbone, SamReinBackBone, MAEBackbone, MAEReinBackbone
 from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import SegmentorEncDec, SegmentorModel
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.UNet.unet import UNet
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_transformer_unet_skip_expand_decoder_sys import SwinTransformerSys
+from pathlib import Path
 
 class ModelType(Enum):
     SEGMENTOR=1
@@ -280,7 +281,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             use_hdf5 = 'hdf5' in attrs['available_formats']
             
         if use_hdf5:
-            ValueError(f'HDF5 format is not supported for {name}')
+            raise ValueError(f'HDF5 format is not supported for {name}')
             
         attrs['data_path_suffix'] = 'lumbarspine/VerSe'
         attrs['num_classes'] = 6
@@ -302,6 +303,25 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         weight = None
         
         attrs['weight'] = weight
+        
+    # Brain Tumor
+    elif 'BraTS' in name:
+        channel = name.split('_')[-1]
+        assert channel in ['T1', 'FLAIR']
+        
+        attrs['data_path_suffix'] = 'brain/BraTS'
+        attrs['num_classes'] = 2 
+        attrs['ignore_idx_loss'] = None
+        attrs['ignore_idx_metric'] = 0
+        attrs['format'] = 'nii.gz'    
+        weight = None
+        attrs['weight'] = weight
+        attrs['lab_suffix'] = 'Label'
+        attrs['img_suffix'] = channel
+        attrs['train_dir'] = 'brats_train'
+        attrs['val_dir'] = 'brats_val'
+        attrs['test_dir'] = 'brats_test'
+        attrs['vol_depth_first'] = 183 # nb of slices for the first volume (not all the same)
         
     else:
         ValueError(f'Dataset: {name} is not defined')
@@ -1005,6 +1025,9 @@ def get_augmentations():
 def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
     """Order of procs: First augmentations then pre-processings ! """
     
+    if not isinstance(data_root_pth, Path):
+        data_root_pth = Path(data_root_pth)
+    
     data_path_suffix = data_attr['data_path_suffix']
     dataset = data_attr['name']
     num_classes = data_attr['num_classes']
@@ -1059,8 +1082,34 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                                 num_classes=num_classes, 
                                                 augmentations=val_test_procs,
                                                 ret_n_xyz=True, rcs_enabled=False)
+        
+    elif data_attr['format']=='nii.gz':
+        preload = True
+        
+        train_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['train_dir'],
+                                                 img_suffix=data_attr['img_suffix'],
+                                                 lab_suffix=data_attr['lab_suffix'],
+                                                 num_classes=num_classes,
+                                                 rcs_enabled=rcs_enabled,
+                                                 augmentations=train_procs, 
+                                                 ret_nz=True, preload=preload,)
+        val_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['val_dir'],
+                                                 img_suffix=data_attr['img_suffix'],
+                                                 lab_suffix=data_attr['lab_suffix'],
+                                                 num_classes=num_classes,
+                                                 rcs_enabled=False,
+                                                 augmentations=val_test_procs, 
+                                                 ret_nz=True, preload=preload,)
+        test_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['test_dir'],
+                                                 img_suffix=data_attr['img_suffix'],
+                                                 lab_suffix=data_attr['lab_suffix'],
+                                                 num_classes=num_classes,
+                                                 rcs_enabled=False,
+                                                 augmentations=val_test_procs, 
+                                                 ret_nz=True, preload=preload,)
+        
     else:
-        ValueError(f'Unsupported data format {data_attr["format"]}')
+        raise ValueError(f'Unsupported data format {data_attr["format"]}')
         
     return train_dataset, val_dataset, test_dataset
     
