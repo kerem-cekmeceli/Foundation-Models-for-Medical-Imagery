@@ -84,7 +84,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/abide_caltech'
             attrs['format'] = 'png'
-            ValueError('Varying volume depth !')
+            raise ValueError('Varying volume depth !')
         else:
             attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'brain/abide/caltech'
@@ -110,7 +110,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         if not use_hdf5:
             attrs['data_path_suffix'] = 'brain/abide_stanford'
             attrs['format'] = 'png'
-            ValueError('Varying volume depth !')
+            raise ValueError('Varying volume depth !')
         else:
             attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'brain/abide/stanford'
@@ -135,7 +135,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             use_hdf5 = 'hdf5' in attrs['available_formats']
             
         if not use_hdf5:
-            ValueError('only HDF5 is supported')
+            raise ValueError('only HDF5 is supported')
             
         attrs['num_classes'] = 3
         attrs['vol_depth_first'] = 15  # First val volume depth NOT ALL THE SAME !
@@ -163,7 +163,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             use_hdf5 = 'hdf5' in attrs['available_formats']
             
         if not use_hdf5:
-            ValueError('only HDF5 is supported')
+            raise ValueError('only HDF5 is supported')
             
         attrs['data_path_suffix'] = 'prostate/pirad_erc'
         attrs['num_classes'] = 3
@@ -193,7 +193,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             use_hdf5 = 'hdf5' in attrs['available_formats']
             
         if not use_hdf5:
-            ValueError('only HDF5 is supported')
+            raise ValueError('only HDF5 is supported')
             
         attrs['data_path_suffix'] = 'cardiac/acdc'
         attrs['num_classes'] = 4
@@ -222,7 +222,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             use_hdf5 = 'hdf5' in attrs['available_formats']
             
         if not use_hdf5:
-            ValueError('only HDF5 is supported')
+            raise ValueError('only HDF5 is supported')
             
         attrs['data_path_suffix'] = 'cardiac/rvsc'
         attrs['num_classes'] = 3
@@ -251,7 +251,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
             use_hdf5 = 'hdf5' in attrs['available_formats']
             
         if use_hdf5:
-            ValueError(f'HDF5 format is not supported for {name}')
+            raise ValueError(f'HDF5 format is not supported for {name}')
             
         attrs['data_path_suffix'] = 'lumbarspine/MRSpineSegV'
         attrs['num_classes'] = 6
@@ -324,7 +324,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         attrs['vol_depth_first'] = 183 # nb of slices for the first volume (not all the same)
         
     else:
-        ValueError(f'Dataset: {name} is not defined')
+        raise ValueError(f'Dataset: {name} is not defined')
         
     return attrs
 
@@ -371,7 +371,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     out_idx = None
     outs_from_diff_conv_layers = False  # For resnet
     uniform_oup_size = True  # For resnet
-    if bb_name in ["dino", "sam", "medsam", "mae", "resnet"]:
+    if bb_name in ["dino", "dinoReg", "sam", "medsam", "mae", "resnet"]:
         if dec_name in ['unet', 'unetS']:
             n_out = 5*2
         elif dec_name in ['sam_mask_dec', 'hsam_mask_dec']:
@@ -420,15 +420,15 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       pre_normalize=False,
                       out_idx=out_idx)
         
-    elif bb_name in ['rein_dino', 'reinL_dino'] :
+    elif bb_name in ['rein_dino', 'reinL_dino', 'rein_dinoReg', 'reinL_dinoReg'] :
         assert pretrained
         assert not train_bb
-        dino_name_params = get_bb_cfg('dino', bb_size, train_bb, dec_name, main_pth, pretrained)
+        dino_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, pretrained)
         name = DinoReinBackbone.__name__
         params = dino_name_params['params']
         del params['train']
         params['name'] = bb_name+bb_size[0].upper()
-        params['lora_reins'] = bb_name=='reinL_dino'
+        params['lora_reins'] = 'reinL' in bb_name
         
     elif bb_name in ['rein_sam', 'reinL_sam', 'rein_medsam', 'reinL_medsam'] :
         assert pretrained
@@ -465,7 +465,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                 elif bb_size=='huge':
                     bb_checkpoint_path = bb_checkpoint_path / 'sam_vit_h_4b8939.pth'
                 else:
-                    ValueError(f'Size: {bb_size} is not available for SAM')
+                    raise ValueError(f'Size: {bb_size} is not available for SAM')
             else:
                 prefix = 'med'
                 assert bb_size=='base', f'Medsam is only availabel for size base but got {bb_size}'
@@ -503,7 +503,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         
     elif bb_name == 'resnet':
         if dec_name=='unet':
-            ValueError(f'Decoder {dec_name} is not supported for {bb_name} backbone')
+            raise ValueError(f'Decoder {dec_name} is not supported for {bb_name} backbone')
         if bb_size=='smallest':
             layers=18
         elif bb_size=='tiny':
@@ -515,7 +515,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
         elif bb_size=='large':
             layers=152
         else:
-            ValueError(f'Size is not defined for resnet {bb_size}')
+            raise ValueError(f'Size is not defined for resnet {bb_size}')
         backbone_name = f'resnet{layers}'    
         
         weights = f'ResNet{layers}_Weights.DEFAULT' if pretrained else None
@@ -568,7 +568,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
             bb2_name_params['params']['nb_outs']=bb1_name_params['params'].get('nb_outs', 1)
             
         else:
-            ValueError(f'Undefined ladder backbone type: {bb_name}')
+            raise ValueError(f'Undefined ladder backbone type: {bb_name}')
         
         
         # Ladder backbone parameters
@@ -578,7 +578,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                       bb2_name_params=bb2_name_params)
         
     else:
-        ValueError(f'Undefined backbone: {bb_name}')
+        raise ValueError(f'Undefined backbone: {bb_name}')
         
     return dict(name=name, params=params)
         
@@ -724,7 +724,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
         elif dec_name=='hq_hsam_mask_dec':
             class_name = HQHSAMdecHead.__name__
         else:
-            ValueError(f'Unknown dec name : {dec_name}')
+            raise ValueError(f'Unknown dec name : {dec_name}')
             
         dec_head_cfg = dict(num_classes=num_classes,
                             sam_checkpoint_neck=sam_checkpoint_neck,
@@ -732,7 +732,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
         if dec_name=='sam_mask_dec':
             dec_head_cfg['train_prompt_enc']=True
     else:
-        ValueError(f'Decoder name {dec_name} is not defined')
+        raise ValueError(f'Decoder name {dec_name} is not defined')
         
     return dict(name=class_name, params=dec_head_cfg)
 
@@ -789,7 +789,7 @@ def get_loss_cfg(loss_key, data_attr):
         return dict(name=CompositionLoss.__name__, params=loss_cfg_comp_foc_dice)
         
     else:
-        ValueError(f'Loss {loss_key} is not defined')
+        raise ValueError(f'Loss {loss_key} is not defined')
         
 
 def get_optimizer_cfg(lr):
@@ -917,7 +917,7 @@ def get_lr(model_type, **kwargs):
     elif model_type in [ModelType.UNET, ModelType.SWINUNET]:
         return 5e-5 
     else:
-        ValueError(f'Unknown model type {model_type}')
+        raise ValueError(f'Unknown model type {model_type}')
 
 
 def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
@@ -962,7 +962,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                                         ))    
             
         else:
-            ValueError(f'Unknown model type {model_type}')
+            raise ValueError(f'Unknown model type {model_type}')
             
         segmentor_cfg = dict(name=SegmentorModel.__name__,
                              params=dict(reshape_dec_oup=True,
