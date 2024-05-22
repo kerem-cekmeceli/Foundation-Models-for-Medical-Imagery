@@ -50,7 +50,7 @@ class ScoreBase(nn.Module, ABC):
         assert (vec_proba<=1).all(), f"Prediction probas can't be >1, but got value {vec_proba.max()}"
         thres = 1e-5
         check_tensor = torch.abs(vec_proba.sum(dim=dim)-1)<thres
-        assert check_tensor.all(), f"Prediction probas do not add up to 1, {torch.count_nonzero(check_tensor)} elems invalidate the threshold {thres}"
+        assert check_tensor.all(), f"Prediction probas do not add up to 1, {torch.count_nonzero(torch.logical_not(check_tensor))} elems invalidate the threshold {thres}"
         
     def _verify(self, mask_pred, mask_gt):
         assert mask_pred.shape == mask_gt.shape, f'mask_pred and mask_gt shapes do not match, {mask_pred.shape} != {mask_gt.shape}'
@@ -59,7 +59,7 @@ class ScoreBase(nn.Module, ABC):
         
     def _get_probas(self, mask_pred):
         if not self.prob_inputs:
-            if mask_pred.shape[1]>2:
+            if True: #mask_pred.shape[1]>2:
                 mask_pred = F.softmax(mask_pred, dim=1)    
             else:
                 assert mask_pred.shape[1] == 2, "Must have at least 2 classes on channel dim (1)"

@@ -1092,7 +1092,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                                  num_classes=num_classes,
                                                  rcs_enabled=rcs_enabled,
                                                  augmentations=train_procs, 
-                                                 ret_nz=True, preload=preload,)
+                                                 ret_nz=False, preload=preload,)
         val_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['val_dir'],
                                                  img_suffix=data_attr['img_suffix'],
                                                  lab_suffix=data_attr['lab_suffix'],
