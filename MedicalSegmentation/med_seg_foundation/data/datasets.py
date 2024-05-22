@@ -162,6 +162,8 @@ class SegDatasetRcsBase(Dataset):
             
             # Get the unique classes and their pixel counts
             unique_classes, counts = np.unique(mask, return_counts=True)  # Read are the img indices (single channel)
+            assert unique_classes.size <= self.num_classes
+            assert np.max(unique_classes) < self.num_classes
             
             # Relative frequency (per mask)
             freqs_per_im = counts / (mask.shape[0]*mask.shape[1])

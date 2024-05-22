@@ -1084,7 +1084,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
                                                 ret_n_xyz=True, rcs_enabled=False)
         
     elif data_attr['format']=='nii.gz':
-        preload = False
+        preload = True
         
         train_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['train_dir'],
                                                  img_suffix=data_attr['img_suffix'],
