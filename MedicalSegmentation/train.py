@@ -49,7 +49,7 @@ if model_type == ModelType.SEGMENTOR:
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
-    if backbone=='dino':
+    if backbone in ['dino', 'dinoReg']:
         fine_tune = 'reinL' 
     elif backbone=='sam':
         fine_tune = 'rein' 
