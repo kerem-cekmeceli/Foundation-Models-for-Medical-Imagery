@@ -84,7 +84,7 @@ def create_segmenter(cfg, backbone_model, seg_checkpoint=None):
         model.init_weights()
     return model
 
-def get_bb_name(backbone_sz, ret_arch=False):
+def get_bb_name(backbone_sz, ret_arch=False, reg=False):
     backbone_archs = {
         "small": "vits14",
         "base": "vitb14",
@@ -94,6 +94,8 @@ def get_bb_name(backbone_sz, ret_arch=False):
     
     backbone_arch = backbone_archs[backbone_sz]
     backbone_name = f"dinov2_{backbone_arch}"
+    if reg:
+        backbone_name = f'{backbone_name}_reg4'
     
     if ret_arch:
         return backbone_name, backbone_arch
@@ -113,14 +115,21 @@ def get_dino_backbone(backbone_name, backbone_cp=None):
         # Instantiate an empty DinoVisionTransformer model for the selected size
         # backbone_model = torch.hub.load('./', backbone_name, source='local', pretrained=False)
         # backbone_model = dinov2_vits14(pretrained=False)
-        if backbone_name == 'dinov2_vits14':
-            backbone_model = vit_small(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
-        elif backbone_name == 'dinov2_vitb14':
-            backbone_model = vit_base(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
-        elif backbone_name == 'dinov2_vitl14':
-            backbone_model = vit_large(patch_size=14, img_size=518, block_chunks=0, init_values=1,)
-        elif backbone_name == 'dinov2_vitg14':
-            backbone_model = vit_giant2(patch_size=14, img_size=518, block_chunks=0, init_values=1, ffn_layer="swiglufused")
+        
+        num_register_tokens = 4 if 'reg4' in backbone_name else 0
+        
+        if 'dinov2_vits14' in backbone_name:
+            backbone_model = vit_small(patch_size=14, img_size=518, block_chunks=0, init_values=1, 
+                                       num_register_tokens=num_register_tokens)
+        elif 'dinov2_vitb14' in backbone_name:
+            backbone_model = vit_base(patch_size=14, img_size=518, block_chunks=0, init_values=1, 
+                                      num_register_tokens=num_register_tokens)
+        elif 'dinov2_vitl14' in backbone_name:
+            backbone_model = vit_large(patch_size=14, img_size=518, block_chunks=0, init_values=1,
+                                       num_register_tokens=num_register_tokens)
+        elif 'dinov2_vitg14' in backbone_name:
+            backbone_model = vit_giant2(patch_size=14, img_size=518, block_chunks=0, init_values=1, 
+                                        num_register_tokens=num_register_tokens, ffn_layer="swiglufused")
         else:
             raise ValueError(f'Unknown backbone name {backbone_name}')
 

@@ -400,9 +400,9 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     last_out_first = True # Keep True
     
     # Backbone Specifics
-    if bb_name == 'dino':
+    if bb_name in ['dino', 'dinoReg']:
         assert bb_size in ["small", "base", "large", "giant"]
-        backbone_name = get_bb_name(bb_size)
+        backbone_name = get_bb_name(bb_size, reg=bb_name=='dinoReg')
         
         if pretrained:
             bb_checkpoint_path = main_pth/bb_cps_pth/f'DinoV2/{backbone_name}_pretrain.pth'

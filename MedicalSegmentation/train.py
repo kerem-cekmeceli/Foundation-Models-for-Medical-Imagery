@@ -44,9 +44,9 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, sam, medsam, mae, resnet
+    backbone = 'dinoReg'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
-    backbone_sz = "huge" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone=='dino':
@@ -74,7 +74,7 @@ if model_type == ModelType.SEGMENTOR:
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
 # BraTS_T1, BraTS_FLAIR
-dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
 rcs_enabled = True
 
 # Select loss
