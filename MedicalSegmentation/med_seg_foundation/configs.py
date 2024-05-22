@@ -310,7 +310,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         assert channel in ['T1', 'FLAIR']
         
         attrs['data_path_suffix'] = 'brain/BraTS'
-        attrs['num_classes'] = 2 
+        attrs['num_classes'] = 3 
         attrs['ignore_idx_loss'] = None
         attrs['ignore_idx_metric'] = 0
         attrs['format'] = 'nii.gz'    
