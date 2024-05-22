@@ -318,9 +318,9 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         attrs['weight'] = weight
         attrs['lab_suffix'] = 'Label'
         attrs['img_suffix'] = channel
-        attrs['train_dir'] = 'brats_train'
-        attrs['val_dir'] = 'brats_val'
-        attrs['test_dir'] = 'brats_test'
+        attrs['train_dir'] = 'brats_train_processed'
+        attrs['val_dir'] = 'brats_val_processed'
+        attrs['test_dir'] = 'brats_test_processed'
         attrs['vol_depth_first'] = 183 # nb of slices for the first volume (not all the same)
         
     else:
