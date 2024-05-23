@@ -36,9 +36,10 @@ def process_img(img_pth, src_dir, save_dir):
     img = sitk.GetArrayFromImage(sitk.ReadImage(os.path.join(src_dir, img_pth))).astype('float32')
     
     # Z-norm
-    mean = np.mean(img)
-    std = np.std(img)
-    corrected_img = (img-mean)/std
+    # mean = np.mean(img)
+    # std = np.std(img)
+    # corrected_img = (img-mean)/std
+    corrected_img = img
     
     # Min-Max Norm
     corrected_img = (corrected_img-np.min(corrected_img)) / np.max(corrected_img)
@@ -109,14 +110,14 @@ def process_dataset(src_data_pth, target_data_pth_n4, target_data_pth_norm):
     lab_pths = get_file_list(fld_pth=src_data_pth, extension='.nii.gz', file_suffix="Label", inc_exc=0)
     
     # Do N4 bias correction
-    tqdm.write(f"N4 bias correction, src: {src_data_pth}")
-    for img_pth in tqdm(img_pths):
-        n4_bias_corr(img_pth=img_pth, src_dir=src_data_pth, save_dir=target_data_pth_n4)
+    # tqdm.write(f"N4 bias correction, src: {src_data_pth}")
+    # for img_pth in tqdm(img_pths):
+    #     n4_bias_corr(img_pth=img_pth, src_dir=src_data_pth, save_dir=target_data_pth_n4)
     
     # Normalize and resize images
-    tqdm.write(f"Image normalization and resizing, src: {target_data_pth_n4}")
+    tqdm.write(f"Image normalization and resizing, src: {src_data_pth}")
     for img_pth in tqdm(img_pths):
-        process_img(img_pth=img_pth, src_dir=target_data_pth_n4, save_dir=target_data_pth_norm)
+        process_img(img_pth=img_pth, src_dir=src_data_pth, save_dir=target_data_pth_norm)
     
     # Resize labels
     tqdm.write(f"Label resizing, src: {src_data_pth}")
@@ -136,7 +137,7 @@ else:
 for dir_name in tqdm(dir_names):
     src_data_pth = f"{main_pth}/brain/BraTS/{dir_name}/"
     target_data_pth_n4 = f"{main_pth}/brain/BraTS/{dir_name}_n4/"
-    target_data_pth_norm = f"{main_pth}/brain/BraTS/{dir_name}_processed/"
+    target_data_pth_norm = f"{main_pth}/brain/BraTS/{dir_name}_processed2/"
     
     # Create directories if missing
     Path(target_data_pth_n4).mkdir(parents=True, exist_ok=True)
