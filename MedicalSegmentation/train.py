@@ -44,7 +44,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -67,6 +67,9 @@ if model_type == ModelType.SEGMENTOR:
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
     dec_head_key = 'hq_hsam_mask_dec'  
+    
+# Fully Test Time Adaptations (Entropy Minimization)
+ftta = False
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
