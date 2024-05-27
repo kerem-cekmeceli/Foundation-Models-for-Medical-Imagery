@@ -46,7 +46,7 @@ if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
-    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
