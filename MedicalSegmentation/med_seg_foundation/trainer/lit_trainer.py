@@ -2,7 +2,7 @@ from torch.optim.lr_scheduler import LinearLR, PolynomialLR, SequentialLR
 # from abc import abstractclassmethod
 from torch.nn import CrossEntropyLoss
 from utils.metrics import mIoU, DiceScore
-from utils.losses import DiceLoss, FocalLoss, CompositionLoss
+from utils.losses import DiceLoss, FocalLoss, CompositionLoss, EntropyMinLoss, ftta_losses
 import lightning as L
 from models.segmentor import SegmentorBase, SegmentorEncDec, SegmentorModel, implemented_segmentors
 import torch
@@ -11,6 +11,7 @@ from typing import Union, Optional, Sequence, Callable, Any
 import torch.nn.functional as F
 from torchvision.utils import make_grid
 from lightning.pytorch.utilities import rank_zero_only
+from torch.optim import SGD, Adam, AdamW
 
 # from torch.optim.optimizer import Optimizer
 # from OrigDino.dinov2.hub.utils import CenterPadding
@@ -25,12 +26,15 @@ class LitBaseTrainer(L.LightningModule):
                  loss_config:dict,
                  optimizer_config:dict,
                  scheduler_config:Optional[dict]=None,
-                 metric_configs:Optional[Union[dict, Sequence[dict]]]=None) -> None:
+                 metric_configs:Optional[Union[dict, Sequence[dict]]]=None,
+                 ftta:bool=False) -> None:
         
         super().__init__()  
-        self.loss_fn = LitBaseTrainer._get_loss(loss_config)
+        self.ftta = ftta # Fully Test Time Adaptation
+        self.loss_fn = self._get_loss(loss_config)
         self.optimizer_config = optimizer_config
         self.scheduler_config = scheduler_config
+        
         
         self.metrics = {}
         if metric_configs is not None:
@@ -41,26 +45,18 @@ class LitBaseTrainer(L.LightningModule):
                 self.metrics[metric_config['name']] = LitBaseTrainer._get_metric(metric_config)
        
     
-    def _get_loss(loss_config):
+    def _get_loss(self, loss_config):
         loss_name = loss_config['name']
         loss_params = loss_config.get('params')
         
         loss_params = {} if loss_params is None else loss_params
         
-        if loss_name == 'CrossEntropyLoss':
-            return CrossEntropyLoss(**loss_params)
-        
-        elif loss_name == 'DiceLoss':
-            return DiceLoss(**loss_params)
-        
-        elif loss_name == 'FocalLoss':
-            return FocalLoss(**loss_params)
-        
-        elif loss_name == 'CompositionLoss':
-            return CompositionLoss(**loss_params)
-        
+        if self.ftta:
+            assert loss_name in ftta_losses
         else:
-            raise ValueError(f"Loss '{loss_name}' is not implemented.")
+            assert not loss_name in ftta_losses
+        
+        return globals()[loss_name](**loss_params)
         
     def _get_metric(metric_config):
         metric_name = metric_config['name']
@@ -81,17 +77,20 @@ class LitBaseTrainer(L.LightningModule):
     def _get_optimizer(self):
         optimizer_name = self.optimizer_config['name']
         optimizer_params = self.optimizer_config['params']
-
-        if optimizer_name == 'SGD':
-            optimizer = torch.optim.SGD(self.parameters(), **optimizer_params)
-        elif optimizer_name == 'Adam':
-            optimizer = torch.optim.Adam(self.parameters(), **optimizer_params)
-        elif optimizer_name == 'AdamW':
-            optimizer = torch.optim.Adam(self.parameters(), **optimizer_params)
+        
+        if not self.ftta:
+            trainable_params = self.parameters()
         else:
-            raise ValueError(f"Optimizer '{optimizer_name}' is not implemented.")
-
-        return optimizer
+            if isinstance(self.segmentor, SegmentorEncDec):
+                trainable_params = self.segmentor.decode_head.parameters()
+                
+            elif isinstance(self.segmentor, SegmentorModel):
+                trainable_params = self.segmentor.parameters()
+                
+            else:
+                raise ValueError('Undefined segmentor !')
+                
+        return globals()[optimizer_name](trainable_params, **optimizer_params)
     
     def _get_scheduler(self, optimizer, scheduler_config=None):
         if scheduler_config is None:
@@ -219,12 +218,18 @@ class LitTrainer(LitBaseTrainer):
             assert len(self.segmentor.decode_head.decoder.loss_weights) == len(y_pred)
             loss = torch.zeros(1, device=y_batch.device)
             for yp, w in zip(y_pred, self.segmentor.decode_head.decoder.loss_weights):
-                loss += w*self.loss_fn(yp, y_batch)
+                if self.ftta:
+                    loss += w*self.loss_fn(yp)
+                else:
+                    loss += w*self.loss_fn(yp, y_batch)
             y_pred_det = torch.stack(y_pred, dim=0).detach().mean(0)
             
         else:
             LitTrainer.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
-            loss = self.loss_fn(y_pred, y_batch)
+            if self.ftta:
+                loss = self.loss_fn(y_pred)
+            else:
+                loss = self.loss_fn(y_pred, y_batch)
             y_pred_det = y_pred.detach()
             
         LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Train loss')
@@ -303,8 +308,11 @@ class LitTrainer(LitBaseTrainer):
         # Forward pass
         y_pred = self.segmentor(x_batch)
         LitTrainer.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Validation y_pred')
-            
-        loss = self.loss_fn(y_pred, y_batch)
+        
+        if self.ftta:   
+            loss = self.loss_fn(y_pred)
+        else: 
+            loss = self.loss_fn(y_pred, y_batch)
         LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Validation loss')
         
         loss_key = 'val_loss' if self.test_dataset_name=='' else f'val_{self.test_dataset_name}_loss'
@@ -374,7 +382,10 @@ class LitTrainer(LitBaseTrainer):
         n_classes = y_pred.shape[1]
         y_pred = F.one_hot(torch.argmax(y_pred, dim=1), n_classes).permute([0, 3, 1, 2]).to(y_pred)
         
-        loss = self.loss_fn(y_pred, y_batch)
+        if self.ftta:
+            loss = self.loss_fn(y_pred,)
+        else:
+            loss = self.loss_fn(y_pred, y_batch)
         LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Test loss')
         
         # save the segmentation result

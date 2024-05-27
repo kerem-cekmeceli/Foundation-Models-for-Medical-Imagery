@@ -138,3 +138,4 @@ class EntropyMinLoss(nn.Module):
         loss = loss.mean()
         return loss
     
+ftta_losses = [EntropyMinLoss.__name__]
