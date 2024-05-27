@@ -74,7 +74,7 @@ if model_type == ModelType.SEGMENTOR:
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
 # BraTS_T1, BraTS_FLAIR
-dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
 rcs_enabled = True
 
 # Select loss
