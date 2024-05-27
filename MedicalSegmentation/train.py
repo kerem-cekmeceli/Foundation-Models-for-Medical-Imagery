@@ -44,7 +44,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
