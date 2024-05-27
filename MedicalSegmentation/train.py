@@ -44,7 +44,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
     backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -273,7 +273,6 @@ else:
 wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     dataset=dataset_attrs,
                     batch_sz=batch_sz,
-                    num_classes=dataset_attrs['num_classes'],
                     augmentations=augmentations,
                     nb_epochs=nb_epochs,
                     timestamp=time_str(),

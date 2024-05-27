@@ -127,3 +127,14 @@ class CompositionLoss(torch.nn.Module):
         return self.comp_rat * self.loss1(x, x_pred) + (1-self.comp_rat) * self.loss2(x, x_pred)
     
     
+    
+class EntropyMinLoss(nn.Module):
+    def __init__(self, softmax_dim=1) -> None:
+        super().__init__()
+        self.softmax_dim=softmax_dim
+        
+    def forward(self, x):
+        loss = -(x.softmax(self.softmax_dim) * x.log_softmax(self.softmax_dim)).sum(self.softmax_dim)
+        loss = loss.mean()
+        return loss
+    
