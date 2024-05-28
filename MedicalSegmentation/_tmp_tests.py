@@ -1,5 +1,49 @@
-# import sys
-# import pathlib
+
+import sys
+from pathlib import Path
+ 
+med_seg_path = Path(__file__).parent
+main_pth = med_seg_path.parent
+med_seg_mod_pth = med_seg_path / 'med_seg_foundation'
+
+orig_models_pth = main_pth / 'OrigModels' 
+dino_mod_pth = orig_models_pth / 'DinoV2' 
+sam_mod_pth = orig_models_pth / 'SAM' 
+
+sys.path.insert(0, str(main_pth))
+sys.path.insert(1, str(med_seg_mod_pth))
+sys.path.insert(2, str(dino_mod_pth))
+sys.path.insert(3, str(sam_mod_pth))
+
+from MedicalSegmentation.med_seg_foundation.utils.tools import get_ckp_path
+import os
+
+search_dir_ = '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
+search_dir = [x[0] for x in os.walk(search_dir_)]
+
+# 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
+# prostate_nci, prostate_usz, 
+# cardiac_acdc, cardiac_rvsc, 
+# spine_mrspinesegv, spine_verse
+
+sd_dataset = 'hcp1'
+backbone_sz = 'base' 
+backbone = 'reinL_dino'  # reinL_dino, rein_sam, mae
+dec_head_key = 'hq_hsam_mask_dec'
+
+ckp_pt = get_ckp_path(search_dir=search_dir, 
+                      dataset=sd_dataset, 
+                      bb_size=backbone_sz, 
+                      backbone=backbone, 
+                      dec_name=dec_head_key)
+
+print(ckp_pt)
+
+
+print()
+
+
+
  
 # dino_main_pth = pathlib.Path(__file__).parent.parent
 # orig_dino_pth = dino_main_pth / 'OrigDino'

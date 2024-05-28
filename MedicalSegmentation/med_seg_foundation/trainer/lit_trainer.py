@@ -123,11 +123,12 @@ class LitTrainer(LitBaseTrainer):
                 sync_dist_train=True,
                 sync_dist_val=True,
                 sync_dist_test=True,
-                test_dataset_name='') -> None:
+                test_dataset_name='',
+                ftta:bool=False) -> None:
         super().__init__(loss_config=loss_config,
                          optimizer_config=optimizer_config,
                          scheduler_config=schedulers_config,
-                         metric_configs=metric_configs)
+                         metric_configs=metric_configs, ftta=ftta)
         
         self.val_metrics_over_vol = val_metrics_over_vol
         if seg_log_batch_idxs is None:

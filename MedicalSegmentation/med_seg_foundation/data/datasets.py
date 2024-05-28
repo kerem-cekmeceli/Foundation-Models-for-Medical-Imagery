@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from data.transforms import *
 import SimpleITK as sitk
 from MedicalSegmentation.med_seg_foundation.data.distributed import VolDistributedSampler
+from MedicalSegmentation.med_seg_foundation.utils.tools import get_file_list
 
 # import torchvision.transforms as transforms
 # from torchvision.transforms import functional as F
@@ -24,39 +25,6 @@ from MedicalSegmentation.med_seg_foundation.data.distributed import VolDistribut
 # from scipy.ndimage import zoom
 # import matplotlib.pyplot as plt
 
-
-def get_file_list(fld_pth, start_idx=0, num_img=None, extension=None, 
-                  file_suffix=None, inc_exc=0):
-    assert inc_exc in [0, 1], "0 to include 1 to exlude"
-
-    # List all files in the folder
-    files = os.listdir(fld_pth)
-
-    # Filter out non-files (directories, subdirectories, etc.)
-    files = [file for file in files if os.path.isfile(os.path.join(fld_pth, file))]
-    
-    # Filter for file type
-    if extension is not None:
-        files = [f for f in files if f.endswith(extension)]
-        
-    # Filter for our dataset
-    if file_suffix is not None:
-        if inc_exc == 0:
-            # Include
-            files = [f for f in files if f.split(extension)[0].endswith(file_suffix)]
-        else:
-            # Exlude
-            files = [f for f in files if not f.split(extension)[0].endswith(file_suffix)]
-
-    # Sort by name
-    files.sort()
-    
-    if num_img is not None:
-        num_img = num_img if num_img>len(files) else len(files)
-    else:
-        num_img = len(files)
-    imgs_sel = files[start_idx:start_idx+num_img]
-    return imgs_sel 
 
 def put_in_res_dict(img, mask=None):
     # if pil img : PIL image ==> rgb order | if path do not touch

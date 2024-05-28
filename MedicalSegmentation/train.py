@@ -29,8 +29,8 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
 from med_seg_foundation.configs import *
 import socket
-from MedicalSegmentation.med_seg_foundation.utils.tools import log_class_rel_freqs
-# import os
+from MedicalSegmentation.med_seg_foundation.utils.tools import log_class_rel_freqs, get_ckp_path
+import os
 
 
 cluster_mode = 'KeremPC' != socket.gethostname()
@@ -47,7 +47,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -79,8 +79,8 @@ if model_type == ModelType.SEGMENTOR:
 # BraTS_T1, BraTS_FLAIR
 
 if ftta:
-    sd_dataset = 'hcp1'  # To be loaded from saved checkpoints
-    da_dataset = 'hcp2'
+    sd_dataset = 'prostate_usz'  # To be loaded from saved checkpoints
+    da_dataset = 'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
@@ -154,6 +154,20 @@ elif dataset in brats_datasets:
     test_datasets = brats_datasets
 else:
     test_datasets = [dataset] 
+    
+    
+if ftta:
+    # Verification for fully test time adaptations
+    if sd_dataset in brain_datasets:
+        assert da_dataset in brain_datasets
+    elif sd_dataset in prostate_datasets:
+        assert da_dataset in prostate_datasets
+    elif sd_dataset in spine_datasets:
+        assert da_dataset in spine_datasets
+    elif sd_dataset in brats_datasets:
+        assert da_dataset in brats_datasets
+    else:
+        raise ValueError(f'Could not find a group of datasets for SD and TD: {sd_dataset}, {da_dataset}')
 
 ####################################################################################################
 
@@ -216,8 +230,14 @@ segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs
 if not ftta:
     model = LitTrainer(**segmentor_cfg_lit)
 else:
-    '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
-    sd_model_ckp_pth = None # @TODO
+    if cluster_paths:
+        search_dir_ = '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
+        search_dir = [x[0] for x in os.walk(search_dir_)]
+    else:
+        search_dir = str(main_pth / 'Checkpoints')
+        
+    sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, bb_size=backbone_sz, backbone=backbone, dec_name=dec_head_key)
+    
     model = LitTrainer.load_from_checkpoint(checkpoint_path=sd_model_ckp_pth, **segmentor_cfg_lit)
 
 # Get augmentations
@@ -355,7 +375,7 @@ models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
 if not ftta:
     checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
-                        val_dice_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
+                        val_dice_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice_vol:.2f}'),
                         )
                         #  val_mIoU_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
 else:
