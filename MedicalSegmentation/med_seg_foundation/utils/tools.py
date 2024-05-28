@@ -96,6 +96,7 @@ def get_ckp_path(search_dir, dataset, bb_size, backbone, dec_name):
                      
         assert res_ret is not None, f'Could not find a checkpoint for {backbone}, {bb_size}, {dec_name} in  {search_dir}'       
         print(f"Using: {res_ret}")
+        return res_ret
                     
     else:
         if isinstance(search_dir, pathlib.Path):
