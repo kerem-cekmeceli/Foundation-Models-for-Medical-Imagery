@@ -113,7 +113,9 @@ def get_ckp_path(search_dir, dataset, bb_size, backbone, dec_name):
         
         files = get_file_list(fld_pth=dir_i, extension='.ckpt', file_name_contains='val_dice')
         
-        if len(files)==1:
+        if len(files)==0:
+            return None
+        elif len(files)==1:
             return os.path.join(dir_i, files[0])
         else:
             print(f'Found multiple candidates: {files}')
