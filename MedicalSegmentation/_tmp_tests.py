@@ -19,7 +19,8 @@ from MedicalSegmentation.med_seg_foundation.utils.tools import get_ckp_path
 import os
 
 search_dir_ = '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
-search_dir = [x[0] for x in os.walk(search_dir_)]
+dirs = os.listdir(search_dir_)
+search_dir = [os.path.join(search_dir_, dir) for dir in dirs if os.path.isdir(os.path.join(search_dir_, dirs))]
 
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
 # prostate_nci, prostate_usz, 
