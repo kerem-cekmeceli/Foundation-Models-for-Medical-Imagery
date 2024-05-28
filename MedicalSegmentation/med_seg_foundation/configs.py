@@ -1022,7 +1022,7 @@ def get_augmentations():
     return augmentations
 
 
-def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
+def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=False):
     """Order of procs: First augmentations then pre-processings ! """
     
     if not isinstance(data_root_pth, Path):
@@ -1038,6 +1038,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
     if data_attr['format']=='png':
         train_fld = 'train-filtered' if 'hcp' in dataset else 'train'
         nz = data_attr.get('vol_depth')
+        train_fld = 'test' if ftta else train_fld
 
         train_dataset = SegmentationDataset(img_dir=data_root_pth/'images'/train_fld,
                                             mask_dir=data_root_pth/'labels'/train_fld,
@@ -1069,6 +1070,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
         hdf5_train_name = data_attr['hdf5_train_name']
         hdf5_val_name = data_attr['hdf5_val_name']
         hdf5_test_name = data_attr['hdf5_test_name']
+        hdf5_train_name = hdf5_test_name if ftta else hdf5_train_name
         
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                                 num_classes=num_classes, 
@@ -1085,8 +1087,9 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs):
         
     elif data_attr['format']=='nii.gz':
         preload = True
+        train_folder = data_attr['test_dir'] if ftta else data_attr['train_dir']
         
-        train_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['train_dir'],
+        train_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/train_folder,
                                                  img_suffix=data_attr['img_suffix'],
                                                  lab_suffix=data_attr['lab_suffix'],
                                                  num_classes=num_classes,

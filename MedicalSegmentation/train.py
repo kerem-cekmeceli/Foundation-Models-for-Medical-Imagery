@@ -44,9 +44,9 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
-    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
@@ -121,6 +121,7 @@ num_workers_dataloader=3
 brain_datasets = ['hcp1', 'hcp2', 'abide_caltech', 'abide_stanford']
 prostate_datasets = ['prostate_nci', 'prostate_usz'] #if backbone != 'medsam' else ['prostate_usz']
 spine_datasets = ['spine_mrspinesegv', 'spine_verse']
+brats_datasets = ['BraTS_T1', 'BraTS_FLAIR']
 
 if dataset in brain_datasets:
     test_datasets = brain_datasets
@@ -128,6 +129,8 @@ elif dataset in prostate_datasets:
     test_datasets = prostate_datasets
 elif dataset in spine_datasets:
     test_datasets = spine_datasets
+elif dataset in brats_datasets:
+    test_datasets = brats_datasets
 else:
     test_datasets = [dataset] 
 
