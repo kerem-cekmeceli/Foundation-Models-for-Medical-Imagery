@@ -44,7 +44,6 @@ print(ckp_pt)
 print()
 
 
-
  
 # dino_main_pth = pathlib.Path(__file__).parent.parent
 # orig_dino_pth = dino_main_pth / 'OrigDino'
