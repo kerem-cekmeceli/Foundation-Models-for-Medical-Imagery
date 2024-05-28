@@ -34,6 +34,9 @@ def get_file_list(fld_pth, start_idx=0, num_files=None, extension=None,
                   file_suffix=None, file_name_contains=None, inc_exc=0):
     assert inc_exc in [0, 1], "0 to include 1 to exlude"
 
+    if not os.path.isdir(fld_pth):
+        return []
+
     # List all files in the folder
     files = os.listdir(fld_pth)
 
