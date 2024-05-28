@@ -104,7 +104,7 @@ else:
                 else:
                     nb_epochs=100
     if 'BraTS' in dataset:
-        nb_epochs=100
+        nb_epochs=80
             
 # Config the batch size and lr for training
 batch_sz = 4#8 
