@@ -39,13 +39,16 @@ cluster_paths = cluster_mode
 save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
+# Fully Test Time Adaptations (Entropy Minimization)
+ftta = True
+
 # Select model type
 model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
-    train_backbone = False and not ('ladder' in backbone or 'rein' in backbone)
+    train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
@@ -67,9 +70,6 @@ if model_type == ModelType.SEGMENTOR:
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
     dec_head_key = 'hq_hsam_mask_dec'  
-    
-# Fully Test Time Adaptations (Entropy Minimization)
-ftta = False
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
@@ -77,16 +77,39 @@ ftta = False
 # cardiac_acdc, cardiac_rvsc, 
 # spine_mrspinesegv, spine_verse
 # BraTS_T1, BraTS_FLAIR
-dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
-rcs_enabled = True
 
-# Select loss
-loss_cfg_key = 'ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
-
-# Training hyperparameters
-if not cluster_paths:
-    nb_epochs = 2
+if ftta:
+    sd_dataset = 'hcp1'  # To be loaded from saved checkpoints
+    da_dataset = 'hcp2'
+    dataset = da_dataset
+    rcs_enabled = False
+    
+    # Select loss
+    loss_cfg_key = 'entropy_min'
+    
+    # Config the batch size
+    batch_sz = 4 #32 ? 
+    
+    # Test checkpoint
+    test_checkpoint_key = 'last'
+    
+    # Nb epochs
+    nb_epochs = 10
+    
 else:
+    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
+    rcs_enabled = True
+
+    # Select loss
+    loss_cfg_key = 'ce'  #'ce'  # 'ce', 'dice', 'dice_ce', 'focal', 'focal_dice'
+    
+    # Config the batch size
+    batch_sz = 4#8 
+    
+    # Test checkpoint
+    test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vol'
+    
+    # Nb epochs
     nb_epochs=150
     if model_type==ModelType.SEGMENTOR:
         if backbone in ["sam", "medsam"]:
@@ -105,14 +128,12 @@ else:
                     nb_epochs=100
     if 'BraTS' in dataset:
         nb_epochs=80
-            
-# Config the batch size and lr for training
-batch_sz = 4#8 
-# lr = 0.5e-4 
-weigh_loss_bg = False  # False is better
 
-# Test checkpoint
-test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vol'
+
+if not cluster_paths:
+    nb_epochs = 2
+
+####################################################################################################
 
 # Dataloader workers
 # num_workers_dataloader = min(os.cpu_count(), torch.cuda.device_count()*8)
@@ -134,8 +155,8 @@ elif dataset in brats_datasets:
 else:
     test_datasets = [dataset] 
 
-
 ####################################################################################################
+
 seed = 42
 
 gpus=torch.cuda.device_count()
@@ -168,9 +189,7 @@ else:
 precision = 'highest' if not tensor_cores else 'high'  # medium
 torch.set_float32_matmul_precision(precision)
 
-
 ########################################################################################################################
-
 
 # Set seeds for numpy, torch and python.random
 seed_everything(seed, workers=True)
@@ -191,8 +210,15 @@ else:
     kwargs=dict()
     
 segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
-                                          dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, **kwargs)
-model = LitTrainer(**segmentor_cfg_lit)
+                                          dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, 
+                                          ftta=ftta, **kwargs)
+
+if not ftta:
+    model = LitTrainer(**segmentor_cfg_lit)
+else:
+    '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
+    sd_model_ckp_pth = None # @TODO
+    model = LitTrainer.load_from_checkpoint(checkpoint_path=sd_model_ckp_pth, **segmentor_cfg_lit)
 
 # Get augmentations
 augmentations = get_augmentations()
@@ -218,8 +244,8 @@ else:
 train_dataset, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
                                                         data_attr=dataset_attrs, 
                                                         train_procs=augmentations+processings, 
-                                                        val_test_procs=processings)
-                                            
+                                                        val_test_procs=processings,
+                                                        ftta=ftta)                                 
 # Dataloader configs                                          
 persistent_workers=True
 pin_memory=True
@@ -233,7 +259,7 @@ val_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_worker
 
 data_module = VolDataModule(train_dataset=train_dataset, val_dataset=val_dataset, test_dataset=dataset_name_testing, 
                             train_dataloader_cfg=train_dataloader_cfg, val_dataloader_cfg=val_dataloader_cfg, 
-                            vol_depth=None, num_gpus=gpus) #@TODO remove vol depth field
+                            vol_depth=None, num_gpus=gpus) 
 
 # Trainer config (loggable components)
 trainer_cfg = dict(accelerator='gpu', devices=gpus, sync_batchnorm=True, strategy=strategy,
@@ -248,6 +274,13 @@ loss_name = segmentor_cfg_lit['loss_config']['name'] if not segmentor_cfg_lit['l
 
 # Tags
 tags = [dataset, loss_name, dataset_attrs['format']]
+if ftta:
+    tags.append('FTTA')
+    ftta_info = dict(sd_dataset=sd_dataset,
+                     da_dataset=da_dataset,
+                     sd_model_ckp_pth=sd_model_ckp_pth,)
+    
+wandb_run_dataset = dataset if not ftta else f'FTTA_{sd_dataset}_to_{da_dataset}'
 
 if model_type==ModelType.SEGMENTOR:
     dec_head_name = model.segmentor.decode_head.__class__.__name__
@@ -256,7 +289,7 @@ if model_type==ModelType.SEGMENTOR:
     wnadb_config_add = dict(dec_head_name = dec_head_name,
                             backbone_name = backbone_name,
                             )
-    run_name = f'{dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
+    run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
     bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
     tags.append(bb_train_str)
     tags.append(dec_head_name)
@@ -266,11 +299,11 @@ if model_type==ModelType.SEGMENTOR:
     
 elif model_type==ModelType.UNET:
     group_name = 'UNet' + 'Model'
-    run_name = f'{dataset}_{group_name}_{loss_cfg_key}'
+    run_name = f'{wandb_run_dataset}_{group_name}_{loss_cfg_key}'
     
 elif model_type==ModelType.SWINUNET:
     group_name = 'SwinUNet' + 'Model'
-    run_name = f'{dataset}_{group_name}_{loss_cfg_key}'
+    run_name = f'{wandb_run_dataset}_{group_name}_{loss_cfg_key}'
     
 else:
     ValueError(f'Model type: {model_type} is not found')
@@ -290,6 +323,8 @@ wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     nb_gpus=gpus,
                     precision=precision,
                     strategy=strategy,)
+if ftta:
+    wnadb_config['ftta_cfg'] = ftta_info
 
 wandb_log_path = main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
@@ -308,16 +343,23 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 
 n_best = 1 if save_checkpoints else 0
 ckp_pth = main_pth #if not cluster_paths else '/scratch-second'
-models_pth = ckp_pth / f'Checkpoints/{dataset}/{group_name}'
+if not ftta:
+    models_pth = ckp_pth / f'Checkpoints/{dataset}/{group_name}'
+else:
+    models_pth = ckp_pth / f'Checkpoints/FTTA/SD_{sd_dataset}/TD_{da_dataset}/{group_name}'
+    
 if model_type == ModelType.SEGMENTOR:
     models_pth = models_pth / model.segmentor.decode_head.__class__.__name__
     
 models_pth.mkdir(parents=True, exist_ok=True)
 time_s = time_str()
-checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
-                     val_dice_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
-                    )
-                    #  val_mIoU_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
+if not ftta:
+    checkpointers = dict(val_loss = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_loss", mode='min', filename=time_s+'-{epoch}-{val_loss:.2f}'),
+                        val_dice_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_dice_vol", mode='max', filename=time_s+'-{epoch}-{val_dice:.2f}'),
+                        )
+                        #  val_mIoU_vol = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="val_mIoU_vol", mode='max', filename=time_s+'-{epoch}-{val_mIoU:.2f}'))
+else:
+    checkpointers = dict(last = ModelCheckpoint(dirpath=models_pth, save_top_k=n_best, monitor="epoch", mode='max', filename=time_s+'-{epoch}-Last'),)
 
 # Create the trainer object
 trainer = L.Trainer(logger=logger, callbacks=list(checkpointers.values()), **trainer_cfg)
@@ -343,7 +385,8 @@ if trainer.global_rank == 0:
     
     batch_sz = batch_sz * gpus  if strategy == 'ddp' else batch_sz
     test_model_cfg = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
-                                          dataset_attrs=dataset_attrs, gpus=1, model_type=model_type, **kwargs)
+                                          dataset_attrs=dataset_attrs, gpus=1, model_type=model_type, 
+                                          ftta=ftta, **kwargs)
     
     # Load the best checkpoint (highest val_dice_vol)
     model = LitTrainer.load_from_checkpoint(checkpoint_path=checkpointers[test_checkpoint_key].best_model_path, **test_model_cfg)
@@ -382,20 +425,3 @@ if trainer.global_rank == 0:
         
 print('***END***')
 
-
-#@TODO  multi GPU (performance optm) (metrics per volume are problematic)
-#@TODO add types and comments
-#@TODO write readme.md
-
-# Try training with plain-vanilla SGD (no momentum nor weight decay).
-# Start with a low learning rate. Can you train successfully, even if slowly?
-# If so, try increasing the learning rate and possibly turning on momentum.
-
-# lr = 0.1
-# optimizer = optim.Adam(model.parameters(), lr = lr)
-# Although it often trains faster, Adam can be unstable sometimes.
-
-# Also, as a general rule, the learning rate with which Adam can train
-# stably tends to be numerically significantly smaller than those that
-# work with SGD. I would suggest starting with lr = 1.e-6 and increasing
-# it until you either get successful, if slow, training, or unstable training.

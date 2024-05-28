@@ -77,20 +77,8 @@ class LitBaseTrainer(L.LightningModule):
     def _get_optimizer(self):
         optimizer_name = self.optimizer_config['name']
         optimizer_params = self.optimizer_config['params']
-        
-        if not self.ftta:
-            trainable_params = self.parameters()
-        else:
-            if isinstance(self.segmentor, SegmentorEncDec):
-                trainable_params = self.segmentor.decode_head.parameters()
-                
-            elif isinstance(self.segmentor, SegmentorModel):
-                trainable_params = self.segmentor.parameters()
-                
-            else:
-                raise ValueError('Undefined segmentor !')
-                
-        return globals()[optimizer_name](trainable_params, **optimizer_params)
+       
+        return globals()[optimizer_name](self.parameters(), **optimizer_params)
     
     def _get_scheduler(self, optimizer, scheduler_config=None):
         if scheduler_config is None:
@@ -174,6 +162,9 @@ class LitTrainer(LitBaseTrainer):
         
         # nb epoch interval to log the seg result
         self.seg_val_intv = max(seg_val_intv, 1)
+        
+        assert self.ftta == self.segmentor.ftta
+        assert sum(1 for _ in self.parameters()) == sum(1 for _ in self.named_parameters()), "NB Params do not match !"
 
     @property
     def test_dataset_name(self):

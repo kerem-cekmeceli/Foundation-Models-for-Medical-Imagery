@@ -2,7 +2,7 @@ from enum import Enum
 from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.decoders import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
-from utils.losses import DiceLoss, FocalLoss, CompositionLoss
+from utils.losses import DiceLoss, FocalLoss, CompositionLoss, EntropyMinLoss
 from torch.nn import CrossEntropyLoss
 from data.datasets import SegmentationDataset, SegmentationDatasetHDF5, SegmentationDatasetNIFIT
 from MedicalSegmentation.med_seg_foundation.models.EncDec.encoder.backbone_wrapper import DinoBackBone, SamBackBone, ResNetBackBone, LadderBackbone, \
@@ -737,7 +737,7 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
     return dict(name=class_name, params=dec_head_cfg)
 
 
-def get_loss_cfg(loss_key, data_attr):
+def get_loss_cfg(loss_key, data_attr, ftta=False):
     
     ignore_idx_loss = data_attr['ignore_idx_loss']
     
@@ -787,6 +787,10 @@ def get_loss_cfg(loss_key, data_attr):
 
     elif loss_key=='focal_dice':
         return dict(name=CompositionLoss.__name__, params=loss_cfg_comp_foc_dice)
+    
+    elif loss_key=='entropy_min':
+        assert ftta
+        return dict(name=EntropyMinLoss.__name__, params={})
         
     else:
         raise ValueError(f'Loss {loss_key} is not defined')
@@ -921,7 +925,7 @@ def get_lr(model_type, **kwargs):
 
 
 def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
-                          dom_gen_tst=False, **kwargs):
+                          dom_gen_tst=False, ftta=False, **kwargs):
 
     
     if model_type==ModelType.SEGMENTOR:
@@ -945,7 +949,8 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                          params=dict(backbone=bb_cfg,
                                      decode_head=dec_head_cfg,
                                      reshape_dec_oup=True,
-                                     align_corners=False))
+                                     align_corners=False,
+                                     ftta=ftta))
     
     else:    
         
@@ -968,7 +973,8 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                              params=dict(reshape_dec_oup=True,
                                          align_corners=False,
                                          model=model_cfg,
-                                         target_inp_shape=224))        
+                                         target_inp_shape=224,
+                                         ftta=ftta))        
     
     # Get lr
     lr = get_lr(model_type=model_type, **kwargs)
@@ -980,7 +986,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
     scheduler_cfg = get_scheduler_cfg(nb_epochs=nb_epochs)
 
     # Loss Config
-    loss_cfg = get_loss_cfg(loss_key=loss_cfg_key, data_attr=dataset_attrs)
+    loss_cfg = get_loss_cfg(loss_key=loss_cfg_key, data_attr=dataset_attrs, ftta=ftta)
 
     # Metrics
     metric_cfgs = get_metric_cfgs(data_attr=dataset_attrs, dom_gen_tst=dom_gen_tst)
@@ -1006,7 +1012,8 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                          seg_val_intv=seg_res_log_itv,
                          sync_dist_train=gpus>1,
                          sync_dist_val=gpus>1,
-                         sync_dist_test=gpus>1)
+                         sync_dist_test=gpus>1,
+                         ftta=ftta)
     return segmentor_cfg_lit
     
     
@@ -1115,6 +1122,7 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=Fal
         raise ValueError(f'Unsupported data format {data_attr["format"]}')
         
     return train_dataset, val_dataset, test_dataset
+    
     
 
 

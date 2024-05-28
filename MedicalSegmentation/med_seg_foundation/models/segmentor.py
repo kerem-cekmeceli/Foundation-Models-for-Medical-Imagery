@@ -18,8 +18,9 @@ from models.benchmarks import implemented_models, UNet, SwinTransformerSys
 
 
 class SegmentorBase(nn.Module):
-    def __init__(self, reshape_dec_oup=False, align_corners=False, target_inp_shape=None,) -> None:
+    def __init__(self, reshape_dec_oup=False, align_corners=False, target_inp_shape=None, ftta=False) -> None:
         super().__init__()
+        self.ftta=ftta # Fully test time adaptation 
         
         # Target input shape
         if target_inp_shape is not None:
@@ -73,8 +74,9 @@ class SegmentorBase(nn.Module):
 class SegmentorEncDec(SegmentorBase):
     def __init__(self, backbone, decode_head,
                  reshape_dec_oup=False, align_corners=False, target_inp_shape=None,
-                 ) -> None:
-        super().__init__(reshape_dec_oup=reshape_dec_oup, align_corners=align_corners, target_inp_shape=target_inp_shape)
+                 ftta=False) -> None:
+        super().__init__(reshape_dec_oup=reshape_dec_oup, align_corners=align_corners, 
+                         target_inp_shape=target_inp_shape, ftta=ftta)
         
         if isinstance(backbone, dict):
             # config is given
@@ -107,6 +109,11 @@ class SegmentorEncDec(SegmentorBase):
             assert isinstance(decode_head, DecHeadBase)
             # Model is given
             self.decode_head = decode_head
+            
+        if self.ftta:
+            # No training for neither finetuning nor backbone jsut the decode head
+            for param in self.backbone.parameters():
+                param.requires_grad = False
         
     def get_masks(self, x):
         feats = self.backbone(x)
@@ -116,8 +123,9 @@ class SegmentorEncDec(SegmentorBase):
 class SegmentorModel(SegmentorBase):
     def __init__(self, model,
                  reshape_dec_oup=False, align_corners=False, target_inp_shape=None,
-                 ) -> None:
-        super().__init__(reshape_dec_oup=reshape_dec_oup, align_corners=align_corners, target_inp_shape=target_inp_shape)
+                 ftta=False) -> None:
+        super().__init__(reshape_dec_oup=reshape_dec_oup, align_corners=align_corners, 
+                         target_inp_shape=target_inp_shape, ftta=ftta)
     
         if isinstance(model, dict):
             # config is given
@@ -133,7 +141,8 @@ class SegmentorModel(SegmentorBase):
             # Model is given
             self.model = model
             
-        pass
+        if self.ftta:
+            pass
             
     def get_masks(self, x):
         return self.model(x)
