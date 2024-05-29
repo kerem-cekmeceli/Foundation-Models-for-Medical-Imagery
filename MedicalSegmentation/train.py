@@ -79,8 +79,8 @@ if model_type == ModelType.SEGMENTOR:
 # BraTS_T1, BraTS_FLAIR
 
 if ftta:
-    sd_dataset = 'hcp1'  # To be loaded from saved checkpoints
-    da_dataset = 'hcp2'
+    sd_dataset = 'prostate_nci'  # To be loaded from saved checkpoints
+    da_dataset = 'prostate_usz'
     dataset = da_dataset
     rcs_enabled = False
     
