@@ -94,7 +94,7 @@ if ftta:
     test_checkpoint_key = 'last'
     
     # Nb epochs
-    nb_epochs = 10
+    nb_epochs = 2
     
 else:
     dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'

@@ -114,6 +114,11 @@ class SegmentorEncDec(SegmentorBase):
             # No training for neither finetuning nor backbone jsut the decode head
             for param in self.backbone.parameters():
                 param.requires_grad = False
+            
+            for name, param in self.decode_head.named_parameters():
+                if not ('norm' in name):
+                    param.requires_grad = False
+            
         
     def get_masks(self, x):
         feats = self.backbone(x)
