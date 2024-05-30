@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torchvision.utils import make_grid
 from lightning.pytorch.utilities import rank_zero_only
 from torch.optim import SGD, Adam, AdamW
+import numpy as np
 
 # from torch.optim.optimizer import Optimizer
 # from OrigDino.dinov2.hub.utils import CenterPadding
@@ -124,7 +125,11 @@ class LitTrainer(LitBaseTrainer):
                 sync_dist_val=True,
                 sync_dist_test=True,
                 test_dataset_name='',
-                ftta:bool=False) -> None:
+                ftta:bool=False,
+                self_training:bool=False, 
+                pseudo_label_update_intv:int=10, 
+                pseudo_lab_confidence_thres=0.5,
+                ) -> None:
         super().__init__(loss_config=loss_config,
                          optimizer_config=optimizer_config,
                          scheduler_config=schedulers_config,
@@ -166,6 +171,18 @@ class LitTrainer(LitBaseTrainer):
         
         assert self.ftta == self.segmentor.ftta
         assert sum(1 for _ in self.parameters()) == sum(1 for _ in self.named_parameters()), "NB Params do not match !"
+        
+        # Self training parameters
+        self.self_training = self_training
+        if self.self_training:
+            assert pseudo_label_update_intv>0
+            self.pseudo_label_update_intv = pseudo_label_update_intv
+            assert pseudo_lab_confidence_thres>=0 and pseudo_lab_confidence_thres<1.
+            self.pseudo_lab_confidence_thres = pseudo_lab_confidence_thres
+            self.pseudo_labels = dict()
+            self.pseudo_label_confidence = dict()
+        
+        assert not (self.self_training and self.ftta), "Self training and fully test time adaptation can not co-exist !"
 
     @property
     def test_dataset_name(self):
@@ -175,10 +192,8 @@ class LitTrainer(LitBaseTrainer):
     def test_dataset_name(self, val):
         self._test_dataset_name = val
         
-        
     def forward(self, x):
         return self.segmentor(x)
-    
     
     def configure_optimizers(self):
         ret = dict(optimizer = self._get_optimizer())
@@ -187,7 +202,6 @@ class LitTrainer(LitBaseTrainer):
             ret['lr_scheduler'] = self._get_scheduler(optimizer=ret['optimizer'])
     
         return ret
-    
     
     def on_train_epoch_start(self) -> None:
         super().on_train_epoch_start()
@@ -198,7 +212,13 @@ class LitTrainer(LitBaseTrainer):
             f"{name} nan ratio={torch.count_nonzero(tensor.isnan()==True)/torch.numel(tensor)}, batch_idx={batch_idx}"
         
     def training_step(self, batch, batch_idx):
-        x_batch, y_batch = batch
+        # Extract data from the batch
+        if not self.self_training:
+            x_batch, y_batch = batch
+        else:
+            x_batch, y_batch, use_pseudo_labs, vol_idxs, slice_idxs = batch
+            vol_idxs = vol_idxs.detach().cpu().numpy()
+            slice_idxs = slice_idxs.detach().cpu().numpy()
         
         LitTrainer.check_nans(tensor=x_batch, batch_idx=batch_idx, name='Train x_batch')
         LitTrainer.check_nans(tensor=y_batch, batch_idx=batch_idx, name='Train y_batch')
@@ -206,36 +226,128 @@ class LitTrainer(LitBaseTrainer):
         # Forward pass
         y_pred = self.segmentor(x_batch)
         
-        if isinstance(y_pred, list):
-            assert len(self.segmentor.decode_head.decoder.loss_weights) == len(y_pred)
-            loss = torch.zeros(1, device=y_batch.device)
-            for yp, w in zip(y_pred, self.segmentor.decode_head.decoder.loss_weights):
+        # Self Training is active
+        if self.self_training:
+            # There are pseudo labels to be used
+            if use_pseudo_labs.any():
+                # Update the pseudo labels
+                if (self.current_epoch%self.pseudo_label_update_intv==0):
+                    # Update pseudo labels
+                    if isinstance(y_pred, list):
+                        pseudo_labels = torch.stack(y_pred, dim=0).detach().mean(0)
+                    else:
+                        pseudo_labels = y_pred.detach()
+                            
+                    pseudo_labels = pseudo_labels[use_pseudo_labs]
+                    pseudo_labels = torch.nn.functional.softmax(pseudo_labels, dim=1)
+                    probas, pseudo_labels = torch.max(pseudo_labels, dim=1)
+                    
+                    pseudo_lab_confidence = probas>=self.pseudo_lab_confidence_thres
+                    assert pseudo_lab_confidence.any(), "None of the labels are confident enough !"
+                    
+                    # Save only the confident labels (flat)
+                    pseudo_lab_confidence = pseudo_lab_confidence.flatten(start_dim=-2)
+                    pseudo_labels = pseudo_labels.flatten(start_dim=-2)
+                    pseudo_labels = torch.masked_select(pseudo_labels, pseudo_lab_confidence).reshape(*pseudo_labels.shape[:-1], -1)
+                    
+                    # Save to dict as cpu tensor (Avoid storing all labels in the dataset in GPU memory)
+                    for i, (vol_idx, slice_idx) in enumerate(zip(vol_idxs[use_pseudo_labs.cpu().numpy()], 
+                                                               slice_idxs[use_pseudo_labs.cpu().numpy()])):
+                        # Add missing dicts if any
+                        if not vol_idx in self.pseudo_labels.keys():
+                            self.pseudo_labels[vol_idx] = dict()
+                        if not vol_idx in self.pseudo_label_confidence.keys():
+                            self.pseudo_label_confidence[vol_idx] = dict()
+                            
+                        # Save pseudo labels and the confidence mask
+                        self.pseudo_labels[vol_idx][slice_idx] = pseudo_labels[i].cpu()
+                        self.pseudo_label_confidence[vol_idx][slice_idx] = pseudo_lab_confidence[i].cpu()
+                
+                ## Use the pseudo labels ##          
+                # Get the pseudo labels and their confidence masks
+                y_label_loss = []
+                confidence = []
+                for vol_idx, slice_idx in zip(vol_idxs[use_pseudo_labs.cpu().numpy()], slice_idxs[use_pseudo_labs.cpu().numpy()]):
+                    y_label_loss.append(self.pseudo_labels[vol_idx][slice_idx].to(x_batch.device))
+                    confidence.append(self.pseudo_label_confidence[vol_idx][slice_idx].to(x_batch.device))
+                    
+                y_label_loss = torch.stack(y_label_loss, dim=0)
+                confidence = torch.stack(confidence, dim=0)
+                
+                # Set the corresponding predictions to the same shape
+                if isinstance(y_pred, list):
+                    y_pred_loss = []
+                    for y_p in y_pred:
+                        y_p_flat = y_p[use_pseudo_labs].flatten(start_dim=-2)
+                        assert y_p_flat.shape[-1] == confidence.shape[-1] and y_p_flat.shape[0] == confidence.shape[0]
+                        y_p_flat = torch.masked_select(y_p_flat, confidence.unsqueeze(1)).reshape(*y_p_flat.shape[:-1], -1)
+                        assert y_p_flat.shape[-1] == y_label_loss.shape[-1] and y_p_flat.shape[0] == y_label_loss.shape[0]
+                        y_pred_loss.append(y_p_flat)
+                        
+                else:
+                    y_pred_loss = y_pred[use_pseudo_labs].flatten(start_dim=-2)
+                    assert y_pred_loss.shape[-1] == confidence.shape[-1] and y_pred_loss.shape[0] == confidence.shape[0] 
+                    y_pred_loss = torch.masked_select(y_pred_loss, confidence.unsqueeze(1)).reshape(*y_pred_loss.shape[:-1], -1)
+                    assert y_pred_loss.shape[-1] == y_label_loss.shape[-1] and y_pred_loss.shape[0] == y_label_loss.shape[0]
+                
+                # If there are also non-pseudo samples in the batch  #@TODO transpose to (Channel, Batch, D) -> (1, C, BxD)
+                if not use_pseudo_labs.all():
+                    # prepare the non-pseudo labels and concatenate with pseudo labels
+                    y_label_loss = torch.cat([y_label_loss, y_batch[torch.logical_not(use_pseudo_labs)].flatten(start_dim=-2)], dim=0)
+                        
+                    # prepare the predictions for non-pseudo labels and concatenate with rest of the predictions
+                    if isinstance(y_pred, list):
+                        for i, y_p in enumerate(y_pred):
+                            y_pred_loss[i] = torch.cat([y_pred_loss[i], y_p[torch.logical_not(use_pseudo_labs)].flatten(start_dim=-2)], dim=0)
+                            assert y_pred_loss[i].shape[-1] == y_label_loss.shape[-1]
+                    else:
+                        y_pred_loss = torch.cat([y_pred_loss, y_pred[torch.logical_not(use_pseudo_labs)].flatten(start_dim=-2)], dim=0)
+                        assert y_pred_loss.shape[-1] == y_label_loss.shape[-1]
+    
+            # No pseudo labels exist in this batch => regular operation
+            else:
+                y_label_loss = y_batch
+                y_pred_loss = y_pred
+                   
+        # Self Training is not used => regular operation
+        else:
+            y_label_loss = y_batch
+            y_pred_loss = y_pred
+        
+        # Compute the Loss
+        if isinstance(y_pred_loss, list):
+            # A list of predictions are returned -> Weights to compute the loss and predictions are different 
+            assert len(self.segmentor.decode_head.decoder.loss_weights) == len(y_pred_loss)
+            loss = torch.zeros(1, device=y_label_loss.device)
+            for yp, w in zip(y_pred_loss, self.segmentor.decode_head.decoder.loss_weights):
                 if self.ftta:
                     loss += w*self.loss_fn(yp)
                 else:
-                    loss += w*self.loss_fn(yp, y_batch)
-            y_pred_det = torch.stack(y_pred, dim=0).detach().mean(0)
+                    loss += w*self.loss_fn(yp, y_label_loss)
+            y_pred_det = torch.stack(y_pred, dim=0).detach().mean(0) # For metrics
             
         else:
-            LitTrainer.check_nans(tensor=y_pred, batch_idx=batch_idx, name='Train y_pred')
+            # Prediction is has the same shape as the loss
+            LitTrainer.check_nans(tensor=y_pred_loss, batch_idx=batch_idx, name='Train y_pred')
             if self.ftta:
-                loss = self.loss_fn(y_pred)
+                loss = self.loss_fn(y_pred_loss)
             else:
-                loss = self.loss_fn(y_pred, y_batch)
-            y_pred_det = y_pred.detach()
+                loss = self.loss_fn(y_pred_loss, y_label_loss)
+            y_pred_det = y_pred.detach() # For metrics
             
         LitTrainer.check_nans(tensor=loss, batch_idx=batch_idx, name='Train loss')
                         
         # Log the loss
         self.log('loss', loss, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
         
-        # Log the metrics
+        # Compute and Log the metrics
         y_batch_det = y_batch.detach()
         for metric_n, metric in self.metrics.items():
             metric_dict = metric.get_res_dict(y_pred_det, y_batch_det)
             for k, v in metric_dict.items():
                 self.log(metric_n+k, v, on_epoch=True, on_step=False, sync_dist=self.sync_dist_train)
                 
+        # Return the loss for back propagation 
         return loss
     
     # def on_after_backward(self) -> None:

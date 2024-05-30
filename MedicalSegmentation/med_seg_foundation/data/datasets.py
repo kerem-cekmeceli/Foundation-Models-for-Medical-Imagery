@@ -56,7 +56,9 @@ class SegDatasetRcsBase(Dataset):
                  num_classes:int,
                  rcs_enabled:bool=False,
                  dtype=torch.float32,
-                 augmentations=None) -> None:
+                 augmentations=None,
+                 split_dataset_idx_vol=None,
+                 after:bool=True) -> None:
         super().__init__()
         
         assert num_classes>0
@@ -86,6 +88,13 @@ class SegDatasetRcsBase(Dataset):
         transforms.append(rm_from_res_dict)
         
         self.transforms = Compose(transforms)
+        
+        # This section is used for self training
+        self.ret_split_indicator_and_idxs = split_dataset_idx_vol is not None
+        assert not (self.rcs_enabled and self.ret_split_indicator_and_idxs), "RCS and self training should not co-exist"
+        if self.ret_split_indicator_and_idxs:
+            self.split_dataset_idx_vol = split_dataset_idx_vol
+            self.after = after
                 
                 
     def apply_transform(self, img, msk):
@@ -155,16 +164,48 @@ class SegDatasetRcsBase(Dataset):
         freq = freq / torch.sum(freq)  
         freq = 1 - freq
         self.rcs_classprob = torch.softmax(freq / self.rcs_class_temp, dim=-1).cpu().numpy()
+        
+        
+    @abstractmethod    
+    def _get_n_vol_n_slice_idxs(self, idx):
+        pass
+    
+    @abstractmethod
+    def _getitem1(self, idx):
+        pass
+    
+    def get_dataset_split_indicator(self, vol_idx):
+        assert self.ret_split_indicator_and_idxs
+        if self.after:
+            return vol_idx>=self.split_dataset_idx_vol
+        else:
+            return vol_idx<self.split_dataset_idx_vol
+    
+    def __getitem__(self, idx):
+        res = self._getitem1(idx=idx)
+        
+        if self.ret_split_indicator_and_idxs:
+            vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx)
+            idc = self.get_dataset_split_indicator(vol_idx)
+            return *res, idc, vol_idx, slice_idx
+        else:
+            return res
 
 
 class SegmentationDataset(SegDatasetRcsBase):
     def __init__(self, img_dir, mask_dir, num_classes, 
                  file_extension=None, mask_suffix='',
-                 augmentations=None, images=None,
+                 augmentations=None,
                  dtype=torch.float32,
+                 split_dataset_idx_vol=None,
+                 after:bool=True,
                  ret_n_z:bool=True,
-                 nz=None, rcs_enabled:bool=False):
-        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, augmentations=augmentations, dtype=dtype)
+                 nz=None, rcs_enabled:bool=False,
+                 preload:bool=True,
+                 ):
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, augmentations=augmentations, dtype=dtype,
+                         split_dataset_idx_vol=split_dataset_idx_vol, after=after)
+        self.preload=preload
         
         if isinstance(img_dir, Path):
             img_dir = str(img_dir)
@@ -181,46 +222,82 @@ class SegmentationDataset(SegDatasetRcsBase):
             assert isinstance(nz, int)
         self.nz = nz
         
-        self.ret_n_z = ret_n_z
+        if self.ret_split_indicator_and_idxs:
+            assert self.nz is not None, "nz must be provided for volume index spliting"
         
+        self.ret_n_z = ret_n_z
         if self.ret_n_z:
             assert self.nz is not None, 'Need to provide the constant vol depth nz'
         
         
         # Only include images for which a mask is found
-        if images is None:
-            # self.images = [img for img in os.listdir(img_dir) if os.path.isfile(os.path.join(mask_dir, img.split(".")[0] + ".png"))]
-            self.images = [img for img in get_file_list(img_dir, extension=file_extension) \
-                if os.path.isfile(os.path.join(mask_dir, img.split(".")[0] + mask_suffix +'.'+ img.split(".")[-1]))]
-        else:
-            self.images = images
-            
+        # self.images = [img for img in os.listdir(img_dir) if os.path.isfile(os.path.join(mask_dir, img.split(".")[0] + ".png"))]
+        self.image_f_names = [img for img in get_file_list(img_dir, extension=file_extension) \
+            if os.path.isfile(os.path.join(mask_dir, img.split(".")[0] + mask_suffix +'.'+ img.split(".")[-1]))]
+        
+        self.nb_imgs = len(self.image_f_names)
+
+        if self.preload:
+            self.images = []
+            self.masks = []
+            for i in range(self.nb_imgs):
+                image, mask = self.load_img_and_mask(idx=i)
+                self.images.append(image)
+                self.masks.append(mask)
+                
         if self.rcs_enabled:
             self.init_rcs()
-    
-    def get_mask(self, idx):
-        mask_path = os.path.join(self.mask_dir, 
-                                 self.images[idx].split(".")[0] + self.mask_suffix +'.'+ self.images[idx].split(".")[-1])
-        return np.array(Image.open(mask_path))
+            
+    def _get_n_vol_n_slice_idxs(self, idx):
+        assert self.nz is not None 
+        assert idx>0 
+        assert idx<self.__len__()
         
-    def __len__(self):
-        return len(self.images)
-
-    def __getitem__(self, idx):
-        if self.rcs_enabled:
-            idx = self.get_rare_class_idx()
+        vol_idx = idx%self.nz
+        slice_idx = idx - vol_idx*self.nz
+        return vol_idx, slice_idx
         
-        img_path = os.path.join(self.img_dir, self.images[idx])
+        
+    def load_img_and_mask(self, idx):
+        assert idx>0 and idx<self.nb_imgs
+        img_path = os.path.join(self.img_dir, self.image_f_names[idx])
         mask_path = os.path.join(self.mask_dir, 
-                                 self.images[idx].split(".")[0] + self.mask_suffix +'.'+ self.images[idx].split(".")[-1])
+                                 self.get_mask_f_name(img_idx=idx))
         
         image = Image.open(img_path).convert("RGB") # H, W, C
         mask = Image.open(mask_path)  # Read are the img indices (single channel)
+        return image, mask
+            
+    def get_mask_f_name(self, img_idx):
+        assert img_idx>0 and img_idx<self.nb_imgs
+        return self.image_f_names[img_idx].split(".")[0] + self.mask_suffix +'.'+ self.image_f_names[img_idx].split(".")[-1]
+        
+    
+    def get_mask(self, idx):
+        if not self.preload:
+            mask_path = os.path.join(self.mask_dir, 
+                                    self.get_mask_f_name(img_idx=idx))
+            return np.array(Image.open(mask_path))
+        else:
+            return np.array(self.masks[idx])
+        
+    def __len__(self):
+        return self.nb_imgs
+
+    def _getitem1(self, idx):
+        if self.rcs_enabled:
+            idx = self.get_rare_class_idx()
+        
+        if not self.preload:
+            image, mask = self.load_img_and_mask(idx=idx)
+        else:
+            image = self.images[idx]
+            mask = self.masks[idx]
         
         image, mask = self.apply_transform(img=image, msk=mask)
         
         if not self.ret_n_z:
-            return image, mask
+            return image, mask     
         else:
             n_z = dict(nz = self.nz,
                        last_slice = (idx+1)%self.nz==0)
@@ -235,8 +312,11 @@ class Segmentation3Dto2Dbase(SegDatasetRcsBase):
                  num_classes: int, 
                  rcs_enabled: bool = False, 
                  dtype=torch.float32, 
-                 augmentations=None) -> None:
-        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations)
+                 augmentations=None,
+                 split_dataset_idx_vol=None,
+                 after:bool=True,) -> None:
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations,
+                         split_dataset_idx_vol=split_dataset_idx_vol, after=after)
         
         
     def _get_n_vol_n_slice_idxs(self, idx):
@@ -285,8 +365,14 @@ class SegmentationDatasetHDF5(Segmentation3Dto2Dbase):
                  augmentations=None,
                  dtype=torch.float32,
                  ret_n_xyz:bool=True,
-                 rcs_enabled:bool=False):
-        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, augmentations=augmentations, dtype=dtype)
+                 rcs_enabled:bool=False,
+                 split_dataset_idx_vol=None,
+                 after:bool=True,):
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, augmentations=augmentations, dtype=dtype,
+                         split_dataset_idx_vol=split_dataset_idx_vol, after=after)
+        
+        self.preload = True
+        assert self.preload, "Not preloading is not yet implemented !"
         
         if isinstance(file_pth, Path):
             file_pth = str(file_pth)
@@ -295,34 +381,34 @@ class SegmentationDatasetHDF5(Segmentation3Dto2Dbase):
         self.ret_n_xyz = ret_n_xyz
         
         # Dataset
-        self.dataset = None
-        with h5py.File(self.file_pth, 'r') as f:
-            self.nb_vol = f['nz'].shape[0]
-            self.nb_slices_until = np.cumsum(f['nz'][:], dtype=int)
-            self.nb_slice_tot = f['nz'][:].sum().astype('int32')
-            assert self.nb_slice_tot == self.nb_slices_until[-1]
-            
-        if self.rcs_enabled:
-            self.init_rcs()
+        self.dataset = h5py.File(self.file_pth, 'r')
         
+        # Get dataset properties
+        self.nb_vol = self.dataset['nz'].shape[0]
+        self.nb_slices_until = np.cumsum(self.dataset['nz'][:], dtype=int)
+        self.nb_slice_tot = self.dataset['nz'][:].sum().astype('int32')
+        assert self.nb_slice_tot == self.nb_slices_until[-1]
+        
+        if self.rcs_enabled:
+            self.init_rcs()        
     
     def get_mask(self, idx):
-        with h5py.File(self.file_pth, 'r') as f:
-            if len(f['labels'].shape) == 4:
-                vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx)
-                mask = f['labels'][vol_idx, slice_idx].copy().astype('uint8')  
-                            
-            elif len(f['labels'].shape) == 3:
-                mask = f['labels'][idx].copy().astype('uint8')                    
-            else:
-                ValueError(f'Unsupported dataset images shape')
+        
+        if len(self.dataset['labels'].shape) == 4:
+            vol_idx, slice_idx = self._get_n_vol_n_slice_idxs(idx)
+            mask = self.dataset['labels'][vol_idx, slice_idx].copy().astype('uint8')  
+                        
+        elif len(self.dataset['labels'].shape) == 3:
+            mask = self.dataset['labels'][idx].copy().astype('uint8')                    
+        else:
+            ValueError(f'Unsupported dataset images shape')
         return mask
 
     def __len__(self):
         return self.nb_slice_tot
     
 
-    def __getitem__(self, idx):
+    def _getitem1(self, idx):
         
         if self.rcs_enabled:
             idx = self.get_rare_class_idx()
@@ -373,8 +459,11 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
                  dtype=torch.float32, 
                  augmentations=None,
                  preload=False,
-                 ret_nz=True) -> None:
-        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations)
+                 ret_nz=True,
+                 split_dataset_idx_vol=None,
+                 after:bool=True,) -> None:
+        super().__init__(num_classes=num_classes, rcs_enabled=rcs_enabled, dtype=dtype, augmentations=augmentations,
+                         split_dataset_idx_vol=split_dataset_idx_vol, after=after)
         
         self.preload=preload
         self.extension = '.nii.gz'
@@ -446,7 +535,7 @@ class SegmentationDatasetNIFIT(Segmentation3Dto2Dbase):
     def __len__(self):
         return self.nb_slice_tot
     
-    def __getitem__(self, idx):
+    def _getitem1(self, idx):
         if self.rcs_enabled:
             idx = self.get_rare_class_idx()
         

@@ -925,8 +925,8 @@ def get_lr(model_type, **kwargs):
 
 
 def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
-                          dom_gen_tst=False, ftta=False, **kwargs):
-
+                          dom_gen_tst=False, ftta=False, self_training=False,
+                          pseudo_label_update_intv=10, pseudo_lab_confidence_thres=0.5, **kwargs):
     
     if model_type==ModelType.SEGMENTOR:
         kwargs['dataset_attrs'] = dataset_attrs
@@ -1013,7 +1013,10 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                          sync_dist_train=gpus>1,
                          sync_dist_val=gpus>1,
                          sync_dist_test=gpus>1,
-                         ftta=ftta)
+                         ftta=ftta,
+                         self_training=self_training,
+                         pseudo_label_update_intv=pseudo_label_update_intv,
+                         pseudo_lab_confidence_thres=pseudo_lab_confidence_thres)
     return segmentor_cfg_lit
     
     
@@ -1029,7 +1032,7 @@ def get_augmentations():
     return augmentations
 
 
-def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=False):
+def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=False, nb_labeled_vol=None):
     """Order of procs: First augmentations then pre-processings ! """
     
     if not isinstance(data_root_pth, Path):
@@ -1054,7 +1057,8 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=Fal
                                             mask_suffix='_labelTrainIds',
                                             augmentations=train_procs,
                                             nz=nz,
-                                            ret_n_z=False, rcs_enabled=rcs_enabled)
+                                            ret_n_z=False, rcs_enabled=rcs_enabled,
+                                            split_dataset_idx_vol=nb_labeled_vol)
         val_dataset = SegmentationDataset(img_dir=data_root_pth/'images/val',
                                         mask_dir=data_root_pth/'labels/val',
                                         num_classes=num_classes,
@@ -1082,7 +1086,8 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=Fal
         train_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_train_name, 
                                                 num_classes=num_classes, 
                                                 augmentations=train_procs,
-                                                ret_n_xyz=False, rcs_enabled=rcs_enabled)
+                                                ret_n_xyz=False, rcs_enabled=rcs_enabled,
+                                                split_dataset_idx_vol=nb_labeled_vol)
         val_dataset = SegmentationDatasetHDF5(file_pth=data_root_pth/hdf5_val_name, 
                                                 num_classes=num_classes, 
                                                 augmentations=val_test_procs,
@@ -1102,7 +1107,8 @@ def get_datasets(data_root_pth, data_attr, train_procs, val_test_procs, ftta=Fal
                                                  num_classes=num_classes,
                                                  rcs_enabled=rcs_enabled,
                                                  augmentations=train_procs, 
-                                                 ret_nz=False, preload=preload,)
+                                                 ret_nz=False, preload=preload,
+                                                 split_dataset_idx_vol=nb_labeled_vol)
         val_dataset = SegmentationDatasetNIFIT(directory=data_root_pth/data_attr['val_dir'],
                                                  img_suffix=data_attr['img_suffix'],
                                                  lab_suffix=data_attr['lab_suffix'],

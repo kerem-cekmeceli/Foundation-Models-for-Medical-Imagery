@@ -39,15 +39,12 @@ cluster_paths = cluster_mode
 save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
-# Fully Test Time Adaptations (Entropy Minimization)
-ftta = True
-
 # Select model type
 model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -78,26 +75,49 @@ if model_type == ModelType.SEGMENTOR:
 # spine_mrspinesegv, spine_verse
 # BraTS_T1, BraTS_FLAIR
 
-if ftta:
-    sd_dataset = 'prostate_nci'  # To be loaded from saved checkpoints
-    da_dataset = 'prostate_usz'
+# Fully Test Time Adaptations (Entropy Minimization)
+ftta = False
+
+# Self training (Vanilla)
+self_training = True
+pseudo_label_update_intv=10
+pseudo_lab_confidence_thres=0.0
+nb_labeled_vol = 1 if self_training else None
+
+if ftta or self_training:
+    sd_dataset = 'prostate_usz'  # To be loaded from saved checkpoints
+    da_dataset = 'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
-    # Select loss
-    loss_cfg_key = 'entropy_min'
-    
-    # Config the batch size
-    batch_sz = 4 #32 ? 
-    
-    # Test checkpoint
-    test_checkpoint_key = 'last'
-    
-    # Nb epochs
-    nb_epochs = 2
+    if ftta:
+        # Select loss
+        loss_cfg_key = 'entropy_min'
+        
+        # Config the batch size
+        batch_sz = 4 #32 ? 
+        
+        # Test checkpoint
+        test_checkpoint_key = 'last'
+        
+        # Nb epochs
+        nb_epochs = 2
+        
+    if self_training:
+        # Select loss
+        loss_cfg_key = 'ce'
+        
+        # Config the batch size
+        batch_sz = 4 
+        
+        # Test checkpoint
+        test_checkpoint_key = 'val_dice_vol'
+        
+        # Nb epochs
+        nb_epochs = 100
     
 else:
-    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
+    dataset = 'hcp1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
@@ -225,9 +245,11 @@ else:
     
 segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
                                           dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, 
-                                          ftta=ftta, **kwargs)
+                                          ftta=ftta, self_training=self_training, 
+                                          pseudo_label_update_intv=pseudo_label_update_intv,
+                                          pseudo_lab_confidence_thres=pseudo_lab_confidence_thres, **kwargs)
 
-if not ftta:
+if not ftta and not self_training:
     model = LitTrainer(**segmentor_cfg_lit)
 else:
     if cluster_paths:
@@ -266,7 +288,7 @@ train_dataset, val_dataset, dataset_name_testing = get_datasets(data_root_pth=da
                                                         data_attr=dataset_attrs, 
                                                         train_procs=augmentations+processings, 
                                                         val_test_procs=processings,
-                                                        ftta=ftta)                                 
+                                                        ftta=ftta, nb_labeled_vol=nb_labeled_vol)                                 
 # Dataloader configs                                          
 persistent_workers=True
 pin_memory=True
@@ -295,13 +317,21 @@ loss_name = segmentor_cfg_lit['loss_config']['name'] if not segmentor_cfg_lit['l
 
 # Tags
 tags = [dataset, loss_name, dataset_attrs['format']]
-if ftta:
-    tags.append('FTTA')
-    ftta_info = dict(sd_dataset=sd_dataset,
+if ftta or self_training:
+    if ftta:
+        name_prefix = 'FTTA'
+        tags.append('FTTA')
+    elif self_training:
+        name_prefix = 'ST'
+        tags.append('SelfTraining')
+    else:
+        raise ValueError()
+    
+    DA_info = dict(sd_dataset=sd_dataset,
                      da_dataset=da_dataset,
                      sd_model_ckp_pth=sd_model_ckp_pth,)
     
-wandb_run_dataset = dataset if not ftta else f'FTTA_{sd_dataset}_to_{da_dataset}'
+wandb_run_dataset = dataset if (not ftta and not self_training) else f'{name_prefix}_{sd_dataset}_to_{da_dataset}'
 
 if model_type==ModelType.SEGMENTOR:
     dec_head_name = model.segmentor.decode_head.__class__.__name__
@@ -345,7 +375,7 @@ wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     precision=precision,
                     strategy=strategy,)
 if ftta:
-    wnadb_config['ftta_cfg'] = ftta_info
+    wnadb_config['domain_adaptation_cfg'] = DA_info
 
 wandb_log_path = main_pth / 'Logs'
 wandb_log_path.mkdir(parents=True, exist_ok=True)
@@ -364,10 +394,10 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 
 n_best = 1 if save_checkpoints else 0
 ckp_pth = main_pth #if not cluster_paths else '/scratch-second'
-if not ftta:
+if not ftta and not self_training:
     models_pth = ckp_pth / f'Checkpoints/{dataset}/{group_name}'
 else:
-    models_pth = ckp_pth / f'Checkpoints/FTTA/SD_{sd_dataset}/TD_{da_dataset}/{group_name}'
+    models_pth = ckp_pth / f'Checkpoints/{name_prefix}/SD_{sd_dataset}/TD_{da_dataset}/{group_name}'
     
 if model_type == ModelType.SEGMENTOR:
     models_pth = models_pth / model.segmentor.decode_head.__class__.__name__
