@@ -81,7 +81,7 @@ ftta = False
 # Self training (Vanilla)
 self_training = True
 pseudo_label_update_intv=10
-pseudo_lab_confidence_thres=0.0
+pseudo_lab_confidence_thres=0.7
 nb_labeled_vol = 1 if self_training else None
 
 if ftta or self_training:
