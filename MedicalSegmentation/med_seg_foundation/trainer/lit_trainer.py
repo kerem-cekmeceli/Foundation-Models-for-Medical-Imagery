@@ -248,7 +248,11 @@ class LitTrainer(LitBaseTrainer):
                     # Save only the confident labels (flat)
                     pseudo_lab_confidence = pseudo_lab_confidence.flatten(start_dim=-2)
                     pseudo_labels = pseudo_labels.flatten(start_dim=-2)
-                    pseudo_labels = torch.masked_select(pseudo_labels, pseudo_lab_confidence).reshape(*pseudo_labels.shape[:-1], -1)
+                    
+                    pseudo_labels_f = []
+                    for i in range(pseudo_labels.shape[0]):
+                        pseudo_labels_f.append(torch.masked_select(pseudo_labels[i], pseudo_lab_confidence[i]))
+                    pseudo_labels =  pseudo_labels_f
                     
                     # Save to dict as cpu tensor (Avoid storing all labels in the dataset in GPU memory)
                     for i, (vol_idx, slice_idx) in enumerate(zip(vol_idxs[use_pseudo_labs.cpu().numpy()], 
@@ -271,37 +275,37 @@ class LitTrainer(LitBaseTrainer):
                     y_label_loss.append(self.pseudo_labels[vol_idx][slice_idx].to(x_batch.device))
                     confidence.append(self.pseudo_label_confidence[vol_idx][slice_idx].to(x_batch.device))
                     
-                y_label_loss = torch.stack(y_label_loss, dim=0)
-                confidence = torch.stack(confidence, dim=0)
+                y_label_loss = torch.cat(y_label_loss, dim=-1).unsqueeze(0)
+                confidence = torch.cat(confidence, dim=-1).unsqueeze(0)
                 
                 # Set the corresponding predictions to the same shape
                 if isinstance(y_pred, list):
                     y_pred_loss = []
                     for y_p in y_pred:
-                        y_p_flat = y_p[use_pseudo_labs].flatten(start_dim=-2)
-                        assert y_p_flat.shape[-1] == confidence.shape[-1] and y_p_flat.shape[0] == confidence.shape[0]
+                        y_p_flat = y_p[use_pseudo_labs].transpose(0, 1).unsqueeze(0).flatten(start_dim=2)
+                        assert y_p_flat.shape[-1] == confidence.shape[-1] and y_p_flat.shape[0] == confidence.shape[0] == 1
                         y_p_flat = torch.masked_select(y_p_flat, confidence.unsqueeze(1)).reshape(*y_p_flat.shape[:-1], -1)
-                        assert y_p_flat.shape[-1] == y_label_loss.shape[-1] and y_p_flat.shape[0] == y_label_loss.shape[0]
+                        assert y_p_flat.shape[-1] == y_label_loss.shape[-1] and y_p_flat.shape[0] == y_label_loss.shape[0] == 1
                         y_pred_loss.append(y_p_flat)
                         
                 else:
-                    y_pred_loss = y_pred[use_pseudo_labs].flatten(start_dim=-2)
+                    y_pred_loss = y_pred[use_pseudo_labs].transpose(0, 1).unsqueeze(0).flatten(start_dim=2)
                     assert y_pred_loss.shape[-1] == confidence.shape[-1] and y_pred_loss.shape[0] == confidence.shape[0] 
                     y_pred_loss = torch.masked_select(y_pred_loss, confidence.unsqueeze(1)).reshape(*y_pred_loss.shape[:-1], -1)
-                    assert y_pred_loss.shape[-1] == y_label_loss.shape[-1] and y_pred_loss.shape[0] == y_label_loss.shape[0]
+                    assert y_pred_loss.shape[-1] == y_label_loss.shape[-1] and y_pred_loss.shape[0] == y_label_loss.shape[0] == 1
                 
-                # If there are also non-pseudo samples in the batch  #@TODO transpose to (Channel, Batch, D) -> (1, C, BxD)
+                # If there are also non-pseudo samples in the batch  
                 if not use_pseudo_labs.all():
                     # prepare the non-pseudo labels and concatenate with pseudo labels
-                    y_label_loss = torch.cat([y_label_loss, y_batch[torch.logical_not(use_pseudo_labs)].flatten(start_dim=-2)], dim=0)
+                    y_label_loss = torch.cat([y_label_loss, y_batch[torch.logical_not(use_pseudo_labs)].unsqueeze(0).flatten(start_dim=1)], dim=-1)
                         
                     # prepare the predictions for non-pseudo labels and concatenate with rest of the predictions
                     if isinstance(y_pred, list):
                         for i, y_p in enumerate(y_pred):
-                            y_pred_loss[i] = torch.cat([y_pred_loss[i], y_p[torch.logical_not(use_pseudo_labs)].flatten(start_dim=-2)], dim=0)
+                            y_pred_loss[i] = torch.cat([y_pred_loss[i], y_p[torch.logical_not(use_pseudo_labs)].transpose(0, 1).unsqueeze(0).flatten(start_dim=2)], dim=-1)
                             assert y_pred_loss[i].shape[-1] == y_label_loss.shape[-1]
                     else:
-                        y_pred_loss = torch.cat([y_pred_loss, y_pred[torch.logical_not(use_pseudo_labs)].flatten(start_dim=-2)], dim=0)
+                        y_pred_loss = torch.cat([y_pred_loss, y_pred[torch.logical_not(use_pseudo_labs)].transpose(0, 1).unsqueeze(0).flatten(start_dim=2)], dim=-1)
                         assert y_pred_loss.shape[-1] == y_label_loss.shape[-1]
     
             # No pseudo labels exist in this batch => regular operation
