@@ -82,7 +82,7 @@ ftta = False
 self_training = True
 pseudo_label_update_intv=10
 pseudo_lab_confidence_thres=0.9
-nb_labeled_vol = 5 if self_training else None
+nb_labeled_vol = 3 if self_training else None
 
 if ftta or self_training:
     sd_dataset = 'prostate_usz'  # To be loaded from saved checkpoints
