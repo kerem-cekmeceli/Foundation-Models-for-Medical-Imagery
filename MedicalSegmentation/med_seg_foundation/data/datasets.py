@@ -269,7 +269,7 @@ class SegmentationDataset(SegDatasetRcsBase):
         return image, mask
             
     def get_mask_f_name(self, img_idx):
-        assert img_idx>0 and img_idx<self.nb_imgs
+        assert img_idx>=0 and img_idx<self.nb_imgs
         return self.image_f_names[img_idx].split(".")[0] + self.mask_suffix +'.'+ self.image_f_names[img_idx].split(".")[-1]
         
     
