@@ -117,7 +117,7 @@ if ftta or self_training:
         nb_epochs = 50
     
 else:
-    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+    dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
