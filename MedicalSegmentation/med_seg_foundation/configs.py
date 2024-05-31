@@ -1,4 +1,3 @@
-from enum import Enum
 from MedicalSegmentation.med_seg_foundation.models.EncDec.decoder.decoders import ConvHeadLinear, ResNetHead, UNetHead, SAMdecHead, HSAMdecHead, HQSAMdecHead, HQHSAMdecHead
 from mmseg.models.decode_heads import FCNHead, PSPHead, DAHead, SegformerHead
 import torch
@@ -12,11 +11,7 @@ from MedicalSegmentation.med_seg_foundation.models.segmentor import SegmentorEnc
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.UNet.unet import UNet
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_transformer_unet_skip_expand_decoder_sys import SwinTransformerSys
 from pathlib import Path
-
-class ModelType(Enum):
-    SEGMENTOR=1
-    UNET=2
-    SWINUNET=3
+from MedicalSegmentation.med_seg_foundation.utils.constants import*
 
 def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
     attrs = {}

@@ -3,7 +3,7 @@ import wandb
 import os
 import pathlib
 from operator import itemgetter
-from MedicalSegmentation.med_seg_foundation.configs import ModelType
+from MedicalSegmentation.med_seg_foundation.utils.constants import*
 
 def get_class_rel_freqs(dataset):
     class_counts = np.zeros(dataset.num_classes)
