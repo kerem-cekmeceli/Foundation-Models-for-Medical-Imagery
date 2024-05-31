@@ -82,7 +82,7 @@ ftta = False
 self_training = True
 pseudo_label_update_intv=10
 pseudo_lab_confidence_thres=0.95
-nb_labeled_vol = 5 if self_training else None
+nb_labeled_vol = 3 if self_training else None
 
 if ftta or self_training:
     sd_dataset = 'hcp2'#'prostate_usz'  # To be loaded from saved checkpoints
@@ -323,18 +323,23 @@ loss_name = segmentor_cfg_lit['loss_config']['name'] if not segmentor_cfg_lit['l
 # Tags
 tags = [dataset, loss_name, dataset_attrs['format']]
 if ftta or self_training:
+    DA_info = dict(sd_dataset=sd_dataset,
+                     da_dataset=da_dataset,
+                     sd_model_ckp_pth=sd_model_ckp_pth,)
     if ftta:
         name_prefix = 'FTTA'
         tags.append('FTTA')
     elif self_training:
         name_prefix = 'ST'
         tags.append('SelfTraining')
+        DA_info['nb_labeled_vol'] = nb_labeled_vol
+        DA_info['pseudo_label_update_intv'] = pseudo_label_update_intv
+        DA_info['pseudo_lab_confidence_thres'] = pseudo_lab_confidence_thres
+        
     else:
         raise ValueError()
     
-    DA_info = dict(sd_dataset=sd_dataset,
-                     da_dataset=da_dataset,
-                     sd_model_ckp_pth=sd_model_ckp_pth,)
+    
     
 wandb_run_dataset = dataset if (not ftta and not self_training) else f'{name_prefix}_{sd_dataset}_to_{da_dataset}'
 
@@ -378,8 +383,10 @@ wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
                     trainer_cfg=trainer_cfg,
                     nb_gpus=gpus,
                     precision=precision,
-                    strategy=strategy,)
-if ftta:
+                    strategy=strategy,
+                    self_training=self_training,
+                    FTTA=ftta)
+if ftta or self_training:
     wnadb_config['domain_adaptation_cfg'] = DA_info
 
 wandb_log_path = main_pth / 'Logs'
