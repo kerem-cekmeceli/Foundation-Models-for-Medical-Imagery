@@ -253,7 +253,8 @@ if not ftta and not self_training:
     model = LitTrainer(**segmentor_cfg_lit)
 else:
     if cluster_paths:
-        search_dir_ = '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
+        # search_dir_ = '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
+        search_dir_ = '/usr/bmicnas02/data-biwi-01/foundation_models/Checkpoints'
         dirs = os.listdir(search_dir_)
         search_dir = [os.path.join(search_dir_, dir) for dir in dirs if os.path.isdir(os.path.join(search_dir_, dir))]
     else:
