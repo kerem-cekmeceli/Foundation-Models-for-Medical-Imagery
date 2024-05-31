@@ -85,8 +85,8 @@ pseudo_lab_confidence_thres=0.9
 nb_labeled_vol = 5 if self_training else None
 
 if ftta or self_training:
-    sd_dataset = 'prostate_usz'#'prostate_usz'  # To be loaded from saved checkpoints
-    da_dataset = 'prostate_nci'#'prostate_nci'
+    sd_dataset = 'hcp2'#'prostate_usz'  # To be loaded from saved checkpoints
+    da_dataset = 'hcp1'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
