@@ -44,6 +44,9 @@ def process_img(img_pth, src_dir, save_dir):
     # Min-Max Norm
     corrected_img = (corrected_img-np.min(corrected_img)) / np.max(corrected_img)
     
+    # Clip the values
+    corrected_img = np.clip(corrected_img, a_min=0, a_max=255)
+    
     # # Percentile [2% 98%] clipping
     # percentile2 = np.percentile(corrected_img, 2)
     # percentile98 = np.percentile(corrected_img, 98)
@@ -64,6 +67,8 @@ def process_img(img_pth, src_dir, save_dir):
     
     # Save image
     corrected_img = np.stack(slices, axis=0, dtype=np.float32)
+    assert np.max(corrected_img) <= 255
+    assert np.min(corrected_img) >= 0
     corrected_img = sitk.GetImageFromArray(corrected_img)
     sitk.WriteImage(corrected_img, os.path.join(save_dir, img_pth))
     
@@ -137,7 +142,7 @@ else:
 for dir_name in tqdm(dir_names):
     src_data_pth = f"{main_pth}/brain/BraTS/{dir_name}/"
     target_data_pth_n4 = f"{main_pth}/brain/BraTS/{dir_name}_n4/"
-    target_data_pth_norm = f"{main_pth}/brain/BraTS/{dir_name}_processed2/"
+    target_data_pth_norm = f"{main_pth}/brain/BraTS/{dir_name}_processed/"
     
     # Create directories if missing
     Path(target_data_pth_n4).mkdir(parents=True, exist_ok=True)
