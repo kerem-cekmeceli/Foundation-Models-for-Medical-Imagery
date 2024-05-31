@@ -3,6 +3,7 @@ import wandb
 import os
 import pathlib
 from operator import itemgetter
+from MedicalSegmentation.med_seg_foundation.configs import ModelType
 
 def get_class_rel_freqs(dataset):
     class_counts = np.zeros(dataset.num_classes)
@@ -75,13 +76,17 @@ def get_file_list(fld_pth, start_idx=0, num_files=None, extension=None,
     return files_sel 
 
 
-def get_ckp_path(search_dir, dataset, bb_size, backbone, dec_name):
+def get_ckp_path(search_dir, dataset, model_type, bb_size=None, backbone=None, dec_name=None):
+    
+    if model_type == ModelType.SEGMENTOR:
+        assert bb_size is not None and backbone is not None and dec_name is not None
     
     if isinstance(search_dir, list):
         # A list of search directories are given
         res_ret = None
         for search_dir_i in search_dir:
-            res = get_ckp_path(search_dir=search_dir_i, dataset=dataset, bb_size=bb_size, backbone=backbone, dec_name=dec_name)
+            res = get_ckp_path(search_dir=search_dir_i, dataset=dataset, model_type=model_type, 
+                               bb_size=bb_size, backbone=backbone, dec_name=dec_name)
             if res is not None:
                 # Found a ckpt
                 if res_ret is None:
@@ -94,7 +99,10 @@ def get_ckp_path(search_dir, dataset, bb_size, backbone, dec_name):
                         # Take the newer  = bigger timestamp
                         res_ret = [res_ret, res].sort(reverse=True)[0]   
                      
-        assert res_ret is not None, f'Could not find a checkpoint for {backbone}, {bb_size}, {dec_name} in  {search_dir}'       
+        if model_type==ModelType.SEGMENTOR:
+            assert res_ret is not None, f'Could not find a checkpoint for {backbone}, {bb_size}, {dec_name} in  {search_dir}'    
+        else:
+            assert res_ret is not None, f'Could not find a checkpoint for {ModelType.SEGMENTOR.name} in  {search_dir}'  
         print(f"Using: {res_ret}")
         return res_ret
                     
@@ -102,16 +110,25 @@ def get_ckp_path(search_dir, dataset, bb_size, backbone, dec_name):
         if isinstance(search_dir, pathlib.Path):
             search_dir = str(search_dir)
         
-        # A single search directory is given
-        bb_dir = backbone + bb_size[0].upper()
-        
-        if dec_name=='hq_hsam_mask_dec':
-            dec_dir = 'HQHSAMdecHead'
+        if model_type==ModelType.SEGMENTOR:
+            # A single search directory is given
+            bb_dir = backbone + bb_size[0].upper()
+            
+            if dec_name=='hq_hsam_mask_dec':
+                dec_dir = 'HQHSAMdecHead'
+            else:
+                raise ValueError('Not defined, add here !')
+            dir_model_type = os.path.join(bb_dir, dec_dir)
+            
         else:
-            raise ValueError('Not defined, add here !')
-        
-        dir_i = os.path.join(search_dir, dataset, bb_dir, dec_dir)
-        
+            if model_type==ModelType.UNET:
+                dir_model_type = 'UNetModel' 
+            elif model_type==ModelType.SWINUNET:
+                dir_model_type = 'SwinUNetModel'
+            else:
+                raise ValueError(f'Unknown Model Type: {model_type}')
+            
+        dir_i = os.path.join(search_dir, dataset, dir_model_type)
         files = get_file_list(fld_pth=dir_i, extension='.ckpt', file_name_contains='val_dice')
         
         if len(files)==0:
