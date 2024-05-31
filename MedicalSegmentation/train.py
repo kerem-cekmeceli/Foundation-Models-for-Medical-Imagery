@@ -147,7 +147,7 @@ else:
                 else:
                     nb_epochs=100
     if 'BraTS' in dataset:
-        nb_epochs=2#80
+        nb_epochs=80
 
 
 if not cluster_paths:
