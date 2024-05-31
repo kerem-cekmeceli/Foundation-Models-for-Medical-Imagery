@@ -250,7 +250,7 @@ class SegmentationDataset(SegDatasetRcsBase):
             
     def _get_n_vol_n_slice_idxs(self, idx):
         assert self.nz is not None 
-        assert idx>0 
+        assert idx>=0 
         assert idx<self.__len__()
         
         vol_idx = idx%self.nz
