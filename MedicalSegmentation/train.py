@@ -44,7 +44,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -117,7 +117,7 @@ if ftta or self_training:
         nb_epochs = 50
     
 else:
-    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+    dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
