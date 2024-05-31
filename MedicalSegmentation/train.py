@@ -259,8 +259,12 @@ else:
         search_dir = [os.path.join(search_dir_, dir) for dir in dirs if os.path.isdir(os.path.join(search_dir_, dir))]
     else:
         search_dir = str(main_pth / 'Checkpoints')
-        
-    sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, bb_size=backbone_sz, backbone=backbone, dec_name=dec_head_key)
+    
+    if model_type==ModelType.SEGMENTOR:
+        sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, model_type=model_type,
+                                        bb_size=backbone_sz, backbone=backbone, dec_name=dec_head_key)
+    else:
+        sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, model_type=model_type)
     
     model = LitTrainer.load_from_checkpoint(checkpoint_path=sd_model_ckp_pth, **segmentor_cfg_lit)
 
