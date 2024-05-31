@@ -79,7 +79,7 @@ if model_type == ModelType.SEGMENTOR:
 ftta = False
 
 # Self training (Vanilla)
-self_training = False
+self_training = True
 pseudo_label_update_intv=10
 pseudo_lab_confidence_thres=0.80
 nb_labeled_vol = 5 if self_training else None
@@ -147,7 +147,7 @@ else:
                 else:
                     nb_epochs=100
     if 'BraTS' in dataset:
-        nb_epochs=2#80
+        nb_epochs=80
 
 
 if not cluster_paths:
