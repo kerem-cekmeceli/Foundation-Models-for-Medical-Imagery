@@ -259,7 +259,7 @@ class SegmentationDataset(SegDatasetRcsBase):
         
         
     def load_img_and_mask(self, idx):
-        assert idx>0 and idx<self.nb_imgs
+        assert idx>=0 and idx<self.nb_imgs
         img_path = os.path.join(self.img_dir, self.image_f_names[idx])
         mask_path = os.path.join(self.mask_dir, 
                                  self.get_mask_f_name(img_idx=idx))
