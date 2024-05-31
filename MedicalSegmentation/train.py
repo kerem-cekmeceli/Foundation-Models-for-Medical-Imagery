@@ -79,7 +79,7 @@ if model_type == ModelType.SEGMENTOR:
 ftta = False
 
 # Self training (Vanilla)
-self_training = True
+self_training = False
 pseudo_label_update_intv=10
 pseudo_lab_confidence_thres=0.80
 nb_labeled_vol = 5 if self_training else None
