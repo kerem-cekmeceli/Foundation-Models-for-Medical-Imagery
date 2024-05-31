@@ -97,7 +97,9 @@ def get_ckp_path(search_dir, dataset, model_type, bb_size=None, backbone=None, d
                     print(f"Multiple checkpoints 1) {res_ret}, 2) {res}")
                     if res_ret.split('/')[-1] != res.split('/')[-1]:
                         # Take the newer  = bigger timestamp
-                        res_ret = [res_ret, res].sort(reverse=True)[0]   
+                        res_ret = [res_ret, res]
+                        res_ret.sort(reverse=True)
+                        res_ret = res_ret[0]   
                      
         if model_type==ModelType.SEGMENTOR:
             assert res_ret is not None, f'Could not find a checkpoint for {backbone}, {bb_size}, {dec_name} in  {search_dir}'    
