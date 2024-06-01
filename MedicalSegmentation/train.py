@@ -44,9 +44,9 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
-    backbone_sz = "giant" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "huge" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
@@ -119,7 +119,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
+    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
