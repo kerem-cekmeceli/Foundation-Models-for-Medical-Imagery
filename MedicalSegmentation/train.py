@@ -40,13 +40,13 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
-    backbone_sz = "huge" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
