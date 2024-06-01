@@ -86,8 +86,8 @@ nb_labeled_vol = 3 if self_training else None
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'hcp2'#'prostate_usz'  # To be loaded from saved checkpoints
-    da_dataset = 'hcp1'#'prostate_nci'
+    sd_dataset = 'spine_verse'#'prostate_usz'  # To be loaded from saved checkpoints
+    da_dataset = 'spine_mrspinesegv'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
@@ -149,7 +149,7 @@ else:
                 else:
                     nb_epochs=100
     if 'BraTS' in dataset:
-        nb_epochs=80
+        nb_epochs=30
 
 
 if not cluster_paths:
