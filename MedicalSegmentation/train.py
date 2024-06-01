@@ -44,9 +44,9 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
-    backbone_sz = "huge" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
@@ -79,15 +79,15 @@ if model_type == ModelType.SEGMENTOR:
 ftta = False
 
 # Self training (Vanilla)
-self_training = False
+self_training = True
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9
 nb_labeled_vol = 3 if self_training else None
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'prostate_nci'#'prostate_usz'  # To be loaded from saved checkpoints
-    da_dataset = 'prostate_usz'#'prostate_nci'
+    sd_dataset = 'hcp2'#'prostate_usz'  # To be loaded from saved checkpoints
+    da_dataset = 'hcp1'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
