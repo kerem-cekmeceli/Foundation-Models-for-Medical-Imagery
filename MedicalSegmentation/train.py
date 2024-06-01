@@ -46,7 +46,7 @@ if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
-    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "giant" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
@@ -79,7 +79,7 @@ if model_type == ModelType.SEGMENTOR:
 ftta = False
 
 # Self training (Vanilla)
-self_training = True
+self_training = False
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9
 nb_labeled_vol = 3 if self_training else None
@@ -119,7 +119,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
+    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
