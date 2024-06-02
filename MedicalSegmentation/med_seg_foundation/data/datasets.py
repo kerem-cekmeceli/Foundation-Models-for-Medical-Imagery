@@ -264,8 +264,15 @@ class SegmentationDataset(SegDatasetRcsBase):
         mask_path = os.path.join(self.mask_dir, 
                                  self.get_mask_f_name(img_idx=idx))
         
-        image = Image.open(img_path).convert("RGB") # H, W, C
-        mask = Image.open(mask_path)  # Read are the img indices (single channel)
+        image_tmp = Image.open(img_path).convert("RGB") # H, W, C
+        mask_tmp = Image.open(mask_path)  # Read are the img indices (single channel)
+        
+        image = image_tmp.copy()
+        mask = mask_tmp.copy()
+        
+        image_tmp.close()
+        mask_tmp.close()
+        
         return image, mask
             
     def get_mask_f_name(self, img_idx):
