@@ -437,9 +437,9 @@ summary(model)
 # model is saved only on the main process when using distributed training
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 trainer_rank = trainer.global_rank
-trainer = None
-data_module = None
-val_dataset = None
+del trainer
+del data_module
+del val_dataset
 
 # Test and Validate on all the indicated datasets on a single GPU
 if gpus>1:
@@ -447,7 +447,7 @@ if gpus>1:
 if trainer_rank == 0:
     # Log the relative frequencies
     log_class_rel_freqs(dataset=train_dataset, log_name_key=f'train_{dataset}')
-    train_dataset = None
+    del train_dataset
 
     
     # Trainer cfg for testing
@@ -478,19 +478,24 @@ if trainer_rank == 0:
                                 shuffle=False)  
         
         # Get datasets
-        _, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
+        _, val_dataset, test_dataset = get_datasets(data_root_pth=data_root_pth, 
                                                                 data_attr=dataset_attrs, 
                                                                 train_procs=augmentations+processings, 
                                                                 val_test_procs=processings)
         
         val_dataloader = DataLoader(dataset=val_dataset, **test_dataloader_cfg)
-        test_dataloader = DataLoader(dataset=dataset_name_testing, **test_dataloader_cfg)
+        test_dataloader = DataLoader(dataset=test_dataset, **test_dataloader_cfg)
         
         # Validate on single GPU
         trainer_testing.validate(model=model, dataloaders=val_dataloader)
         
         # Test on single GPU
         trainer_testing.test(model=model, dataloaders=test_dataloader) 
+        
+        del val_dataloader
+        del test_dataloader
+        del val_dataset
+        del test_dataset
         
     # Finish logging
     wandb.finish()
