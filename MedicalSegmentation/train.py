@@ -32,7 +32,6 @@ import socket
 from MedicalSegmentation.med_seg_foundation.utils.tools import log_class_rel_freqs, get_ckp_path
 import os
 
-
 cluster_mode = 'KeremPC' != socket.gethostname()
 
 cluster_paths = cluster_mode
