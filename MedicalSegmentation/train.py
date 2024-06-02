@@ -267,7 +267,7 @@ else:
     else:
         sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, model_type=model_type)
     
-    model = LitTrainer.load_from_checkpoint(checkpoint_path=sd_model_ckp_pth, **segmentor_cfg_lit)
+    model = LitTrainer.load_from_checkpoint(checkpoint_path=sd_model_ckp_pth, **segmentor_cfg_lit, strict=False)
 
 # Get augmentations
 augmentations = get_augmentations()
