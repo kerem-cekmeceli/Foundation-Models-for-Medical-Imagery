@@ -39,7 +39,7 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
@@ -118,7 +118,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'hcp1'  #if cluster_paths else 'prostate_usz'
+    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
