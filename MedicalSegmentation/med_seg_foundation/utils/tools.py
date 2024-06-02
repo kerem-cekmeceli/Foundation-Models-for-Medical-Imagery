@@ -114,7 +114,7 @@ def get_ckp_path(search_dir, dataset, model_type, bb_size=None, backbone=None, d
         
         if model_type==ModelType.SEGMENTOR:
             # A single search directory is given
-            if not '_' in backbone:
+            if '_' in backbone:
                 # A finetuning is used
                 bb_dir = backbone + bb_size[0].upper()
             else:
