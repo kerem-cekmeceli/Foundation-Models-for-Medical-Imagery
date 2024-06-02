@@ -277,7 +277,9 @@ class SegmentationDataset(SegDatasetRcsBase):
         if not self.preload:
             mask_path = os.path.join(self.mask_dir, 
                                     self.get_mask_f_name(img_idx=idx))
-            return np.array(Image.open(mask_path))
+            with Image.open(mask_path) as img:
+                np_img = np.array(img, copy=True)
+            return np_img
         else:
             return np.array(self.masks[idx])
         
@@ -304,6 +306,12 @@ class SegmentationDataset(SegDatasetRcsBase):
         
             return image, mask, n_z
         
+    def __del__(self):
+        if self.preload:
+            for im, mask in zip(self.images, self.masks):
+                im.close()
+                mask.close()
+                
 
 #################################################################################################
 
@@ -444,6 +452,10 @@ class SegmentationDatasetHDF5(Segmentation3Dto2Dbase):
             return image, mask
         else:
             return image, mask, n_xyz
+        
+    def __del__(self):
+        self.dataset.close()    
+    
 
         
  #################################################################################################

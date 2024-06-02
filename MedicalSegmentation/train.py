@@ -40,7 +40,7 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
@@ -119,7 +119,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
@@ -155,6 +155,7 @@ else:
 if not cluster_paths:
     nb_epochs = 2
 
+nb_epochs = 2
 ####################################################################################################
 
 # Dataloader workers
@@ -291,7 +292,7 @@ else:
         data_root_pth = data_root_pth / 'hdf5'
         
 # Get datasets
-train_dataset, val_dataset, dataset_name_testing = get_datasets(data_root_pth=data_root_pth, 
+train_dataset, val_dataset, _ = get_datasets(data_root_pth=data_root_pth, 
                                                         data_attr=dataset_attrs, 
                                                         train_procs=augmentations+processings, 
                                                         val_test_procs=processings,
@@ -307,7 +308,7 @@ val_dataloader_cfg = dict(batch_size=batch_sz, pin_memory=pin_memory, num_worker
                           persistent_workers=persistent_workers, drop_last=drop_last, 
                           shuffle=False if gpus==1 else None)
 
-data_module = VolDataModule(train_dataset=train_dataset, val_dataset=val_dataset, test_dataset=dataset_name_testing, 
+data_module = VolDataModule(train_dataset=train_dataset, val_dataset=val_dataset, #test_dataset=None, 
                             train_dataloader_cfg=train_dataloader_cfg, val_dataloader_cfg=val_dataloader_cfg, 
                             vol_depth=None, num_gpus=gpus) 
 
@@ -435,13 +436,19 @@ summary(model)
 # Train the model
 # model is saved only on the main process when using distributed training
 trainer.fit(model=model, datamodule=data_module)#train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+trainer_rank = trainer.global_rank
+trainer = None
+data_module = None
+val_dataset = None
 
 # Test and Validate on all the indicated datasets on a single GPU
 if gpus>1:
     torch.distributed.destroy_process_group()
-if trainer.global_rank == 0:
+if trainer_rank == 0:
     # Log the relative frequencies
     log_class_rel_freqs(dataset=train_dataset, log_name_key=f'train_{dataset}')
+    train_dataset = None
+
     
     # Trainer cfg for testing
     trainer_cfg_test = dict(accelerator='gpu', devices=1, 
