@@ -151,7 +151,7 @@ def get_ckp_path(search_dir, dataset, model_type, bb_size=None, backbone=None, d
                 # Choose from a later epoch
                 epochs = []
                 for f in files_sel:
-                    epochs.append(int(f.split('=')[-1].split('-')[0]))
+                    epochs.append(int(f.split('=')[-2].split('-')[0]))
                 index, max_epoch = max(enumerate(epochs), key=itemgetter(1))    
                 
                 print(f'Taking the latest epoch={max_epoch}, {files_sel[index]}')
