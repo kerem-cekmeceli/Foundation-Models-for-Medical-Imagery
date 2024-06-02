@@ -85,8 +85,8 @@ nb_labeled_vol = 3 if self_training else None
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'hcp2'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'abide_stanford'#'prostate_nci'
+    sd_dataset = 'abide_caltech'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'hcp1'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
