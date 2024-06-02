@@ -40,7 +40,7 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
+model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
