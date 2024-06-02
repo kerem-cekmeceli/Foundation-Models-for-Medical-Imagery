@@ -8,6 +8,7 @@ from MedicalSegmentation.med_seg_foundation.models.EncDec.encoder.backbone_wrapp
     LadderBackbone, DinoReinBackbone, SamReinBackBone, MAEBackbone, MAEReinBackbone
 from typing import Union, Optional, Sequence, Callable, Any
 from models.benchmarks import implemented_models, UNet, SwinTransformerSys
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.AttnUNets.attn_unets import R2AttU_Net
 
 # from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 # from MedDino.med_dinov2.layers.segmentation import DecBase

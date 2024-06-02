@@ -40,13 +40,13 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
-    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
@@ -115,11 +115,11 @@ if ftta or self_training:
         test_checkpoint_key = 'val_dice_vol'
         
         # Nb epochs
-        nb_epochs = 40
+        nb_epochs = 20
  
 # Source domain training    
 else:
-    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
+    dataset = 'hcp1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
@@ -132,7 +132,7 @@ else:
     test_checkpoint_key = 'val_dice_vol'  # 'val_loss', 'val_dice_vol', 'val_mIoU_vol'
     
     # Nb epochs
-    nb_epochs=150
+    nb_epochs=120
     if model_type==ModelType.SEGMENTOR:
         if backbone in ["sam", "medsam"]:
             if dataset in ['hcp1', 'hcp2']:
@@ -149,7 +149,7 @@ else:
                 else:
                     nb_epochs=100
     if 'BraTS' in dataset:
-        nb_epochs=30
+        nb_epochs=80
 
 
 if not cluster_paths:
@@ -291,12 +291,11 @@ else:
         data_root_pth = data_root_pth / 'hdf5'
         
 # Get datasets
-train_dataset, val_dataset, tmp = get_datasets(data_root_pth=data_root_pth, 
+train_dataset, val_dataset, _ = get_datasets(data_root_pth=data_root_pth, 
                                                         data_attr=dataset_attrs, 
                                                         train_procs=augmentations+processings, 
                                                         val_test_procs=processings,
                                                         ftta=ftta, nb_labeled_vol=nb_labeled_vol)    
-del tmp
                              
 # Dataloader configs                                          
 persistent_workers=True
@@ -361,17 +360,20 @@ if model_type==ModelType.SEGMENTOR:
     tags.extend(backbone_name.split('_'))
     group_name = backbone_name
     
-    
-elif model_type==ModelType.UNET:
-    group_name = 'UNet' + 'Model'
+else:    
+    if model_type==ModelType.UNET:
+        group_name = 'UNetModel'
+        
+    elif model_type==ModelType.SWINUNET:
+        group_name = 'SwinUNetModel'
+        
+    elif model_type==ModelType.R2ATTNUNET:
+        group_name = 'AttnR2UNetModel'
+        
+    else:
+        ValueError(f'Model type: {model_type} is not found')
+        
     run_name = f'{wandb_run_dataset}_{group_name}_{loss_cfg_key}'
-    
-elif model_type==ModelType.SWINUNET:
-    group_name = 'SwinUNet' + 'Model'
-    run_name = f'{wandb_run_dataset}_{group_name}_{loss_cfg_key}'
-    
-else:
-    ValueError(f'Model type: {model_type} is not found')
 
 
 wnadb_config = dict(segmentor_cfg_lit=segmentor_cfg_lit,
@@ -479,11 +481,10 @@ if trainer_rank == 0:
                                 shuffle=False)  
         
         # Get datasets
-        td, val_dataset, test_dataset = get_datasets(data_root_pth=data_root_pth, 
+        _, val_dataset, test_dataset = get_datasets(data_root_pth=data_root_pth, 
                                                     data_attr=dataset_attrs, 
                                                     train_procs=augmentations+processings, 
                                                     val_test_procs=processings)
-        del td
         
         val_dataloader = DataLoader(dataset=val_dataset, **test_dataloader_cfg)
         test_dataloader = DataLoader(dataset=test_dataset, **test_dataloader_cfg)

@@ -10,6 +10,7 @@ from ModelSpecific.DinoMedical.prep_model import get_bb_name
 from MedicalSegmentation.med_seg_foundation.models.segmentor import SegmentorEncDec, SegmentorModel
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.UNet.unet import UNet
 from MedicalSegmentation.med_seg_foundation.models.benchmarks.SwinUnet.swin_transformer_unet_skip_expand_decoder_sys import SwinTransformerSys
+from MedicalSegmentation.med_seg_foundation.models.benchmarks.AttnUNets.attn_unets import R2AttU_Net
 from pathlib import Path
 from MedicalSegmentation.med_seg_foundation.utils.constants import*
 
@@ -913,7 +914,7 @@ def get_lr(model_type, **kwargs):
         # SAM and MedSAM
         else: 
             return 5e-5 
-    elif model_type in [ModelType.UNET, ModelType.SWINUNET]:
+    elif model_type in [ModelType.UNET, ModelType.SWINUNET, ModelType.R2ATTNUNET]:
         return 5e-5 
     else:
         raise ValueError(f'Unknown model type {model_type}')
@@ -960,6 +961,12 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                             params=dict(n_channels=3, 
                                         num_classes=dataset_attrs['num_classes'], 
                                         ))    
+            
+        elif model_type==ModelType.R2ATTNUNET:
+            model_cfg = dict(name=R2AttU_Net.__name__,
+                             params=dict(img_ch=3,
+                                         output_ch=3,
+                                         t=2))
             
         else:
             raise ValueError(f'Unknown model type {model_type}')
