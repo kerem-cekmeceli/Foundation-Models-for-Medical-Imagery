@@ -114,7 +114,15 @@ def get_ckp_path(search_dir, dataset, model_type, bb_size=None, backbone=None, d
         
         if model_type==ModelType.SEGMENTOR:
             # A single search directory is given
-            bb_dir = backbone + bb_size[0].upper()
+            if not '_' in backbone:
+                # A finetuning is used
+                bb_dir = backbone + bb_size[0].upper()
+            else:
+                # Freeze model
+                if backbone=='mae':
+                    bb_dir = f'{backbone}_{bb_size}'
+                else:
+                    raise ValueError('Names of the directories are not added yet !')
             
             if dec_name=='hq_hsam_mask_dec':
                 dec_dir = 'HQHSAMdecHead'
