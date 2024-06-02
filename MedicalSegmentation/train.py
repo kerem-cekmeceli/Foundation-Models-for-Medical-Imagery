@@ -292,11 +292,13 @@ else:
         data_root_pth = data_root_pth / 'hdf5'
         
 # Get datasets
-train_dataset, val_dataset, _ = get_datasets(data_root_pth=data_root_pth, 
+train_dataset, val_dataset, tmp = get_datasets(data_root_pth=data_root_pth, 
                                                         data_attr=dataset_attrs, 
                                                         train_procs=augmentations+processings, 
                                                         val_test_procs=processings,
-                                                        ftta=ftta, nb_labeled_vol=nb_labeled_vol)                                 
+                                                        ftta=ftta, nb_labeled_vol=nb_labeled_vol)    
+del tmp
+                             
 # Dataloader configs                                          
 persistent_workers=True
 pin_memory=True
@@ -478,10 +480,11 @@ if trainer_rank == 0:
                                 shuffle=False)  
         
         # Get datasets
-        _, val_dataset, test_dataset = get_datasets(data_root_pth=data_root_pth, 
-                                                                data_attr=dataset_attrs, 
-                                                                train_procs=augmentations+processings, 
-                                                                val_test_procs=processings)
+        td, val_dataset, test_dataset = get_datasets(data_root_pth=data_root_pth, 
+                                                    data_attr=dataset_attrs, 
+                                                    train_procs=augmentations+processings, 
+                                                    val_test_procs=processings)
+        del td
         
         val_dataloader = DataLoader(dataset=val_dataset, **test_dataloader_cfg)
         test_dataloader = DataLoader(dataset=test_dataset, **test_dataloader_cfg)
