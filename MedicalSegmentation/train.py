@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = True and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -419,7 +419,12 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 # logger.watch(model, log="all")
 
 n_best = 1 if save_checkpoints else 0
-ckp_pth = main_pth #if not cluster_paths else '/scratch-second'
+
+if cluster_paths:
+    ckp_pth = '/usr/bmicnas02/data-biwi-01/foundation_models/AllCheckpoints'
+else:
+    ckp_pth = main_pth
+    
 if not ftta and not self_training:
     models_pth = ckp_pth / f'Checkpoints/{dataset}/{group_name}'
 else:
