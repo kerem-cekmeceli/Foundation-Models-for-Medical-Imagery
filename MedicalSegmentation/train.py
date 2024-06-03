@@ -39,20 +39,20 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
+model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 # Fully Test Time Adaptations (Entropy Minimization)
 ftta = False
 
 # Self training (Vanilla)
-self_training = True
+self_training = False
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
 nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -66,7 +66,8 @@ if model_type == ModelType.SEGMENTOR:
     elif backbone=='mae':
         fine_tune = ''
     else:
-        raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
+        fine_tune = ''
+        # raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
     
     bb_w_ft = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
@@ -79,7 +80,7 @@ if model_type == ModelType.SEGMENTOR:
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'hq_hsam_mask_dec'  
+    dec_head_key = 'unetS'#'hq_hsam_mask_dec'  
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
@@ -125,7 +126,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+    dataset = 'hcp1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
