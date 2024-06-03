@@ -127,7 +127,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
+    dataset = 'prostate_nci'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
