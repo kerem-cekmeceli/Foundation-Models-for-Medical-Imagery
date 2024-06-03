@@ -57,19 +57,24 @@ if model_type == ModelType.SEGMENTOR:
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
-    if not self_training:
-        if backbone in ['dino', 'dinoReg']:
-            fine_tune = 'reinL' 
-        elif backbone=='sam':
-            fine_tune = 'rein' 
-        elif backbone=='medsam':
-            fine_tune = 'ladderD' 
-        elif backbone=='mae':
-            fine_tune = ''
-        else:
-            raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
-        
-        backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
+    if backbone in ['dino', 'dinoReg']:
+        fine_tune = 'reinL' 
+    elif backbone=='sam':
+        fine_tune = 'rein' 
+    elif backbone=='medsam':
+        fine_tune = 'ladderD' 
+    elif backbone=='mae':
+        fine_tune = ''
+    else:
+        raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
+    
+    bb_w_ft = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
+    
+    if not self_training:    
+        backbone = bb_w_ft
+    else:
+        backbone = backbone
+        backbone_to_load = bb_w_ft
     
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
@@ -265,7 +270,7 @@ else:
     
     if model_type==ModelType.SEGMENTOR:
         sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, model_type=model_type,
-                                        bb_size=backbone_sz, backbone=backbone, dec_name=dec_head_key)
+                                        bb_size=backbone_sz, backbone=backbone_to_load, dec_name=dec_head_key)
     else:
         sd_model_ckp_pth = get_ckp_path(search_dir=search_dir, dataset=sd_dataset, model_type=model_type)
     
