@@ -46,6 +46,7 @@ ftta = False
 
 # Self training (Vanilla)
 self_training = False
+
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
 nb_labeled_vol = 3 if self_training else None ## 3
@@ -126,7 +127,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'abide_stanford'  #if cluster_paths else 'prostate_usz'
+    dataset = 'abide_caltech'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
