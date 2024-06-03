@@ -41,26 +41,35 @@ log_the_run = cluster_mode
 # Select model type
 model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
+# Fully Test Time Adaptations (Entropy Minimization)
+ftta = False
+
+# Self training (Vanilla)
+self_training = True
+pseudo_label_update_intv=1
+pseudo_lab_confidence_thres=0.9
+nb_labeled_vol = 3 if self_training else None
+
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
-    backbone_sz = "large" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
-    if backbone in ['dino', 'dinoReg']:
-        fine_tune = 'reinL' 
-    elif backbone=='sam':
-        fine_tune = 'rein' 
-    elif backbone=='medsam':
-        fine_tune = 'ladderD' 
-    elif backbone=='mae':
-        fine_tune = ''
-    else:
-        raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
-    
-    
-    backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
+    if not self_training:
+        if backbone in ['dino', 'dinoReg']:
+            fine_tune = 'reinL' 
+        elif backbone=='sam':
+            fine_tune = 'rein' 
+        elif backbone=='medsam':
+            fine_tune = 'ladderD' 
+        elif backbone=='mae':
+            fine_tune = ''
+        else:
+            raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
+        
+        backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
@@ -74,19 +83,10 @@ if model_type == ModelType.SEGMENTOR:
 # spine_mrspinesegv, spine_verse
 # BraTS_T1, BraTS_FLAIR
 
-# Fully Test Time Adaptations (Entropy Minimization)
-ftta = False
-
-# Self training (Vanilla)
-self_training = True
-pseudo_label_update_intv=1
-pseudo_lab_confidence_thres=0.9
-nb_labeled_vol = 3 if self_training else None
-
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'BraTS_T1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'BraTS_FLAIR'#'prostate_nci'
+    sd_dataset = 'hcp1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'hcp2'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
