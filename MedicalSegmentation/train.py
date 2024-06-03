@@ -39,7 +39,7 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 # Fully Test Time Adaptations (Entropy Minimization)
 ftta = False
@@ -50,7 +50,7 @@ pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
 nb_labeled_vol = 3 if self_training else None ## 3
 
-if model_type == ModelType.UNET:
+if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
