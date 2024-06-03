@@ -93,7 +93,7 @@ if model_type == ModelType.SEGMENTOR:
 # Domain adaptation
 if ftta or self_training:
     sd_dataset = 'abide_stanford'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'hcp2'#'prostate_nci'
+    da_dataset = 'abide_caltech'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
