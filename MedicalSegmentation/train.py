@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
     backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
-    train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
+    train_backbone = True and not ('ladder' in backbone or 'rein' in backbone) and not ftta
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
