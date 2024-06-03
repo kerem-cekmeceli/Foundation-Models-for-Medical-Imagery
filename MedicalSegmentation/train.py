@@ -126,7 +126,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'hcp2'  #if cluster_paths else 'prostate_usz'
+    dataset = 'abide_caltech'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
