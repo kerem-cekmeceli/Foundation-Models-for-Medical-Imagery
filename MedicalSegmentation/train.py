@@ -421,7 +421,7 @@ logger = WandbLogger(project='FoundationModels_MedDino',
 n_best = 1 if save_checkpoints else 0
 
 if cluster_paths:
-    ckp_pth = '/usr/bmicnas02/data-biwi-01/foundation_models/AllCheckpoints'
+    ckp_pth = Path('/usr/bmicnas02/data-biwi-01/foundation_models/AllCheckpoints')
 else:
     ckp_pth = main_pth
     
