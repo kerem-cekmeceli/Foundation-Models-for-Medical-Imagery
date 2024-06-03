@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta and not self_training
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -93,7 +93,7 @@ if model_type == ModelType.SEGMENTOR:
 # Domain adaptation
 if ftta or self_training:
     sd_dataset = 'hcp1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'abide_stanford'#'prostate_nci'
+    da_dataset = 'hcp2'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
@@ -264,7 +264,7 @@ if not ftta and not self_training:
 else:
     if cluster_paths:
         # search_dir_ = '/scratch_net/biwidl210_second/kcekmeceli/Checkpoints'
-        search_dir_ = '/usr/bmicnas02/data-biwi-01/foundation_models/Checkpoints'
+        search_dir_ = '/usr/bmicnas02/data-biwi-01/foundation_models/AllCheckpoints'
         dirs = os.listdir(search_dir_)
         search_dir = [os.path.join(search_dir_, dir) for dir in dirs if os.path.isdir(os.path.join(search_dir_, dir))]
     else:
