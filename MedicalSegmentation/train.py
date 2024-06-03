@@ -47,10 +47,10 @@ ftta = False
 # Self training (Vanilla)
 self_training = True
 pseudo_label_update_intv=1
-pseudo_lab_confidence_thres=0.98  # 0.9
-nb_labeled_vol = 0 if self_training else None ## 3
+pseudo_lab_confidence_thres=0.9  # 0.9
+nb_labeled_vol = 3 if self_training else None ## 3
 
-if model_type == ModelType.SEGMENTOR:
+if model_type == ModelType.SWINUNET:
     # Set the BB
     backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta
@@ -90,8 +90,8 @@ if model_type == ModelType.SEGMENTOR:
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'hcp1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'hcp2'#'prostate_nci'
+    sd_dataset = 'BraTS_T1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'BraTS_FLAIR'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
