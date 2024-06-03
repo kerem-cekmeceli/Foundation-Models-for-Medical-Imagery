@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ('ladder' in backbone or 'rein' in backbone) and not ftta and not self_training
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
@@ -93,7 +93,7 @@ if model_type == ModelType.SEGMENTOR:
 # Domain adaptation
 if ftta or self_training:
     sd_dataset = 'hcp1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'hcp2'#'prostate_nci'
+    da_dataset = 'abide_caltech'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
