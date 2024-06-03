@@ -47,7 +47,7 @@ ftta = False
 # Self training (Vanilla)
 self_training = True
 pseudo_label_update_intv=1
-pseudo_lab_confidence_thres=0.9
+pseudo_lab_confidence_thres=0.98
 nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
@@ -333,8 +333,8 @@ loss_name = segmentor_cfg_lit['loss_config']['name'] if not segmentor_cfg_lit['l
 tags = [dataset, loss_name, dataset_attrs['format']]
 if ftta or self_training:
     DA_info = dict(sd_dataset=sd_dataset,
-                     da_dataset=da_dataset,
-                     sd_model_ckp_pth=sd_model_ckp_pth,)
+                   da_dataset=da_dataset,
+                   sd_model_ckp_pth=sd_model_ckp_pth)
     if ftta:
         name_prefix = 'FTTA'
         tags.append('FTTA')
