@@ -45,15 +45,15 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 ftta = False
 
 # Self training (Vanilla)
-self_training = True
+self_training = False
 
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
 nb_labeled_vol = 3 if self_training else None ## 3
 
-if model_type == ModelType.UNET:
+if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
@@ -83,7 +83,7 @@ if model_type == ModelType.UNET:
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'hq_hsam_mask_dec' # 'unetS'#'hq_hsam_mask_dec'  
+    dec_head_key = 'unetS' # 'unetS'#'hq_hsam_mask_dec'  
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
@@ -129,7 +129,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
+    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
