@@ -53,8 +53,10 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
-    train_backbone = True and not ('ladder' in backbone or 'rein' in backbone) and not ftta and not self_training
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    train_backbone = False and not ftta and not self_training
+    train_finetune = True and not ftta and not self_training # For reins and reins Lora
+    
     backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
@@ -70,18 +72,18 @@ if model_type == ModelType.SEGMENTOR:
         fine_tune = ''
         # raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
     
-    bb_w_ft = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
+    backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
-    if not self_training:    
-        backbone = bb_w_ft
-    else:
-        backbone = backbone
-        backbone_to_load = bb_w_ft
+    if 'rein' in fine_tune or 'ladder' in fine_tune:
+        train_backbone = False
+    
+    if self_training:    
+        backbone_to_load = backbone
     
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'unetS' # 'unetS'#'hq_hsam_mask_dec'  
+    dec_head_key = 'hq_hsam_mask_dec' # 'unetS'#'hq_hsam_mask_dec'  
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
@@ -92,8 +94,8 @@ if model_type == ModelType.SEGMENTOR:
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'BraTS_FLAIR'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'BraTS_T1'#'prostate_nci'
+    sd_dataset = 'prostate_usz'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'prostate_nci'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
@@ -127,7 +129,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'BraTS_FLAIR'  #if cluster_paths else 'prostate_usz'
+    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
@@ -250,10 +252,12 @@ if model_type == ModelType.SEGMENTOR:
                   train_backbone=train_backbone,
                   dec_head_key=dec_head_key,
                   main_pth=main_pth)
+    if 'rein' in backbone:
+        kwargs['train_finetune'] = train_finetune
 else:
     kwargs=dict()
     
-segmentor_cfg_lit = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
+segmentor_cfg_lit = get_lit_trainer_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
                                           dataset_attrs=dataset_attrs, gpus=gpus, model_type=model_type, 
                                           ftta=ftta, self_training=self_training, 
                                           pseudo_label_update_intv=pseudo_label_update_intv,
@@ -358,11 +362,16 @@ if model_type==ModelType.SEGMENTOR:
     dec_head_name = model.segmentor.decode_head.__class__.__name__
     backbone_name = model.segmentor.backbone.name
     bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
+    if 'rein' in fine_tune:
+        ft_train_str_short = 'ftT' if train_finetune else 'NftT'
     wnadb_config_add = dict(dec_head_name = dec_head_name,
                             backbone_name = backbone_name,
                             )
-    run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
+    run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{ft_train_str_short}_{dec_head_key}_{loss_cfg_key}'
     bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
+    if 'rein' in fine_tune:
+        ft_train_str = 'train_ft_YES' if train_finetune else 'train_ft_NO'
+        tags.append(ft_train_str)
     tags.append(bb_train_str)
     tags.append(dec_head_name)
     tags.extend(backbone_name.split('_'))
@@ -472,7 +481,7 @@ if trainer_rank == 0:
     trainer_testing = L.Trainer(logger=logger, **trainer_cfg_test)
     
     batch_sz = batch_sz * gpus  if strategy == 'ddp' else batch_sz
-    test_model_cfg = get_lit_segmentor_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
+    test_model_cfg = get_lit_trainer_cfg(batch_sz=batch_sz, nb_epochs=nb_epochs, loss_cfg_key=loss_cfg_key, 
                                           dataset_attrs=dataset_attrs, gpus=1, model_type=model_type, 
                                           ftta=ftta, **kwargs)
     

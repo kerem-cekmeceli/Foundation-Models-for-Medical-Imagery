@@ -20,8 +20,8 @@ class BackBoneBase(nn.Module):
     def __init__(self, 
                  name:str,
                  last_out_first:bool=True,
-                 *args: torch.Any, **kwargs: torch.Any) -> None:
-        super().__init__(*args, **kwargs)
+                 ) -> None:
+        super().__init__()
         
         self.name = name
         self._input_sz_multiple = 1
@@ -87,8 +87,8 @@ class BackBoneBase1(BackBoneBase):
                  to_bgr:bool=False,
                  to_0_1:bool=False,
                  out_idx:Optional[List[int]]=None,
-                 *args: torch.Any, **kwargs: torch.Any) -> None:
-        super().__init__(name=name, last_out_first=last_out_first, *args, **kwargs)
+                 ) -> None:
+        super().__init__(name=name, last_out_first=last_out_first)
         assert isinstance(nb_outs, int) and nb_outs>0
         self._nb_outs = nb_outs
         
@@ -330,12 +330,12 @@ class BlockBackboneBase(BackBoneBase1):
                  to_bgr: bool = False, 
                  to_0_1: bool = False, 
                  out_idx:Optional[List[int]]=None,
-                 *args: Any, **kwargs: Any) -> None:
+                 ) -> None:
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize, 
                          pix_mean=pix_mean, pix_std=pix_std, target_size=target_size, 
                          interp_feats_to_orig_inp_size=interp_feats_to_orig_inp_size, 
                          last_out_first=last_out_first, to_bgr=to_bgr, to_0_1=to_0_1, 
-                         out_idx=out_idx, *args, **kwargs)
+                         out_idx=out_idx,)
         
     
     @property
@@ -403,11 +403,12 @@ class DinoBackBone(BlockBackboneBase):
                  disable_mask_tokens=True,
                  pre_normalize:bool=False,
                  out_idx:Optional[List[int]]=None,
-                 *args: torch.Any, **kwargs: torch.Any) -> None:
+                 ) -> None:
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], target_size=224,#None,
                          interp_feats_to_orig_inp_size=False, 
-                         last_out_first=last_out_first, to_bgr=True, to_0_1=False, out_idx=out_idx, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=True, to_0_1=False, out_idx=out_idx,
+                         )
         # DINO NEEDS BGR ORDER !
         
         assert nb_outs >= 1, f'n_out should be at least 1, but got: {nb_outs}'
@@ -470,6 +471,7 @@ class DinoReinBackbone(DinoBackBone):
     def __init__(self, 
                  nb_outs: int, 
                  name: str, 
+                 train_ft:bool=True,
                  last_out_first: bool = True, 
                  bb_model: Optional[nn.Module] = None, 
                  cfg: Optional[dict] = None, 
@@ -478,12 +480,13 @@ class DinoReinBackbone(DinoBackBone):
                  lora_reins:bool=False,
                  link_token_to_query:bool=False,
                  out_idx:Optional[List[int]]=None,
-                 *args: Any, **kwargs: Any) -> None:
+                 ) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
                          cfg=cfg, train=False, disable_mask_tokens=disable_mask_tokens, pre_normalize=pre_normalize, 
-                         out_idx=out_idx, *args, **kwargs)
+                         out_idx=out_idx, )
         
+        self.train_ft = train_ft
         self.lora_reins = lora_reins
         
         lora_params = dict(num_layers=len(self.backbone.blocks),
@@ -494,6 +497,11 @@ class DinoReinBackbone(DinoBackBone):
             self.reins: Reins = Reins(**lora_params)
         else:
             self.reins: LoRAReins = LoRAReins(**lora_params)
+            
+        # Turn fine tuning training off if necessary
+        if not self.train_ft:
+            for param in self.reins.parameters():
+                param.requires_grad=False
         
         # If to apply layer norm before append
         self.do_norm = False
@@ -530,12 +538,12 @@ class SamBackBone(BlockBackboneBase):
                  interp_to_inp_shape:bool=True,
                  pre_normalize:bool=False,
                  out_idx:Optional[List[int]]=None,
-                 *args: torch.Any, **kwargs: torch.Any) -> None:
+                 ) -> None:
         
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[123.675, 116.28, 103.53], pix_std=[58.395, 57.12, 57.375], target_size=224,#1024, 
                          interp_feats_to_orig_inp_size=interp_to_inp_shape, 
-                         last_out_first=last_out_first, to_bgr=False, to_0_1=False, out_idx=out_idx, *args, **kwargs)
+                         last_out_first=last_out_first, to_bgr=False, to_0_1=False, out_idx=out_idx, )
         
         assert self.nb_outs >= 1, f'n_out should be at least 1, but got: {self.nb_outs}'
         assert self.nb_outs <= self.backbone.n_blocks, f'Requested n_out={self.nb_outs}, but only available {self.backbone.n_blocks}'     
@@ -594,21 +602,22 @@ class SamReinBackBone(SamBackBone):
     def __init__(self, 
                  nb_outs: int, 
                  name, 
+                 train_ft:bool=True,
                  last_out_first: bool = True, 
                  bb_model: Optional[nn.Module]= None, 
                  cfg: Optional[dict] = None, 
-                 train: bool = False, 
                  interp_to_inp_shape: bool = True, 
                  pre_normalize: bool = False, 
                  lora_reins:bool=False,
                  link_token_to_query:bool=False,
                  out_idx:Optional[List[int]]=None,
-                 *args: Any, **kwargs: Any) -> None:
+                 ) -> None:
         
         super().__init__(nb_outs=nb_outs, name=name, last_out_first=last_out_first, bb_model=bb_model, 
-                         cfg=cfg, train=train, interp_to_inp_shape=interp_to_inp_shape, 
-                         pre_normalize=pre_normalize, out_idx=out_idx, *args, **kwargs)
+                         cfg=cfg, train=False, interp_to_inp_shape=interp_to_inp_shape, 
+                         pre_normalize=pre_normalize, out_idx=out_idx, )
         
+        self.train_ft = train_ft
         self.lora_reins = lora_reins
         lora_params = dict(num_layers=len(self.backbone.blocks),
                            embed_dims=self.backbone.patch_embed.proj.out_channels,
@@ -619,6 +628,11 @@ class SamReinBackBone(SamBackBone):
             self.reins: Reins = Reins(**lora_params)
         else:
             self.reins: LoRAReins = LoRAReins(**lora_params)   
+            
+        # Turn fine tuning training off if necessary
+        if not self.train_ft:
+            for param in self.reins.parameters():
+                param.requires_grad=False
         
         
     def blk_post_hook(self, x, i):
@@ -639,12 +653,12 @@ class MAEBackbone(BlockBackboneBase):
                  pre_normalize: bool = False, 
                  last_out_first: bool = True, 
                  out_idx:Optional[List[int]]=None,
-                 *args: Any, **kwargs: Any) -> None:
+                 ) -> None:
          super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, 
                           pre_normalize=pre_normalize,  pix_mean=[0.485, 0.456, 0.406], pix_std=[0.229, 0.224, 0.225],
                           target_size=224, interp_feats_to_orig_inp_size=False, 
                           last_out_first=last_out_first, to_bgr=False, to_0_1=True, out_idx=out_idx,
-                          *args, **kwargs)
+                          )
          
     @property
     def blocks(self):
@@ -694,6 +708,7 @@ class MAEBackbone(BlockBackboneBase):
     def oups_end_hook(self, outputs):
         return tuple(outputs)
     
+      
     
 class MAEReinBackbone(MAEBackbone):
     def __init__(self, 
@@ -701,26 +716,31 @@ class MAEReinBackbone(MAEBackbone):
                  nb_outs: int, 
                  bb_model: Optional[nn.Module] = None, 
                  cfg: Optional[dict] = None, 
-                 train: bool = False, 
+                 train_ft: bool = True, 
                  pre_normalize: bool = False, 
                  last_out_first: bool = True, 
                  out_idx:Optional[List[int]]=None,
                  lora_reins:bool=False,
                  link_token_to_query:bool=False,
                  ):
-        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, 
+        super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=False,
                          pre_normalize=pre_normalize, last_out_first=last_out_first, out_idx=out_idx) 
         
+        self.train_ft=train_ft
         self.lora_reins = lora_reins
         lora_params = dict(num_layers=len(self.backbone.blocks),
                            embed_dims=self.backbone.patch_embed.proj.out_channels,
                            patch_size=self.hw_shrink_fac,
                            link_token_to_query=link_token_to_query)
-        
         if not self.lora_reins:
             self.reins: Reins = Reins(**lora_params)
         else:
-            self.reins: LoRAReins = LoRAReins(**lora_params)   
+            self.reins: LoRAReins = LoRAReins(**lora_params) 
+            
+        # Turn fine tuning training off if necessary
+        if not self.train_ft:
+            for param in self.reins.parameters():
+                param.requires_grad=False
             
         # If to do Layernorm before reins (for last block only)
         self.do_norm=False
@@ -761,12 +781,12 @@ class ResNetBackBone(BackBoneBase1):
                  uniform_oup_size:bool=True,
                  out_idx:Optional[List[int]]=None,
                  outs_from_diff_conv_layers:bool=False,
-                 *args: torch.Any, **kwargs: torch.Any) -> None:
+                ) -> None:
         
         super().__init__(name=name, nb_outs=nb_outs, bb_model=bb_model, cfg=cfg, train=train, pre_normalize=pre_normalize,
                          pix_mean=[0.485, 0.456, 0.406], pix_std=[0.229, 0.224, 0.225], 
                          target_size=224, interp_feats_to_orig_inp_size=False, 
-                         last_out_first=last_out_first,  to_bgr=False, to_0_1=True, *args, **kwargs)
+                         last_out_first=last_out_first,  to_bgr=False, to_0_1=True)
         
         assert nb_layers in [18, 34, 50, 101, 152], f'Nb of layers {nb_layers} is not a valid resnet number'
         self._nb_layers = nb_layers
@@ -987,8 +1007,8 @@ class LadderBackbone(BackBoneBase):
                  name: str,
                  bb1_name_params:dict, 
                  bb2_name_params:dict, 
-                 *args: Any, **kwargs: Any) -> None:
-        super().__init__(name, *args, **kwargs)
+                ) -> None:
+        super().__init__(name,)
                 
         bb1_name = bb1_name_params['name']
         bb1_params = bb1_name_params['params']
@@ -999,7 +1019,10 @@ class LadderBackbone(BackBoneBase):
         bb2_params = bb2_name_params['params']
         self.bb2 = globals()[bb2_name](**bb2_params)
         assert isinstance(self.bb2, BackBoneBase1)
-        assert self.bb2.train_backbone
+        if not hasattr(self.bb2, 'train_ft'):
+            assert self.bb2.train_backbone
+        else:
+            assert self.bb2.train_backbone or self.bb2.train_ft
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
         

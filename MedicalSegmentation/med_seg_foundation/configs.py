@@ -361,7 +361,7 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
 #     return batch_sz
 
 
-def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
+def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, train_finetune, pretrained=True,):
     # Set general fields
     bb_cps_pth = 'Checkpoints/Orig/backbone'
     out_idx = None
@@ -419,32 +419,38 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
     elif bb_name in ['rein_dino', 'reinL_dino', 'rein_dinoReg', 'reinL_dinoReg'] :
         assert pretrained
         assert not train_bb
-        dino_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, pretrained)
+        assert train_finetune is not None
+        dino_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, train_finetune, pretrained)
         name = DinoReinBackbone.__name__
         params = dino_name_params['params']
         del params['train']
         params['name'] = bb_name+bb_size[0].upper()
         params['lora_reins'] = 'reinL' in bb_name
+        params['train_ft'] = train_finetune
         
     elif bb_name in ['rein_sam', 'reinL_sam', 'rein_medsam', 'reinL_medsam'] :
         assert pretrained
         assert not train_bb
-        sam_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, pretrained)
+        assert train_finetune is not None
+        sam_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, train_finetune, pretrained)
         name = SamReinBackBone.__name__
         params = sam_name_params['params']
         del params['train']
         params['name'] = bb_name+bb_size[0].upper()
         params['lora_reins'] = 'reinL' in bb_name
+        params['train_ft'] = train_finetune
         
     elif bb_name in ['rein_mae', 'reinL_mae']:  
         assert pretrained
         assert not train_bb
-        mae_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, pretrained)
+        assert train_finetune is not None
+        mae_name_params = get_bb_cfg(bb_name.split('_')[-1], bb_size, train_bb, dec_name, main_pth, train_finetune, pretrained)
         name = MAEReinBackbone.__name__
         params = mae_name_params['params']
         del params['train']
         params['name'] = bb_name+bb_size[0].upper()
         params['lora_reins'] = 'reinL' in bb_name
+        params['train_ft'] = train_finetune
         
     elif bb_name == 'sam' or bb_name == 'medsam':
         apply_neck = (dec_name=='sam_mask_dec')
@@ -538,6 +544,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                                      train_bb=train_bb, 
                                      dec_name=dec_name, 
                                      main_pth=main_pth, 
+                                     train_finetune=train_finetune,
                                      pretrained=True)
         if 'sam' in bb_name.split('_')[-1]:
             bb1_name_params['params']['cfg']['apply_neck']=True
@@ -550,6 +557,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                                          train_bb=True, 
                                          dec_name=dec_name, 
                                          main_pth=main_pth, 
+                                         train_finetune=train_finetune,
                                          pretrained=True,)
             bb2_name_params['params']['skip_last_layer']=True
         
@@ -560,6 +568,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, pretrained=True):
                                          train_bb=True, 
                                          dec_name=dec_name, 
                                          main_pth=main_pth, 
+                                         train_finetune=train_finetune,
                                          pretrained=True)
             bb2_name_params['params']['nb_outs']=bb1_name_params['params'].get('nb_outs', 1)
             
@@ -920,7 +929,7 @@ def get_lr(model_type, **kwargs):
         raise ValueError(f'Unknown model type {model_type}')
 
 
-def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
+def get_lit_trainer_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus, model_type, 
                           dom_gen_tst=False, ftta=False, self_training=False,
                           pseudo_label_update_intv=10, pseudo_lab_confidence_thres=0.5, **kwargs):
     
@@ -929,6 +938,7 @@ def get_lit_segmentor_cfg(batch_sz, nb_epochs, loss_cfg_key, dataset_attrs, gpus
                 
         # Backbone config
         bb_cfg = get_bb_cfg(bb_name=kwargs['backbone'], bb_size=kwargs['backbone_sz'], train_bb=kwargs['train_backbone'], 
+                            train_finetune=kwargs.get('train_finetune', None), 
                             dec_name=kwargs['dec_head_key'], main_pth=kwargs['main_pth'], pretrained=True)
         
         if bb_cfg['name'] != LadderBackbone.__name__:
