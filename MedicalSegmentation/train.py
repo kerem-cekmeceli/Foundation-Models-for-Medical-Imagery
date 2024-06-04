@@ -51,7 +51,7 @@ pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
 nb_labeled_vol = 3 if self_training else None ## 3
 
-if model_type == ModelType.SWINUNET:
+if model_type == ModelType.UNET:
     # Set the BB
     backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
