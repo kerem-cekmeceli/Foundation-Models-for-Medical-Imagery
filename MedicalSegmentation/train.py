@@ -39,7 +39,7 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
+model_type = ModelType.UNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 # Fully Test Time Adaptations (Entropy Minimization)
 ftta = False
@@ -94,8 +94,8 @@ if model_type == ModelType.SEGMENTOR:
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'spine_mrspinesegv'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'spine_verse'#'prostate_nci'
+    sd_dataset = 'BraTS_T1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'BraTS_FLAIR'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
