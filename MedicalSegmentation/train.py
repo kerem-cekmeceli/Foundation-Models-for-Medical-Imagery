@@ -364,10 +364,13 @@ if model_type==ModelType.SEGMENTOR:
     bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
     if 'rein' in fine_tune:
         ft_train_str_short = 'ftT' if train_finetune else 'NftT'
+        run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{ft_train_str_short}_{dec_head_key}_{loss_cfg_key}'
+    else:
+        run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{dec_head_key}_{loss_cfg_key}'
     wnadb_config_add = dict(dec_head_name = dec_head_name,
                             backbone_name = backbone_name,
                             )
-    run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{ft_train_str_short}_{dec_head_key}_{loss_cfg_key}'
+    
     bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
     if 'rein' in fine_tune:
         ft_train_str = 'train_ft_YES' if train_finetune else 'train_ft_NO'
