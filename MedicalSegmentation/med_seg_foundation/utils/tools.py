@@ -121,11 +121,19 @@ def get_ckp_path(search_dir, dataset, model_type, bb_size=None, backbone=None, d
                 # Freeze model
                 if backbone=='mae':
                     bb_dir = f'{backbone}_{bb_size}'
+                elif backbone=='resnet':
+                    bb_dir = 'resnet'
+                    if bb_size=='base':
+                        bb_dir+='101'
+                    else:
+                        raise ValueError('add size ')
                 else:
                     raise ValueError('Names of the directories are not added yet !')
             
             if dec_name=='hq_hsam_mask_dec':
                 dec_dir = 'HQHSAMdecHead'
+            elif 'unet' in dec_name:
+                dec_dir = 'UNetHead'
             else:
                 raise ValueError('Not defined, add here !')
             dir_model_type = os.path.join(bb_dir, dec_dir)

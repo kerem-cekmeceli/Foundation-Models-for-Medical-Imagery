@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
@@ -83,7 +83,7 @@ if model_type == ModelType.SEGMENTOR:
     # Select the dec head
         # 'lin', 'fcn', 'psp', 'da', 'segformer', 'resnet', 'unet', 'unetS', 
         #'sam_mask_dec', 'hsam_mask_dec', 'hq_sam_mask_dec', 'hq_hsam_mask_dec'
-    dec_head_key = 'hq_hsam_mask_dec' # 'unetS'#'hq_hsam_mask_dec'  
+    dec_head_key = 'unetS' # 'unetS'#'hq_hsam_mask_dec'  
 
 # Select dataset
 # 'hcp1', 'hcp2', abide_caltech, abide_stanford, 
@@ -94,8 +94,8 @@ if model_type == ModelType.SEGMENTOR:
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'spine_mrspinesegv'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'spine_verse'#'prostate_nci'
+    sd_dataset = 'prostate_usz'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'prostate_nci'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
