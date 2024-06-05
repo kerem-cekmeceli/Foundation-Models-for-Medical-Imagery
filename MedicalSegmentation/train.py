@@ -94,8 +94,8 @@ if model_type == ModelType.SEGMENTOR:
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'BraTS_T1'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'BraTS_FLAIR'#'prostate_nci'
+    sd_dataset = 'BraTS_FLAIR'#'prostate_usz'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'BraTS_T1'#'prostate_nci'
     dataset = da_dataset
     rcs_enabled = False
     
