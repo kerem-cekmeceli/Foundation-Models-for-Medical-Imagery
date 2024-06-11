@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'sam'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
