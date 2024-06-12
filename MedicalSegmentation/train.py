@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
@@ -95,7 +95,7 @@ if model_type == ModelType.SEGMENTOR:
 # Domain adaptation
 if ftta or self_training:
     sd_dataset = 'abide_stanford'#'BraTS_FLAIR'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'hcp2'#'BraTS_T1'
+    da_dataset = 'abide_caltech'#'BraTS_T1'
     dataset = da_dataset
     rcs_enabled = False
     
