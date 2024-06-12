@@ -53,7 +53,7 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR:
     # Set the BB
-    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
@@ -72,7 +72,7 @@ if model_type == ModelType.SEGMENTOR:
         fine_tune = ''
         # raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
         
-    fine_tune = 'rein'
+    fine_tune = 'ladderD'
     
     backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
