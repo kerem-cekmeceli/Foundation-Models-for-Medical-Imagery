@@ -45,7 +45,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 ftta = False
 
 # Self training (Vanilla)
-self_training = False
+self_training = True
 
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
@@ -53,11 +53,11 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
     # Set the BB
-    backbone = 'dino'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
-    backbone_sz = "giant" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
@@ -94,8 +94,8 @@ if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'prostate_nci'#'BraTS_FLAIR'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'prostate_usz'#'BraTS_T1'
+    sd_dataset = 'prostate_usz'#'BraTS_FLAIR'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'prostate_nci'#'BraTS_T1'
     dataset = da_dataset
     rcs_enabled = False
     
