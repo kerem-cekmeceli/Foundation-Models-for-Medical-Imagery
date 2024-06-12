@@ -39,13 +39,13 @@ save_checkpoints = cluster_mode
 log_the_run = cluster_mode
 
 # Select model type
-model_type = ModelType.SWINUNET  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
+model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 
 # Fully Test Time Adaptations (Entropy Minimization)
 ftta = False
 
 # Self training (Vanilla)
-self_training = True
+self_training = False
 
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
@@ -57,7 +57,7 @@ if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
-    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "giant" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
