@@ -140,9 +140,9 @@ def get_data_attrs(name:str, use_hdf5=None, rcs_enabled=False):
         if use_hdf5:
             attrs['format'] = 'hdf5'
             attrs['data_path_suffix'] = 'nci'
-            attrs['hdf5_train_name'] = 'nci_test.hdf5' # TODO MISTAKE !
-            attrs['hdf5_val_name'] = 'nci_val.hdf5'
-            attrs['hdf5_test_name'] = 'nci_train.hdf5' # TODO MISTAKE !
+            attrs['hdf5_train_name'] = 'test.hdf5' # TODO MISTAKE !
+            attrs['hdf5_val_name'] = 'val.hdf5'
+            attrs['hdf5_test_name'] = 'train.hdf5' # TODO MISTAKE !
         else:
             attrs['format'] = 'png'
             
