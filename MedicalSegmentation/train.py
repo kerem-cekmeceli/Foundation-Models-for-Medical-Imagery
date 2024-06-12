@@ -53,11 +53,11 @@ nb_labeled_vol = 3 if self_training else None ## 3
 
 if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
     # Set the BB
-    backbone = 'resnet'  # dino, dinoReg, sam, medsam, mae, resnet
+    backbone = 'mae'  # dino, dinoReg, sam, medsam, mae, resnet
     train_backbone = False and not ftta and not self_training
     train_finetune = True and not ftta and not self_training # For reins and reins Lora
     
-    backbone_sz = "base" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
+    backbone_sz = "huge" if cluster_mode else "base" # in ("small", "base", "large" "huge" "giant")
     
     # Choose the FineTuning  # ladderR, ladderD, rein, reinL
     if backbone in ['dino', 'dinoReg']:
