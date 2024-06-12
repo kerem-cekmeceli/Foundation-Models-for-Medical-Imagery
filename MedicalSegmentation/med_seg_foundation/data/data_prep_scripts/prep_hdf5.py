@@ -1,6 +1,6 @@
 import h5py
 
-dataset = 'acdc' # 'nci' , 'acdc', 'rvsc'
+dataset = 'nci' # 'nci' , 'acdc', 'rvsc'
 cluster = True
 
 if cluster:
@@ -41,7 +41,6 @@ else:
 dir_path = main_pth + sub_path
 pth_full = dir_path + filename
 
-# pth = main_pth + 'brain/abide/stanford/'+'data_T1_original_depth_132_from_10_to_15.hdf5'
 
 def get_train_val_test_dicts(pth, train_suff='_train', val_suff='_validation', test_suff='_test'):
     train_dict = dict()
@@ -96,28 +95,49 @@ def save_dicts_as_hdf5(pth, train_dict=None, val_dict=None, test_dict=None):
     
     if val_dict is not None:
         print("Writing val files")
-        write_dict_as_hdf5(dct=train_dict, pth=pth, name='val')
+        write_dict_as_hdf5(dct=val_dict, pth=pth, name='val')
     
     if test_dict is not None:
         print("Writing test files")
-        write_dict_as_hdf5(dct=train_dict, pth=pth, name='test')
+        write_dict_as_hdf5(dct=test_dict, pth=pth, name='test')
     
     print("Done !")
     
 
-pth = '/usr/bmicnas02/data-biwi-01/foundation_models/da_data/brain/abide/stanford/' 
-file_n = 'data_T1_original_depth_132_from_10_to_15.hdf5'
-pth += file_n
+# pth = '/usr/bmicnas02/data-biwi-01/foundation_models/da_data/nci/' 
+# file_n = 'data_T1_original_depth_132_from_10_to_15.hdf5'
+# pth += file_n
+# with h5py.File(pth, "r") as f:
+#     print("Keys: %s" % f.keys())
+
+
+
+
+train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
+
+save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_dict=test_dict)
+
+
+pth = dir_path+'train.hdf5'
 with h5py.File(pth, "r") as f:
+    assert f['nz'].shape[0]==train_vols
+    
     print("Keys: %s" % f.keys())
+    keys = f.keys()
+    # print(f[keys[0]].shape)
+    
+    
+pth = dir_path+'val.hdf5'
+with h5py.File(pth, "r") as f:
+    assert f['nz'].shape[0]==val_vols 
 
-# train_dict, val_dict, test_dict = get_train_val_test_dicts(pth=pth_full)
-
-# save_dicts_as_hdf5(pth=dir_path, train_dict=train_dict, val_dict=val_dict, test_dict=test_dict)
-
+    print("Keys: %s" % f.keys())
+    keys = f.keys()
+    # print(f[keys[0]].shape)
 
 pth = dir_path+'test.hdf5'
 with h5py.File(pth, "r") as f:
+    assert f['nz'].shape[0]==test_vols
 
     print("Keys: %s" % f.keys())
     keys = f.keys()
