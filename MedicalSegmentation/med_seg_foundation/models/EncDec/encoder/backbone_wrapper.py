@@ -1046,7 +1046,7 @@ class LadderBackbone(BackBoneBase):
         if hasattr(self.bb2, 'train_ft'):
             train_ft2 = self.bb2.train_ft
         else:
-            train_ft2 = True
+            train_ft2 = False
         
         # freeze backbone if no FT or bb training
         if (not train_ft2) and (not self.bb2.train_backbone):
