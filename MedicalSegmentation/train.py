@@ -45,7 +45,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 ftta = False
 
 # Self training (Vanilla)
-self_training = False
+self_training = True
 
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
@@ -94,8 +94,8 @@ if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
 
 # Domain adaptation
 if ftta or self_training:
-    sd_dataset = 'spine_verse'#'BraTS_FLAIR'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'spine_mrspinesegv'#'BraTS_T1'
+    sd_dataset = 'prostate_usz'#'BraTS_FLAIR'  # To be loaded from saved checkpoints  spine_mrspinesegv  
+    da_dataset = 'prostate_nci'#'BraTS_T1'
     dataset = da_dataset
     rcs_enabled = False
     
@@ -252,7 +252,7 @@ if model_type == ModelType.SEGMENTOR:
                   train_backbone=train_backbone,
                   dec_head_key=dec_head_key,
                   main_pth=main_pth)
-    if 'rein' in backbone:
+    if 'rein' in backbone or 'ladder' in backbone:
         kwargs['train_finetune'] = train_finetune
 else:
     kwargs=dict()
@@ -362,7 +362,7 @@ if model_type==ModelType.SEGMENTOR:
     dec_head_name = model.segmentor.decode_head.__class__.__name__
     backbone_name = model.segmentor.backbone.name
     bb_train_str_short = 'bbT' if train_backbone else 'NbbT'
-    if 'rein' in fine_tune:
+    if 'rein' in fine_tune or 'ladder' in  fine_tune:
         ft_train_str_short = 'ftT' if train_finetune else 'NftT'
         run_name = f'{wandb_run_dataset}_{backbone_name}_{bb_train_str_short}_{ft_train_str_short}_{dec_head_key}_{loss_cfg_key}'
     else:
@@ -372,7 +372,7 @@ if model_type==ModelType.SEGMENTOR:
                             )
     
     bb_train_str = 'train_bb_YES' if train_backbone else 'train_bb_NO'
-    if 'rein' in fine_tune:
+    if 'rein' in fine_tune or 'ladder' in  fine_tune:
         ft_train_str = 'train_ft_YES' if train_finetune else 'train_ft_NO'
         tags.append(ft_train_str)
     tags.append(bb_train_str)

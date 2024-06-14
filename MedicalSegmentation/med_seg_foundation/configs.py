@@ -536,6 +536,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, train_finetune, p
                       uniform_oup_size=uniform_oup_size)   
         
     elif 'ladder' in bb_name:
+        assert train_finetune is not None
         name = LadderBackbone.__name__
         
         ## BB1
@@ -565,7 +566,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, train_finetune, p
             # DinoS as ladder bb 
             bb2_name_params = get_bb_cfg(bb_name='dino', 
                                          bb_size='small', 
-                                         train_bb=True, 
+                                         train_bb=train_finetune, 
                                          dec_name=dec_name, 
                                          main_pth=main_pth, 
                                          train_finetune=train_finetune,

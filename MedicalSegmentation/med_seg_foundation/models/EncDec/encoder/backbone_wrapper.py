@@ -1019,10 +1019,6 @@ class LadderBackbone(BackBoneBase):
         bb2_params = bb2_name_params['params']
         self.bb2 = globals()[bb2_name](**bb2_params)
         assert isinstance(self.bb2, BackBoneBase1)
-        if not hasattr(self.bb2, 'train_ft'):
-            assert self.bb2.train_backbone
-        else:
-            assert self.bb2.train_backbone or self.bb2.train_ft
         
         self._input_sz_multiple = self.bb1.input_sz_multiple
         
