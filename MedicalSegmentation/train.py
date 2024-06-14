@@ -95,7 +95,7 @@ if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
 # Domain adaptation
 if ftta or self_training:
     sd_dataset = 'abide_stanford'#'BraTS_FLAIR'  # To be loaded from saved checkpoints  spine_mrspinesegv  
-    da_dataset = 'hcp2'#'BraTS_T1'
+    da_dataset = 'abide_caltech'#'BraTS_T1'
     dataset = da_dataset
     rcs_enabled = False
     
