@@ -71,7 +71,7 @@ if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
     else:
         fine_tune = ''
         # raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
-                    
+                            
     backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
     if 'rein' in fine_tune or 'ladder' in fine_tune:
@@ -129,7 +129,7 @@ if ftta or self_training:
  
 # Source domain training    
 else:
-    dataset = 'BraTS_T1'  #if cluster_paths else 'prostate_usz'
+    dataset = 'prostate_usz'  #if cluster_paths else 'prostate_usz'
     rcs_enabled = True
 
     # Select loss
