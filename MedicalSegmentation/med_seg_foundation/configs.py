@@ -705,7 +705,8 @@ def get_dec_cfg(dec_name, dataset_attrs, n_in, main_path=None, bb_size=None):
             assert main_path is not None
             bb_cps_pth = 'Checkpoints/Orig/backbone'
             
-            sam_checkpoint_prom_enc = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth' 
+            # sam_checkpoint_prom_enc = main_path/bb_cps_pth/'MedSam'/'medsam_vit_b.pth' 
+            sam_checkpoint_prom_enc = main_path/bb_cps_pth/'SAM' / 'sam_vit_b_01ec64.pth'
             
             if bb_size=='base':
                     sam_checkpoint_neck = main_path/bb_cps_pth/'SAM' / 'sam_vit_b_01ec64.pth'
