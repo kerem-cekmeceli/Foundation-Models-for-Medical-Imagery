@@ -548,7 +548,7 @@ def get_bb_cfg(bb_name, bb_size, train_bb, dec_name, main_pth, train_finetune, p
                                      train_finetune=train_finetune,
                                      pretrained=True)
         if 'sam' in bb_name.split('_')[-1]:
-            bb1_name_params['params']['cfg']['apply_neck']=True
+            bb1_name_params['params']['cfg']['apply_neck']=False  # @TODO SHOULD NOT BE HERE !
             
         ## BB2    
         if 'ladderR' in bb_name:

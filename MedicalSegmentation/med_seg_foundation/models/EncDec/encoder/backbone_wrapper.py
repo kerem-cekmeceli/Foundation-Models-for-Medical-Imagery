@@ -1042,6 +1042,21 @@ class LadderBackbone(BackBoneBase):
             
         self.alpha = nn.ParameterList([nn.Parameter(torch.zeros(1)) for i in range(self.bb1.nb_outs)])
         self.Sigmoid = nn.Sigmoid()
+        
+        if hasattr(self.bb2, 'train_ft'):
+            train_ft2 = self.bb2.train_ft
+        else:
+            train_ft2 = True
+        
+        # freeze backbone if no FT or bb training
+        if (not train_ft2) and (not self.bb2.train_backbone):
+            assert not self.bb1.train_backbone
+            
+            for param in self.necks_y2_ch.parameters():
+                param.requires_grad = False
+                
+            for param in self.alpha.parameters():
+                param.requires_grad = False
     
     @property
     def nb_patches(self):

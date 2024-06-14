@@ -71,7 +71,7 @@ if model_type == ModelType.SEGMENTOR: # Do not TOUCH !
     else:
         fine_tune = ''
         # raise ValueError(f'Best FT is not determined for {backbone} backbone yet !') 
-            
+                    
     backbone = f'{fine_tune}_{backbone}' if fine_tune != '' else backbone
     
     if 'rein' in fine_tune or 'ladder' in fine_tune:
