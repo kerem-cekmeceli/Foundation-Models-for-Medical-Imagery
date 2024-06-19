@@ -4,13 +4,13 @@ A Modular Segmentation Framework is developed for training and testing medical s
 
 All architectural details can be found in the final report "Training and Tuning Strategies for Foundation Models in Medical Imaging".
 
-Code for the developed framework can be found under `MedicalSegmentation` directory. Original code for the supported foundation models are under `OrigModels` directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framewoek are under the `ModelSpecific` directory.
+Code for the developed framework can be found under `MedicalSegmentation` directory, `train.py` is the main file to run. Original code for the supported foundation models are under `OrigModels` directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framewoek are under the `ModelSpecific` directory.
 
 # Framework Support
 
-Supported Stand Alone Benchmark Models (trained from scratch):
-* UNet
-* Swin UNet
+Supported Stand Alone Benchmark Models (trained from scratch) along with the value to set for `model_type` parameter:
+* UNet `ModelType.UNET`
+* Swin UNet `ModelType.SWINUNET`
 
 Supported Backbones For Encoder/Decoder Type (supporting all available sizes for all above-listed backbones):
 * Dino (both registered and not-registered)
