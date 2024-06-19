@@ -3,6 +3,12 @@ Training and Tuning Strategies for Foundation Models in Medical Imaging
 
 # Checkpoints for the Foundation Models
 Checkpoints folder with the below structure and data is expected to load the weights for the foundaiton models. Files can be downloaded from respective repositories for each backbone.
+
+* [DinoV2](https://github.com/facebookresearch/dinov2)
+* [SAM](https://github.com/facebookresearch/segment-anything)
+* [MedSam](https://github.com/bowang-lab/MedSAM)
+* [MAE](https://github.com/facebookresearch/mae)
+
 ```
   Checkpoints
   └── Orig
