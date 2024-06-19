@@ -34,11 +34,31 @@ Implemented Decoders:
 * HSAM Head
 * HQHSAM Head
 
+Supported Domain Adaptation Methods:
+* Entropy Minimization
+* Self-Training
+
 Supported Data Formats:
 * NifTI
 * HDF5
 * PNG (requires uniform volume depth for validation and test sets)
-  
+
+Supported Datasets:
+* Brain:
+  - HCP (T1w and T2w)
+  - ABIDE (Caltech and Stanford)
+    
+* Lumbar Spine:
+  - VerSe
+  - MrSegV
+
+* Prostate:
+  - NCI
+  - PiradErc USZ dataset
+ 
+* Brain Tumor:
+  - BraTS (T1 and FLAIR)
+
 
 # Checkpoints for the Foundation Models
 
@@ -74,4 +94,5 @@ Checkpoints folder with the below structure and data is expected to load the wei
               └── sam_vit_l_0b3195.pth
 ```
 
+# Training 
 
