@@ -13,32 +13,37 @@ Supported Stand Alone Benchmark Models (trained from scratch) along with the val
 * Swin UNet `ModelType.SWINUNET`
 
 Supported Backbones For Encoder/Decoder Type (supporting all available sizes for all above-listed backbones):
-* Dino (both registered and not-registered)
-* SAM
-* MedSAM
-* MAE
-* ResNET
+The following must be set `model_type=ModelType.SEGMENTOR` along with the `backbone` variable as listed.
+* Dino (both registered and not-registered) `dino` or `dinoReg`
+* SAM `sam`
+* MedSAM `medsam`
+* MAE `mae`
+* ResNET `resnet`
 
 Supported Fine-Tunings For Backbones:
-* Freeze (No Fine Tune)
-* Ladder Fine-Tuning (RN34 or Dino-Small)
-* Reins and Reins LoRA
-* Full Fine-Tuning
+`fine_tune` must be set to the below values with `train_backbone=False`
+* Freeze (No Fine Tune) `''`
+* Ladder Fine-Tuning (RN34 or Dino-Small) 'ladderR' or `ladderD`
+* Reins and Reins LoRA `'rein'` or `'reinL'`
+* Full Fine-Tuning `train_backbone=True` and `fine_tune=''`
 
 Implemented Decoders:
-* Linear
-* ResNet-Type
-* UNet-Type
-* DA Head
-* SegFormer Head
-* SAM Prompt Encoder and Mask Decoder
-* HQSAM Head
-* HSAM Head
-* HQHSAM Head
+Set `dec_head_key` to the below values
+* Linear `'lin'`
+* ResNet-Type `'resnet'`
+* UNet-Type `'unet'` or `'unetS'` for smaller size
+* DA Head (MMSEG) `'da'`
+* SegFormer Head (MMSEG) `'segformer'`
+* FCN Head (MMSEG) `'fcn'`
+* PSP Head (MMSEG) `'psp'`
+* SAM Prompt Encoder and Mask Decoder `''`
+* HQSAM Head `'hqsam'`
+* HSAM Head `'hsam'`
+* HQHSAM Head `'hqhsam'`
 
 Supported Domain Adaptation Methods:
-* Entropy Minimization
-* Self-Training
+* Entropy Minimization `ftta=True`
+* Self-Training `self_training=True`
 
 Supported Data Formats:
 * NifTI
@@ -46,20 +51,21 @@ Supported Data Formats:
 * PNG (requires uniform volume depth for validation and test sets)
 
 Supported Datasets:
+Can be chosen by setting the `dataset` variable
 * Brain:
-  - HCP (T1w and T2w)
-  - ABIDE (Caltech and Stanford)
+  - HCP (T1w and T2w) `'hcp1'` ot `'hcp2'`
+  - ABIDE (Caltech and Stanford) `'abide_caltech'` or `'abide_stanford'`
     
 * Lumbar Spine:
-  - VerSe
-  - MrSegV
+  - VerSe `'spine_verse'`
+  - MrSegV `'spine_mrspinesegv'`
 
 * Prostate:
-  - NCI
-  - PiradErc USZ dataset
+  - NCI `'prostate_nci'`
+  - PiradErc USZ dataset `'prostate_usz'`
  
 * Brain Tumor:
-  - BraTS (T1 and FLAIR)
+  - BraTS (T1 and FLAIR) `'BraTS_T1'` or `'BraTS_FLAIR'`
 
 
 # Checkpoints for the Foundation Models
