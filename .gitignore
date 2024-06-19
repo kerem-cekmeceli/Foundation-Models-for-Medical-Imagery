@@ -11,6 +11,10 @@ __pycache__/
 *.ckpt
 
 wandb/
+Checkpoints/
+.vscode/
+.github/
+sbatch_log/
 
 # Distribution / packaging
 .Python

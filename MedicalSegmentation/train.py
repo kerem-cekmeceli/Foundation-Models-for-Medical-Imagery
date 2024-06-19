@@ -45,7 +45,7 @@ model_type = ModelType.SEGMENTOR  # SEGMENTOR, UNET, SWINUNET, R2ATTNUNET
 ftta = False
 
 # Self training (Vanilla)
-self_training = True
+self_training = False
 
 pseudo_label_update_intv=1
 pseudo_lab_confidence_thres=0.9  # 0.9
