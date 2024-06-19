@@ -1,4 +1,0 @@
-slurmstepd: error: Unable to create TMPDIR [/scratch/kcekmeceli/tmp]: No such file or directory
-slurmstepd: error: Setting TMPDIR to /tmp
-Creating tensor
-tensor([1., 1., 1., 1., 1., 1., 1., 1., 1., 1.], device='cuda:0')
