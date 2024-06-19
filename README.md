@@ -110,5 +110,7 @@ Running train.py, models are trained on the source domain and tested both in-dom
 
 # Saved Models
 
-Models 
+`ckp_pth` must be set to the path where the trained models will be saved. A checkpoints directory will be created (if it doesn't already exist) with the following folder structure: `DATASET_NAME/FINETUNE_BACKBONE_NAME/DECODER_NAME`, and checkpoints are saved with timestamps and epoch numbers inside. Self-training runs are saved with the same folder structure under the `ST` folder inside the `Checkpoints` directory.
+
+For domain adaptation, since checkpoints trained on the source domain must be loaded, `search_dir_` must be set to the path where the same folder structure as above exists and where the checkpoints are stored.
 
