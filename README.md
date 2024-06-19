@@ -3,7 +3,7 @@ Training and Tuning Strategies for Foundation Models in Medical Imaging
 
 # Checkpoints for the Foundation Models
 Checkpoints folder with the below structure is expected to load the weights for the foundaiton models
-
+```
   Checkpoints
   └── Orig
       └── backbone
@@ -26,3 +26,4 @@ Checkpoints folder with the below structure is expected to load the weights for 
               ├── sam_vit_b_01ec64.pth
               ├── sam_vit_h_4b8939.pth
               └── sam_vit_l_0b3195.pth
+```
