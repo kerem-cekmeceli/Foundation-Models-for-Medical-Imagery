@@ -108,7 +108,7 @@ Checkpoints folder with the below structure and data is expected to load the wei
 
 Running train.py, models are trained on the source domain and tested both in-domain and on all available datasets for the anatomy for domain generalization/domain adaptation. Dice and mIoU scores are computed over the volume for the validation and test sets, while they are computed per slice to serve as indicators during the training process. The WandB logger is used. Sample segmentation results from the validation (at defined intervals during training) and test sets (at the end) are logged. The model with the highest validation DSC over the volume is used for testing.
 
-# Saved Models
+# Saving and Loading Models
 
 `ckp_pth` must be set to the path where the trained models will be saved. A checkpoints directory will be created (if it doesn't already exist) with the following folder structure: `DATASET_NAME/FINETUNE_BACKBONE_NAME/DECODER_NAME`, and checkpoints are saved with timestamps and epoch numbers inside. Self-training runs are saved with the same folder structure under the `ST` folder inside the `Checkpoints` directory.
 
