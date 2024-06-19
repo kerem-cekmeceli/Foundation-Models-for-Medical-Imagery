@@ -8,6 +8,8 @@ Code for the developed framework can be found under `MedicalSegmentation` direct
 
 # Framework Support
 
+Below listed parameters must be set in `train.py` under `MedicalSegmentation` directory.
+
 Supported Stand Alone Benchmark Models (trained from scratch) along with the value to set for `model_type` parameter:
 * UNet `ModelType.UNET`
 * Swin UNet `ModelType.SWINUNET`
@@ -36,7 +38,7 @@ Set `dec_head_key` to the below values
 * SegFormer Head (MMSEG) `'segformer'`
 * FCN Head (MMSEG) `'fcn'`
 * PSP Head (MMSEG) `'psp'`
-* SAM Prompt Encoder and Mask Decoder `''`
+* SAM Prompt Encoder and Mask Decoder `'sam_mask_dec'`
 * HQSAM Head `'hqsam'`
 * HSAM Head `'hsam'`
 * HQHSAM Head `'hqhsam'`
@@ -53,19 +55,19 @@ Supported Data Formats:
 Supported Datasets:
 Can be chosen by setting the `dataset` variable
 * Brain:
-  - HCP (T1w and T2w) `'hcp1'` ot `'hcp2'`
-  - ABIDE (Caltech and Stanford) `'abide_caltech'` or `'abide_stanford'`
+  - HCP (T1w and T2w) - HDF5 `'hcp1'` ot `'hcp2'`
+  - ABIDE (Caltech and Stanford) - HDF5 `'abide_caltech'` or `'abide_stanford'`
     
 * Lumbar Spine:
-  - VerSe `'spine_verse'`
-  - MrSegV `'spine_mrspinesegv'`
+  - VerSe - PNG `'spine_verse'`
+  - MrSegV - PNG `'spine_mrspinesegv'`
 
 * Prostate:
-  - NCI `'prostate_nci'`
-  - PiradErc USZ dataset `'prostate_usz'`
+  - NCI - HDF5 `'prostate_nci'`
+  - PiradErc USZ dataset - HDF5 `'prostate_usz'`
  
 * Brain Tumor:
-  - BraTS (T1 and FLAIR) `'BraTS_T1'` or `'BraTS_FLAIR'`
+  - BraTS (T1 and FLAIR) - NifTI `'BraTS_T1'` or `'BraTS_FLAIR'`
 
 
 # Checkpoints for the Foundation Models
@@ -102,5 +104,7 @@ Checkpoints folder with the below structure and data is expected to load the wei
               └── sam_vit_l_0b3195.pth
 ```
 
-# Training 
+# Training and Testing
+
+
 
