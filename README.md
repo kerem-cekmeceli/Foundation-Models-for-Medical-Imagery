@@ -25,7 +25,7 @@ The following must be set `model_type=ModelType.SEGMENTOR` along with the `backb
 Supported Fine-Tunings For Backbones:
 `fine_tune` must be set to the below values with `train_backbone=False`
 * Freeze (No Fine Tune) `''`
-* Ladder Fine-Tuning (RN34 or Dino-Small) 'ladderR' or `ladderD`
+* Ladder Fine-Tuning (ResNet34 or Dino-Small) 'ladderR' or `ladderD`
 * Reins and Reins LoRA `'rein'` or `'reinL'`
 * Full Fine-Tuning `train_backbone=True` and `fine_tune=''`
 
@@ -106,5 +106,9 @@ Checkpoints folder with the below structure and data is expected to load the wei
 
 # Training and Testing
 
+Running train.py, models are trained on the source domain and tested both in-domain and on all available datasets for the anatomy for domain generalization/domain adaptation. Dice and mIoU scores are computed over the volume for the validation and test sets, while they are computed per slice to serve as indicators during the training process. The WandB logger is used. Sample segmentation results from the validation (at defined intervals during training) and test sets (at the end) are logged. The model with the highest validation DSC over the volume is used for testing.
 
+# Saved Models
+
+Models 
 
