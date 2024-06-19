@@ -4,48 +4,48 @@ A Modular Segmentation Framework is developed for training and testing medical s
 
 All architectural details can be found in the final report "Training and Tuning Strategies for Foundation Models in Medical Imaging".
 
-Code for the developed framework can be found under `MedicalSegmentation` directory, `train.py` is the main file to run. Original code for the supported foundation models are under `OrigModels` directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framewoek are under the `ModelSpecific` directory.
+Code for the developed framework can be found under the `MedicalSegmentation` directory, with `train.py` as the main file to run. Original code for the supported foundation models is under the `OrigModels` directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framework is under the `ModelSpecific` directory.
 
 # Framework Support
 
-Below listed parameters must be set in `train.py` under `MedicalSegmentation` directory.
+The parameters listed below must be set in `train.py` under the `MedicalSegmentation` directory.
 
-Supported Stand Alone Benchmark Models (trained from scratch) along with the value to set for `model_type` parameter:
-* UNet `ModelType.UNET`
-* Swin UNet `ModelType.SWINUNET`
+Supported Standalone Benchmark Models (trained from scratch) along with the value to set for the `model_type` parameter:
+* UNet: `ModelType.UNET`
+* Swin UNet: `ModelType.SWINUNET`
 
-Supported Backbones For Encoder/Decoder Type (supporting all available sizes for all above-listed backbones):
-The following must be set `model_type=ModelType.SEGMENTOR` along with the `backbone` variable as listed.
-* Dino (both registered and not-registered) `dino` or `dinoReg`
-* SAM `sam`
-* MedSAM `medsam`
-* MAE `mae`
-* ResNET `resnet`
+Supported Backbones for Encoder/Decoder Type (supporting all available sizes for all above-listed backbones):
+The following must be set `model_type=ModelType.SEGMENTOR` along with the `backbone` variable as listed:
+* Dino (both registered and not-registered): `dino` or `dinoReg`
+* SAM: `sam`
+* MedSAM: `medsam`
+* MAE: `mae`
+* ResNET: `resnet`
 
-Supported Fine-Tunings For Backbones:
-`fine_tune` must be set to the below values with `train_backbone=False`
-* Freeze (No Fine Tune) `''`
-* Ladder Fine-Tuning (ResNet34 or Dino-Small) 'ladderR' or `ladderD`
-* Reins and Reins LoRA `'rein'` or `'reinL'`
-* Full Fine-Tuning `train_backbone=True` and `fine_tune=''`
+Supported Fine-Tunings for Backbones:
+`fine_tune` must be set to the below values with `train_backbone=False`:
+* Freeze (No Fine Tune): `''`
+* Ladder Fine-Tuning (ResNet34 or Dino-Small): `ladderR` or `ladderD`
+* Reins and Reins LoRA: `rein` or `reinL`
+* Full Fine-Tuning: `train_backbone=True` and `fine_tune=''`
 
 Implemented Decoders:
-Set `dec_head_key` to the below values
-* Linear `'lin'`
-* ResNet-Type `'resnet'`
-* UNet-Type `'unet'` or `'unetS'` for smaller size
-* DA Head (MMSEG) `'da'`
-* SegFormer Head (MMSEG) `'segformer'`
-* FCN Head (MMSEG) `'fcn'`
-* PSP Head (MMSEG) `'psp'`
-* SAM Prompt Encoder and Mask Decoder `'sam_mask_dec'`
-* HQSAM Head `'hqsam'`
-* HSAM Head `'hsam'`
-* HQHSAM Head `'hqhsam'`
+Set `dec_head_key` to the below values:
+* Linear: `lin`
+* ResNet-Type: `resnet`
+* UNet-Type: `unet` or `unetS` for smaller size
+* DA Head (MMSEG): `da`
+* SegFormer Head (MMSEG): `segformer`
+* FCN Head (MMSEG): `fcn`
+* PSP Head (MMSEG): `psp`
+* SAM Prompt Encoder and Mask Decoder: `sam_mask_dec`
+* HQSAM Head: `hqsam`
+* HSAM Head: `hsam`
+* HQHSAM Head: `hqhsam`
 
 Supported Domain Adaptation Methods:
-* Entropy Minimization `ftta=True`
-* Self-Training `self_training=True`
+* Entropy Minimization: `ftta=True`
+* Self-Training: `self_training=True`
 
 Supported Data Formats:
 * NifTI
@@ -53,26 +53,22 @@ Supported Data Formats:
 * PNG (requires uniform volume depth for validation and test sets)
 
 Supported Datasets:
-Can be chosen by setting the `dataset` variable
+Can be chosen by setting the `dataset` variable:
 * Brain:
-  - HCP (T1w and T2w) - HDF5 `'hcp1'` ot `'hcp2'`
-  - ABIDE (Caltech and Stanford) - HDF5 `'abide_caltech'` or `'abide_stanford'`
-    
+  - HCP (T1w and T2w) - HDF5: `hcp1` or `hcp2`
+  - ABIDE (Caltech and Stanford) - HDF5: `abide_caltech` or `abide_stanford`
 * Lumbar Spine:
-  - VerSe - PNG `'spine_verse'`
-  - MrSegV - PNG `'spine_mrspinesegv'`
-
+  - VerSe - PNG: `spine_verse`
+  - MrSegV - PNG: `spine_mrspinesegv`
 * Prostate:
-  - NCI - HDF5 `'prostate_nci'`
-  - PiradErc USZ dataset - HDF5 `'prostate_usz'`
- 
+  - NCI - HDF5: `prostate_nci`
+  - PiradErc USZ dataset - HDF5: `prostate_usz`
 * Brain Tumor:
-  - BraTS (T1 and FLAIR) - NifTI `'BraTS_T1'` or `'BraTS_FLAIR'`
-
+  - BraTS (T1 and FLAIR) - NifTI: `BraTS_T1` or `BraTS_FLAIR`
 
 # Checkpoints for the Foundation Models
 
-Checkpoints folder with the below structure and data is expected to load the weights for the foundaiton models. Files can be downloaded from respective repositories for each backbone.
+Checkpoints folder with the below structure and data is expected to load the weights for the foundation models. Files can be downloaded from the respective repositories for each backbone.
 
 * [DinoV2](https://github.com/facebookresearch/dinov2)
 * [SAM](https://github.com/facebookresearch/segment-anything)
@@ -106,7 +102,7 @@ Checkpoints folder with the below structure and data is expected to load the wei
 
 # Training and Testing
 
-Running train.py, models are trained on the source domain and tested both in-domain and on all available datasets for the anatomy for domain generalization/domain adaptation. Dice and mIoU scores are computed over the volume for the validation and test sets, while they are computed per slice to serve as indicators during the training process. The WandB logger is used. Sample segmentation results from the validation (at defined intervals during training) and test sets (at the end) are logged. The model with the highest validation DSC over the volume is used for testing.
+Running `train.py`, models are trained on the source domain and tested both in-domain and on all available datasets for the anatomy for domain generalization/domain adaptation. Dice and mIoU scores are computed over the volume for the validation and test sets, while they are computed per slice to serve as indicators during the training process. The WandB logger is used. Sample segmentation results from the validation (at defined intervals during training) and test sets (at the end) are logged. The model with the highest validation DSC over the volume is used for testing.
 
 # Saving and Loading Models
 
