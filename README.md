@@ -4,11 +4,11 @@ A Modular Segmentation Framework is developed for training and testing medical s
 
 All architectural details can be found in the final [report](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/report.pdf) "Training and Tuning Strategies for Foundation Models in Medical Imaging".
 
-Code for the developed framework can be found under the `MedicalSegmentation` directory, with [`train.py`](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/MedicalSegmentation/train.py) as the main file to run. Original code for the supported foundation models is under the `OrigModels` directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framework is under the `ModelSpecific` directory.
+Code for the developed framework can be found under the [`MedicalSegmentation`](https://github.com/kerem-cekmeceli/FoundationModels/tree/main/MedicalSegmentation) directory, with [`train.py`](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/MedicalSegmentation/train.py) as the main file to run. Original code for the supported foundation models is under the [`OrigModels`](https://github.com/kerem-cekmeceli/FoundationModels/tree/main/OrigModels) directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framework is under the [`ModelSpecific`](https://github.com/kerem-cekmeceli/FoundationModels/tree/main/ModelSpecific) directory.
 
 # Framework Support
 
-The parameters listed below must be set in [`train.py`](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/MedicalSegmentation/train.py) under the `MedicalSegmentation` directory.
+The parameters listed below must be set in [`train.py`](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/MedicalSegmentation/train.py) under the [`MedicalSegmentation`](https://github.com/kerem-cekmeceli/FoundationModels/tree/main/MedicalSegmentation) directory.
 
 Supported Standalone Benchmark Models (trained from scratch) along with the value to set for the `model_type` parameter:
 * UNet: `ModelType.UNET`
