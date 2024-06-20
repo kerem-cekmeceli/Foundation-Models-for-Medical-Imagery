@@ -2,13 +2,13 @@
 
 A Modular Segmentation Framework is developed for training and testing medical segmentation models compatible with a range of common input data formats. The framework supports encoder-decoder architectures with various backbones and projection heads, or standalone models for predicting segmentation masks. Loss functions and optimizers are switchable, while metrics such as Dice Similarity Coefficient (DSC) and mean Intersection over Union (mIoU) are automatically computed per slice and over the volume. These metrics, along with sample segmentation masks from the validation set, are logged during training for quick assessment of performance.
 
-All architectural details can be found in the final report "Training and Tuning Strategies for Foundation Models in Medical Imaging".
+All architectural details can be found in the final [report](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/report.pdf) "Training and Tuning Strategies for Foundation Models in Medical Imaging".
 
 Code for the developed framework can be found under the `MedicalSegmentation` directory, with `train.py` as the main file to run. Original code for the supported foundation models is under the `OrigModels` directory for each backbone respectively. Code for backbone or fine-tune specific implementations or adjustments required for the framework is under the `ModelSpecific` directory.
 
 # Framework Support
 
-The parameters listed below must be set in `train.py` under the `MedicalSegmentation` directory.
+The parameters listed below must be set in [`train.py`](https://github.com/kerem-cekmeceli/FoundationModels/blob/main/MedicalSegmentation/train.py) under the `MedicalSegmentation` directory.
 
 Supported Standalone Benchmark Models (trained from scratch) along with the value to set for the `model_type` parameter:
 * UNet: `ModelType.UNET`
